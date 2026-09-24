@@ -1,0 +1,111 @@
+name: Bug report
+description: Report a reproducible KanaAI workbench, API, CLI, bridge, or build defect.
+title: "[bug]: "
+labels:
+  - bug
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include API keys, model files, real dictionaries, private profiles, or typed user text.
+        Use synthetic input and redact logs. For a possible vulnerability, follow `SECURITY.md` instead.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues and confirmed this is not a duplicate.
+          required: true
+        - label: I used only synthetic or license-clean reproduction data.
+          required: true
+        - label: I can reproduce this from the current source.
+          required: false
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Where does the failure occur?
+      multiple: true
+      options:
+        - Rust core or personalization
+        - Mozc bridge or conversion
+        - kanai-cli
+        - kanai-api
+        - Web workbench
+        - Build, CI, or dependency
+        - Documentation
+        - Native shell
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: KanaAI source version or commit
+      description: Do not enter a local filesystem path.
+      placeholder: Git commit SHA or vX.Y.Z
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      multiple: true
+      options:
+        - Linux
+        - Windows
+        - macOS
+        - WSL
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: toolchain
+    attributes:
+      label: Toolchain details
+      description: Include architecture and relevant Rust, Node, Bazel, Mozc, and model-server versions.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Provide exact, synthetic steps that a maintainer can follow.
+      placeholder: |
+        1. Build with ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: State the expected result without relying on roadmap documentation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs or diagnostics
+      description: Remove secrets, prompts, compositions, real dictionaries, and machine-specific paths.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact and workaround
+      description: Explain what is blocked and any safe workaround.
+    validations:
+      required: true

@@ -1,0 +1,24 @@
+[package]
+name = "kanai-mozc"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "KanaAI's isolated line-protocol adapter for the Mozc conversion bridge"
+publish = false
+
+[dependencies]
+async-trait.workspace = true
+kanai-core = { path = "../kanai-core" }
+percent-encoding.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["fs"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile = "3.23"

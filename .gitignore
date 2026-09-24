@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+coverage/
+.vite/
+target/
+.local/
+.kanai/
+*.log
+.DS_Store

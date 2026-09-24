@@ -1,0 +1,9 @@
+# Default owner for security-sensitive and public-release material.
+# Maintainers should add an independent reviewer when one is available.
+/.github/workflows/ @aruiki
+/.release/ @aruiki
+/SECURITY.md @aruiki
+/CONTRIBUTING.md @aruiki
+/CODE_OF_CONDUCT.md @aruiki
+/LICENSE-MIT @aruiki
+/LICENSE-APACHE @aruiki

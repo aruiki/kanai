@@ -1,0 +1,39 @@
+{
+  "name": "kanai-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "KanaAI explainable Japanese IME workbench",
+  "license": "MIT OR Apache-2.0",
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c cyan,magenta \"cargo run -p kanai-api\" \"vite\"",
+    "dev:web": "vite",
+    "dev:api": "cargo run -p kanai-api",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "start": "NODE_ENV=production cargo run -p kanai-api --release",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && npm run test && npm run build"
+  },
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "packageManager": "npm@11.19.0",
+  "dependencies": {
+    "lucide-react": "^1.48.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^5.0.1",
+    "concurrently": "^10.0.5",
+    "jsdom": "^30.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.1"
+  }
+}

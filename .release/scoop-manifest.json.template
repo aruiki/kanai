@@ -1,0 +1,29 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json",
+  "version": "X.Y.Z",
+  "description": "KanaAI local-first Japanese IME (unsigned portable build)",
+  "homepage": "https://github.com/aruiki/kanai",
+  "license": "MIT OR Apache-2.0",
+  "notes": "This build is unsigned. Verify the full SHA-256 digest and artifact attestation before running it.",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/aruiki/kanai/releases/download/vX.Y.Z/kanai-X.Y.Z-windows-x64-portable.zip",
+      "hash": "<64-lowercase-hex-characters-for-the-exact-final-zip>",
+      "extract_dir": "kanai-X.Y.Z-windows-x64",
+      "bin": "<reviewed-relative-launcher>"
+    }
+  },
+  "checkver": {
+    "github": "https://github.com/aruiki/kanai"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/aruiki/kanai/releases/download/v$version/kanai-$version-windows-x64-portable.zip"
+      }
+    },
+    "hash": {
+      "url": "https://github.com/aruiki/kanai/releases/download/v$version/kanai-$version-windows-x64-portable.zip.sha256"
+    }
+  }
+}

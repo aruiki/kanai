@@ -1,0 +1,78 @@
+name: Feature request
+description: Propose a scoped KanaAI feature or explainable user workflow.
+title: "[feature]: "
+labels:
+  - enhancement
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        KanaAI is a preview. Please distinguish a proposed feature from functionality that already exists.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues and discussions.
+          required: true
+        - label: This request does not require collecting or sending private user text.
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: true
+      options:
+        - Japanese conversion and candidate UX
+        - Personalization and explainability
+        - Local AI or model tiers
+        - Privacy and deletion
+        - Native IME integration
+        - Accessibility and localization
+        - Developer workbench, API, or CLI
+        - Build, release, Scoop, or provenance
+        - Documentation
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user problem, not only the proposed implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Explain the expected workflow and how success can be observed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Privacy, security, platform, and licensing constraints
+      description: Include data sent/stored, native ABI impact, dependencies, models, data, and offline behavior where relevant.
+    validations:
+      required: true
+
+  - type: textarea
+    id: prototypes
+    attributes:
+      label: Prototype or prior art
+      description: Include synthetic examples, links, or measurements. Do not attach user data.
+    validations:
+      required: false

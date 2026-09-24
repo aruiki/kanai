@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/aruiki/kanai/security/advisories/new
+    about: Never disclose an unreported vulnerability in a public issue.
+  - name: Read the contribution guide
+    url: https://github.com/aruiki/kanai/blob/main/CONTRIBUTING.md
+    about: Find source setup, checks, DCO, and third-party requirements.
+  - name: Read the project status
+    url: https://github.com/aruiki/kanai#current-status
+    about: KanaAI is not yet a released native IME and does not bundle a model.

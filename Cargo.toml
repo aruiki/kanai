@@ -1,0 +1,40 @@
+[workspace]
+members = [
+    "crates/kanai-core",
+    "crates/kanai-mozc",
+    "crates/kanai-api",
+    "crates/kanai-cli",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+authors = ["KanaAI contributors"]
+repository = "https://github.com/aruiki/kanai"
+homepage = "https://github.com/aruiki/kanai"
+description = "A local-first, explainable Japanese IME built on Mozc with a Rust orchestration layer"
+keywords = ["ime", "input-method", "japanese", "rust", "mozc", "local-first"]
+categories = ["text-processing", "internationalization"]
+
+[workspace.dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+axum = "0.8"
+percent-encoding = "2.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sysinfo = "0.37"
+thiserror = "2.0"
+tokio = { version = "1.48", features = ["macros", "rt-multi-thread", "process", "io-util", "signal", "sync", "time"] }
+tower-http = { version = "0.6", features = ["fs", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = true
