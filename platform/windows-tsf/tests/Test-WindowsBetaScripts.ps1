@@ -24,7 +24,10 @@ function Get-TestPath {
 }
 
 function New-TestPeFile {
-    param([Parameter(Mandatory = $true)][string]$Path)
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [uint16]$Machine = 0x8664
+    )
 
     $bytes = New-Object byte[] 512
     $bytes[0] = 0x4d
@@ -33,7 +36,7 @@ function New-TestPeFile {
     $coff = 0x80
     $bytes[$coff] = 0x50
     $bytes[$coff + 1] = 0x45
-    [BitConverter]::GetBytes([uint16]0x8664).CopyTo($bytes, $coff + 4) | Out-Null
+    [BitConverter]::GetBytes($Machine).CopyTo($bytes, $coff + 4) | Out-Null
     [BitConverter]::GetBytes([uint16]1).CopyTo($bytes, $coff + 6) | Out-Null
     [BitConverter]::GetBytes([uint16]0xf0).CopyTo($bytes, $coff + 20) | Out-Null
     [BitConverter]::GetBytes([uint16]0x0022).CopyTo($bytes, $coff + 22) | Out-Null
@@ -148,6 +151,10 @@ $output = Join-Path $testRoot 'output'
 $install = Join-Path $testRoot 'installed'
 $data = Join-Path $testRoot 'data'
 $extracted = Join-Path $testRoot 'extracted'
+$badPayload = Join-Path $testRoot 'bad-payload'
+$badOutput = Join-Path $testRoot 'bad-output'
+$epochPayload = Join-Path $testRoot 'epoch-payload'
+$epochOutput = Join-Path $testRoot 'epoch-output'
 New-Item -ItemType Directory -Path (Get-TestPath -Root $payload -Relative 'bin') -Force | Out-Null
 New-Item -ItemType Directory -Path (Get-TestPath -Root $payload -Relative 'dist') -Force | Out-Null
 try {
@@ -201,6 +208,48 @@ try {
         if (-not (Test-Path -LiteralPath (Get-TestPath -Root $packageDirectory -Relative ('legal/' + $legalName)) -PathType Leaf)) {
             throw "Package is missing a required third-party notice: $legalName"
         }
+    }
+
+    Copy-Item -LiteralPath $payload -Destination $badPayload -Recurse -Force
+    New-TestPeFile -Path (Get-TestPath -Root $badPayload -Relative 'bin/kanai-api.exe') -Machine 0x014c
+    $badMachineRejected = $false
+    try {
+        & $packageScript -PayloadRoot $badPayload -OutputDirectory $badOutput -Version '0.1.0' -Target 'x86_64-pc-windows-msvc' -Architecture 'x64' -SourceRevision 'test-revision' -SourceDateEpoch '0' -NoArchive -Force | Out-Null
+    }
+    catch {
+        $badMachineRejected = $true
+    }
+    if (-not $badMachineRejected) {
+        throw 'Package accepted a non-x64 PE machine type.'
+    }
+
+    $targetRejected = $false
+    try {
+        & $packageScript -PayloadRoot $payload -OutputDirectory $badOutput -Version '0.1.0' -Target 'aarch64-pc-windows-msvc' -Architecture 'x64' -SourceRevision 'test-revision' -SourceDateEpoch '0' -NoArchive -Force | Out-Null
+    }
+    catch {
+        $targetRejected = $true
+    }
+    if (-not $targetRejected) {
+        throw 'Package accepted a non-x86_64 Windows target.'
+    }
+
+    Copy-Item -LiteralPath $payload -Destination $epochPayload -Recurse -Force
+    Remove-Item -LiteralPath (Get-TestPath -Root $epochPayload -Relative '.build-inputs.json') -Force
+    $oldSourceDateEpoch = $env:SOURCE_DATE_EPOCH
+    $env:SOURCE_DATE_EPOCH = ''
+    $missingEpochRejected = $false
+    try {
+        & $packageScript -PayloadRoot $epochPayload -OutputDirectory $epochOutput -Version '0.1.0' -Target 'x86_64-pc-windows-msvc' -Architecture 'x64' -SourceRevision 'test-revision' -NoArchive -Force | Out-Null
+    }
+    catch {
+        $missingEpochRejected = $true
+    }
+    finally {
+        $env:SOURCE_DATE_EPOCH = $oldSourceDateEpoch
+    }
+    if (-not $missingEpochRejected) {
+        throw 'Package accepted a missing SOURCE_DATE_EPOCH in scaffold mode.'
     }
 
     Add-Type -AssemblyName System.IO.Compression
