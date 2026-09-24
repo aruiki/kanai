@@ -134,6 +134,11 @@ if ($buildShellText -notmatch 'not a' -or $buildShellText -notmatch 'TSF DLL' -o
     $buildShellText -match 'name\s*=\s*"[^"]+\.dll"') {
     throw 'The optional Windows shell seam is not explicitly non-TSF.'
 }
+$bridgeContract = Get-Content -LiteralPath (Join-Path $RepoRoot 'platform\windows-tsf\shell\bridge-contract.json') -Raw | ConvertFrom-Json
+if ($bridgeContract.status -ne 'unimplemented' -or $bridgeContract.tsf.registered -ne $false -or
+    $bridgeContract.tsf.dllIncluded -ne $false) {
+    throw 'The bridge contract must keep TSF explicitly unimplemented.'
+}
 
 if (-not $Smoke) {
     [pscustomobject]@{

@@ -23,5 +23,6 @@ cc_binary(
         "/DNOMINMAX",
     ],
     linkopts = ["-DEFAULTLIB:winhttp.lib"],
+    target_compatible_with = ["@platforms//os:windows"],
     tags = ["manual"],
 )

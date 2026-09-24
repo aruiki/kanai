@@ -1,7 +1,8 @@
 {
   "schemaVersion": 1,
   "name": "kanai-windows-shell-bridge",
-  "status": "scaffold",
+  "status": "unimplemented",
+  "phase": "workbench-cli-phase-1",
   "transport": "http",
   "baseUrl": "http://127.0.0.1:8787",
   "endpoints": {
