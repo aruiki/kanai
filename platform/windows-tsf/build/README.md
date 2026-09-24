@@ -48,7 +48,8 @@ Bazel cannot use a UNC workspace. The harness uses the repository's pinned
 `prepare-pinned-mozc.ps1` to make a disposable Windows-local archive, copies
 the KanaAI host overlay, applies the reviewed patch, and never edits
 `third_party/mozc` in place. The prepared stage is reused when its commit
-marker and patch are intact. It also supplies WSL-safe Git settings for
+marker and reviewed overlay/patch fingerprint are intact. It also supplies
+WSL-safe Git settings for
 Windows Git's `core.filemode`/line-ending view. If the local Windows host
 cannot create Bazel's symlink forest, the harness does not require a broad
 Developer Mode/security change: it retries the same pinned x64 target with

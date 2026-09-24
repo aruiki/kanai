@@ -144,6 +144,7 @@ $staticChecks = @(
     @{ Name = 'VS x64 initialization'; Text = $commonText; Needle = 'VsDevCmd.bat -arch=x64 -host_arch=x64' },
     @{ Name = 'WSL UNC handling'; Text = $commonText; Needle = 'pushd' },
     @{ Name = 'pinned Mozc preparation'; Text = $mainText; Needle = 'prepare-pinned-mozc.ps1' },
+    @{ Name = 'overlay cache fingerprint'; Text = $mainText; Needle = 'Get-TsfTreeFingerprint' },
     @{ Name = 'pinned Mozc check'; Text = $commonText; Needle = 'Get-TsfPinnedMozcInfo' },
     @{ Name = 'Bazel symlink fallback'; Text = $mainText; Needle = 'no-runfiles fallback' },
     @{ Name = 'no runfile links flag'; Text = $mainText; Needle = '--nobuild_runfile_links' },

@@ -1270,10 +1270,27 @@ if (-not $PlanOnly -and $BuildSystem -ieq 'Bazel') {
     )
     $preparedMarkerPresent = @($preparedMarkers | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }).Count -gt 0
     $commitMarker = Join-Path (Split-Path -Parent $BazelWorkspace) '.kanai-pinned-commit'
+    $fingerprintMarker = Join-Path (Split-Path -Parent $BazelWorkspace) '.kanai-overlay-fingerprint'
+    $overlaySourceForStage = Join-Path $repository 'platform\windows-tsf\tsf\host_overlay'
+    $patchForStage = Join-Path $repository 'platform\windows-tsf\tsf\patches\0001-install-kanai-supplemental-model.patch'
+    $currentOverlayFingerprint = ''
+    if ((Test-Path -LiteralPath $overlaySourceForStage -PathType Container) -and
+        (Test-Path -LiteralPath $patchForStage -PathType Leaf)) {
+        $currentOverlayFingerprint = (Get-TsfTreeFingerprint -Root $overlaySourceForStage) + ':' + (Get-TsfSha256 -Path $patchForStage)
+    }
+    $engineMarker = Join-Path $BazelWorkspace 'engine\modules.cc'
+    $enginePatchPresent = $false
+    if (Test-Path -LiteralPath $engineMarker -PathType Leaf) {
+        $engineText = Get-Content -LiteralPath $engineMarker -Raw
+        $enginePatchPresent = $engineText.IndexOf('kanai::tsf::KanaAiSupplementalModel', [System.StringComparison]::Ordinal) -ge 0
+    }
     $isPreparedStage = (Test-Path -LiteralPath (Join-Path $BazelWorkspace 'MODULE.bazel') -PathType Leaf) -and
         $preparedMarkerPresent -and
-        (Test-Path -LiteralPath $commitMarker -PathType Leaf) -and
-        ([System.IO.File]::ReadAllText($commitMarker).Trim() -eq $mozcInfo.Commit)
+        $enginePatchPresent -and
+        (-not [string]::IsNullOrWhiteSpace($currentOverlayFingerprint)) -and
+        (Test-Path -LiteralPath $fingerprintMarker -PathType Leaf) -and
+        ([System.IO.File]::ReadAllText($commitMarker).Trim() -eq $mozcInfo.Commit) -and
+        ([System.IO.File]::ReadAllText($fingerprintMarker).Trim() -eq $currentOverlayFingerprint)
     if ($isPreparedStage) {
         $mozcInfo = [pscustomobject]@{
             Root = (Split-Path -Parent $BazelWorkspace)
