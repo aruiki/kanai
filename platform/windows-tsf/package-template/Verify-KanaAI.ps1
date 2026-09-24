@@ -118,7 +118,7 @@ function Sort-PathOrdinal {
 
     $normalized = [string[]]@($Paths | ForEach-Object { ([string]$_).Replace('\', '/').ToLowerInvariant() })
     [Array]::Sort($normalized, [System.StringComparer]::Ordinal)
-    return ,$normalized
+    return $normalized
 }
 
 function Get-NormalizedPathSet {
@@ -303,6 +303,7 @@ if ($normalizedGeneratedAtUtc -cne (Get-EpochUtc -Epoch ([string]$manifest.sourc
 }
 $buildTarget = Get-JsonProperty -Object $manifest.buildInputs -Name 'target'
 $buildArchitecture = Get-JsonProperty -Object $manifest.buildInputs -Name 'architecture'
+$buildEpoch = Get-JsonProperty -Object $manifest.buildInputs -Name 'sourceDateEpoch'
 $buildConversionReady = Get-JsonProperty -Object $manifest.buildInputs -Name 'conversionReady'
 $buildRuntimeVerified = Get-JsonProperty -Object $manifest.buildInputs -Name 'runtimeVerified'
 if ($null -ne $buildTarget -and [string]$buildTarget -cne 'x86_64-pc-windows-msvc') {
@@ -310,6 +311,9 @@ if ($null -ne $buildTarget -and [string]$buildTarget -cne 'x86_64-pc-windows-msv
 }
 if ($null -ne $buildArchitecture -and [string]$buildArchitecture -ine 'x64') {
     throw 'Build inputs contain a non-x64 architecture.'
+}
+if ($null -ne $buildEpoch -and [string]$buildEpoch -cne [string]$manifest.sourceDateEpoch) {
+    throw 'Build inputs and manifest sourceDateEpoch values differ.'
 }
 if ($null -ne $buildConversionReady -and $buildConversionReady -ne $false) {
     throw 'Build inputs must not claim conversion readiness from staged files.'

@@ -91,7 +91,7 @@ function Sort-PathOrdinal {
 
     $normalized = [string[]]@($Paths | ForEach-Object { ([string]$_).Replace('\', '/').ToLowerInvariant() })
     [Array]::Sort($normalized, [System.StringComparer]::Ordinal)
-    return ,$normalized
+    return $normalized
 }
 
 function Assert-SafeRelativePath {
