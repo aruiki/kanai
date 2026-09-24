@@ -177,7 +177,11 @@ function Get-AllFiles {
     param([Parameter(Mandatory = $true)][string]$Root)
 
     $files = @(Get-ChildItem -LiteralPath $Root -Recurse -Force -File)
-    return @($files | Sort-Object -Property FullName)
+    return @($files | Sort-Object -Property @{
+        Expression = {
+            (Get-RelativePath -BasePath $Root -Path $_.FullName).ToLowerInvariant()
+        }
+    })
 }
 
 function Get-PayloadFiles {
@@ -186,7 +190,7 @@ function Get-PayloadFiles {
     $files = @(Get-AllFiles -Root $Root | Where-Object {
         $_.Name -notin @('manifest.json', 'SHA256SUMS')
     })
-    return @($files | Sort-Object -Property FullName)
+    return $files
 }
 
 function Get-ChecksumFiles {
@@ -195,7 +199,7 @@ function Get-ChecksumFiles {
     $files = @(Get-AllFiles -Root $Root | Where-Object {
         $_.Name -ine 'SHA256SUMS'
     })
-    return @($files | Sort-Object -Property FullName)
+    return $files
 }
 
 function Get-Hash {
