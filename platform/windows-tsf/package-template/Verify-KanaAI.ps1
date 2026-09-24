@@ -84,6 +84,35 @@ function Get-TextHash {
     }
 }
 
+function Get-EpochUtc {
+    param([Parameter(Mandatory = $true)][string]$Epoch)
+
+    if ($Epoch -notmatch '^(0|[1-9][0-9]*)$') {
+        throw 'SOURCE_DATE_EPOCH must be a non-negative integer.'
+    }
+    try {
+        return ([DateTime]::SpecifyKind([DateTime]'1970-01-01', [DateTimeKind]::Utc).AddSeconds([long]$Epoch).ToString('o'))
+    }
+    catch {
+        throw 'SOURCE_DATE_EPOCH is outside the supported timestamp range.'
+    }
+}
+
+function Get-NormalizedUtcString {
+    param([Parameter(Mandatory = $false)]$Value)
+
+    if ($Value -is [DateTimeOffset]) {
+        return $Value.UtcDateTime.ToString('o')
+    }
+    if ($Value -is [DateTime]) {
+        return $Value.ToUniversalTime().ToString('o')
+    }
+    return [DateTimeOffset]::Parse(
+        [string]$Value,
+        [Globalization.CultureInfo]::InvariantCulture,
+        [Globalization.DateTimeStyles]::RoundtripKind).UtcDateTime.ToString('o')
+}
+
 function Get-NormalizedPathSet {
     param([string[]]$Paths)
     return @($Paths | ForEach-Object { ([string]$_).Replace('\', '/').ToLowerInvariant() } | Sort-Object)
@@ -104,6 +133,21 @@ function Assert-ExactPathSet {
     for ($index = 0; $index -lt $expectedNormalized.Count; $index++) {
         if ($expectedNormalized[$index] -cne $actualNormalized[$index]) {
             throw "$Description differs at sorted path $index (expected $($expectedNormalized[$index]), found $($actualNormalized[$index]))."
+        }
+    }
+}
+
+function Assert-PathOrder {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Paths,
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+
+    $normalized = @($Paths | ForEach-Object { ([string]$_).Replace('\', '/').ToLowerInvariant() })
+    $sorted = @($normalized | Sort-Object)
+    for ($index = 0; $index -lt $normalized.Count; $index++) {
+        if ($normalized[$index] -cne $sorted[$index]) {
+            throw "$Description is not in deterministic sorted order at index $index."
         }
     }
 }
@@ -231,6 +275,34 @@ if ($manifest.architecture -ine 'x64') {
 if ($manifest.conversionReady -ne $false -or $manifest.runtimeVerified -ne $false) {
     throw 'Packaging must not claim conversion or runtime readiness from file presence.'
 }
+if ([string]$manifest.sourceDateEpoch -notmatch '^(0|[1-9][0-9]*)$') {
+    throw 'Manifest sourceDateEpoch is not a deterministic integer timestamp.'
+}
+try {
+    $normalizedGeneratedAtUtc = Get-NormalizedUtcString -Value $manifest.generatedAtUtc
+}
+catch {
+    throw 'Manifest generatedAtUtc is not an ISO-8601 timestamp.'
+}
+if ($normalizedGeneratedAtUtc -cne (Get-EpochUtc -Epoch ([string]$manifest.sourceDateEpoch))) {
+    throw 'Manifest generatedAtUtc is not derived from sourceDateEpoch.'
+}
+$buildTarget = Get-JsonProperty -Object $manifest.buildInputs -Name 'target'
+$buildArchitecture = Get-JsonProperty -Object $manifest.buildInputs -Name 'architecture'
+$buildConversionReady = Get-JsonProperty -Object $manifest.buildInputs -Name 'conversionReady'
+$buildRuntimeVerified = Get-JsonProperty -Object $manifest.buildInputs -Name 'runtimeVerified'
+if ($null -ne $buildTarget -and [string]$buildTarget -cne 'x86_64-pc-windows-msvc') {
+    throw 'Build inputs contain a non-x86_64 Windows target.'
+}
+if ($null -ne $buildArchitecture -and [string]$buildArchitecture -ine 'x64') {
+    throw 'Build inputs contain a non-x64 architecture.'
+}
+if ($null -ne $buildConversionReady -and $buildConversionReady -ne $false) {
+    throw 'Build inputs must not claim conversion readiness from staged files.'
+}
+if ($null -ne $buildRuntimeVerified -and $buildRuntimeVerified -ne $false) {
+    throw 'Build inputs must not claim runtime verification from staged files.'
+}
 if ($null -eq $manifest.tsf -or $manifest.tsf.status -ne 'unimplemented' -or
     $manifest.tsf.registered -ne $false -or $manifest.tsf.dllIncluded -ne $false -or
     $manifest.tsf.implementation -ne 'not-built') {
@@ -276,6 +348,23 @@ foreach ($file in $allFiles) {
     }
 }
 Assert-ExactPathSet -Expected @($manifest.files | ForEach-Object { [string]$_.path }) -Actual $actualPayloadPaths -Description 'Manifest/payload file set'
+$excludedFiles = @($manifest.fileSet.excludes | ForEach-Object { [string]$_ })
+if ($excludedFiles.Count -ne 2 -or $excludedFiles -notcontains 'manifest.json' -or $excludedFiles -notcontains 'SHA256SUMS') {
+    throw 'Manifest fileSet.excludes must contain only manifest.json and SHA256SUMS.'
+}
+$apiPresent = Test-Path -LiteralPath (Join-RelativePath -BasePath $root -RelativePath 'bin/kanai-api.exe') -PathType Leaf
+$cliPresent = Test-Path -LiteralPath (Join-RelativePath -BasePath $root -RelativePath 'bin/kanai.exe') -PathType Leaf
+$bridgePresent = Test-Path -LiteralPath (Join-RelativePath -BasePath $root -RelativePath 'bin/kanai-mozc-bridge.exe') -PathType Leaf
+$webPresent = Test-Path -LiteralPath (Join-RelativePath -BasePath $root -RelativePath 'dist/index.html') -PathType Leaf
+$expectedPayloadPresent = $apiPresent -and $cliPresent -and $bridgePresent -and $webPresent
+if ($manifest.payloadFilesPresent -ne $expectedPayloadPresent -or
+    $manifest.payloadPresent -ne $expectedPayloadPresent) {
+    throw 'Manifest payload presence fields do not match the exact file set; they are inventory fields, not readiness.'
+}
+$expectedStatus = if ($expectedPayloadPresent) { 'beta-workbench-unverified' } else { 'scaffold' }
+if ([string]$manifest.status -ne $expectedStatus) {
+    throw "Manifest status does not match the staged file state: $($manifest.status)"
+}
 
 $manifestPaths = @()
 $manifestPathKeys = @{}
@@ -312,6 +401,7 @@ foreach ($record in @($manifest.files)) {
         throw "Manifest SHA-256 differs for ${relative}: $($record.sha256) / $actualHash"
     }
 }
+Assert-PathOrder -Paths $manifestPaths -Description 'Manifest files.paths'
 
 $fileSet = $manifest.fileSet
 if ([int]$fileSet.count -ne $actualPayloadPaths.Count) {
@@ -379,6 +469,7 @@ foreach ($line in $lines) {
 if ($checked -eq 0) {
     throw 'SHA256SUMS did not contain any file entries.'
 }
+Assert-PathOrder -Paths $checksumPaths -Description 'SHA256SUMS paths'
 $expectedChecksumPaths = @($actualPayloadPaths + @('manifest.json'))
 Assert-ExactPathSet -Expected $expectedChecksumPaths -Actual $checksumPaths -Description 'SHA256SUMS file set'
 
