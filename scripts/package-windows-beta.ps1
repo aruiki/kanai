@@ -260,6 +260,12 @@ function Assert-ExactPathSet {
     }
 }
 
+function Test-AllowedLegalPath {
+    param([Parameter(Mandatory = $true)][string]$RelativePath)
+
+    return $RelativePath -match '^legal/(LICENSE(-MIT|-APACHE)?|Mozc-(LICENSE\.txt|AUTHORS\.txt|CONTRIBUTORS\.txt|README\.md|VOCABULARY-POLICY\.md|dictionary-README\.txt|dictionary-manual-README\.md|src-README\.md)|mozc-kanai-bridge\.patch|Cargo\.lock|package-lock\.json|THIRD-PARTY-(NOTICES\.txt|INVENTORY\.json)|npm-licenses/[^/]+|rust-licenses/[^/]+)$'
+}
+
 function Assert-AllowedPayloadPath {
     param(
         [Parameter(Mandatory = $true)][string]$RelativePath,
@@ -285,7 +291,7 @@ function Assert-AllowedPayloadPath {
         if ($RelativePath -match '^dist/.+') {
             return
         }
-        if ($RelativePath -match '^legal/.+') {
+        if (Test-AllowedLegalPath -RelativePath $RelativePath) {
             return
         }
         throw "File is not in the reviewed Windows beta package file set: $RelativePath"
@@ -295,7 +301,7 @@ function Assert-AllowedPayloadPath {
         $RelativePath -match '^bin/(kanai-api\.exe|kanai\.exe|kanai-mozc-bridge\.exe|kanai-windows-shell\.exe)$' -or
         $RelativePath -match '^config/(kanai\.env\.example|bridge-contract\.json)$' -or
         $RelativePath -match '^dist/.+' -or
-        $RelativePath -match '^legal/.+') {
+        (Test-AllowedLegalPath -RelativePath $RelativePath)) {
         return
     }
     throw "File is not in the reviewed staged payload file set: $RelativePath"
@@ -599,6 +605,27 @@ function New-ThirdPartyInventory {
     $records = @($records | Sort-Object -Property @{
         Expression = { ([string]$_.path).ToLowerInvariant() }
     })
+    $lockfiles = @()
+    foreach ($lockName in @('Cargo.lock', 'package-lock.json')) {
+        $lockPath = Join-Path $RepositoryRoot $lockName
+        if (Test-Path -LiteralPath $lockPath -PathType Leaf) {
+            $lockfiles += [ordered]@{
+                path = 'legal/' + $lockName
+                bytes = [int64](Get-Item -LiteralPath $lockPath).Length
+                sha256 = Get-Hash -Path $lockPath
+            }
+        }
+    }
+    $npmNoticeCount = 0
+    $rustNoticeCount = 0
+    $npmNoticeRoot = Join-Path $LegalRoot 'npm-licenses'
+    $rustNoticeRoot = Join-Path $LegalRoot 'rust-licenses'
+    if (Test-Path -LiteralPath $npmNoticeRoot -PathType Container) {
+        $npmNoticeCount = @(Get-ChildItem -LiteralPath $npmNoticeRoot -Force -File).Count
+    }
+    if (Test-Path -LiteralPath $rustNoticeRoot -PathType Container) {
+        $rustNoticeCount = @(Get-ChildItem -LiteralPath $rustNoticeRoot -Force -File).Count
+    }
     $inventory = [ordered]@{
         schemaVersion = 1
         product = 'KanaAI'
@@ -606,6 +633,11 @@ function New-ThirdPartyInventory {
         version = $Version
         sourceDateEpoch = $SourceDateEpoch
         note = 'Deterministic inventory of notices copied into this package. It is not legal advice or a substitute for dependency-license review.'
+        lockfiles = $lockfiles
+        dependencyNoticeCounts = [ordered]@{
+            npm = $npmNoticeCount
+            rust = $rustNoticeCount
+        }
         files = $records
     }
     $json = $inventory | ConvertTo-Json -Depth 10

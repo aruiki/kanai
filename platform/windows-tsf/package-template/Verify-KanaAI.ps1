@@ -168,6 +168,12 @@ function Get-JsonProperty {
     return $property.Value
 }
 
+function Test-AllowedLegalPath {
+    param([Parameter(Mandatory = $true)][string]$RelativePath)
+
+    return $RelativePath -match '^legal/(LICENSE(-MIT|-APACHE)?|Mozc-(LICENSE\.txt|AUTHORS\.txt|CONTRIBUTORS\.txt|README\.md|VOCABULARY-POLICY\.md|dictionary-README\.txt|dictionary-manual-README\.md|src-README\.md)|mozc-kanai-bridge\.patch|Cargo\.lock|package-lock\.json|THIRD-PARTY-(NOTICES\.txt|INVENTORY\.json)|npm-licenses/[^/]+|rust-licenses/[^/]+)$'
+}
+
 function Assert-AllowedPackagePath {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
 
@@ -186,7 +192,7 @@ function Assert-AllowedPackagePath {
     if ($RelativePath -match '^config/(kanai\.env\.example|bridge-contract\.json)$') {
         return
     }
-    if ($RelativePath -match '^dist/.+' -or $RelativePath -match '^legal/.+') {
+    if ($RelativePath -match '^dist/.+' -or (Test-AllowedLegalPath -RelativePath $RelativePath)) {
         return
     }
     throw "File is not in the reviewed Windows beta package file set: $RelativePath"
