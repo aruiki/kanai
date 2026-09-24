@@ -61,9 +61,10 @@ def main() -> int:
     tsf_root = repo_root / "platform" / "windows-tsf" / "tsf"
     adapter_root = tsf_root / "host_overlay" / "engine" / "kanai_ai"
     metadata_path = tsf_root / "metadata" / "tsf-integration.json"
-    patch_path = (
-        tsf_root / "patches" / "0001-install-kanai-supplemental-model.patch"
-    )
+    patch_paths = [
+        tsf_root / "patches" / "0001-install-kanai-supplemental-model.patch",
+        tsf_root / "patches" / "0002-kanai-tsf-identity.patch",
+    ]
 
     if not mozc_src.is_dir():
         raise AssertionError(f"pinned Mozc source is missing: {mozc_src}")
@@ -172,6 +173,7 @@ def main() -> int:
     if metadata["integration"]["patchedUpstreamFiles"] != [
         "third_party/mozc/src/engine/BUILD.bazel",
         "third_party/mozc/src/engine/modules.cc",
+        "third_party/mozc/src/win32/base/tsf_profile.cc",
     ]:
         raise AssertionError("metadata patch boundary drifted")
     if metadata["broker"]["frameMagic"] != "KBF1":
@@ -204,13 +206,14 @@ def main() -> int:
         raise AssertionError("adapter is not bound to the pinned upstream host")
 
     # This is read-only and proves that the only upstream edits are replayable.
-    subprocess.run(
-        ["git", "-C", str(mozc_src), "apply", "--check", str(patch_path)],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    for patch_path in patch_paths:
+        subprocess.run(
+            ["git", "-C", str(mozc_src), "apply", "--check", str(patch_path)],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
 
     print(
         json.dumps(

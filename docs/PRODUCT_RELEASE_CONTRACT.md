@@ -78,6 +78,25 @@ private dictionaries, cloud synchronization, UI, branding, or internal
 implementation. The reusable technical foundation is the open-source Mozc
 Windows TIP and its documented interfaces.
 
+## Niche preview scope
+
+The immediate target is a deliberately small, unsigned developer preview for
+technical Windows users, not a broadly supported commercial product.
+
+The preview may ship with:
+
+- Windows 10/11 x64 only;
+- manual elevated PowerShell installation and uninstall;
+- one supported host application for the first input-path test;
+- pinned upstream Mozc conversion;
+- optional local model-assisted reranking with MozcOnly fallback; and
+- explicit source/build logs and known limitations.
+
+The preview does not claim x86, broad Office/Edge compatibility, complete UIA,
+secure-field coverage, signing, SmartScreen trust, enterprise management, or
+ATOK-level quality. Those are later product gates, not reasons to block the
+small usable preview once its narrow input path is verified.
+
 ## Beta exit gates
 
 Before publishing a Windows beta:

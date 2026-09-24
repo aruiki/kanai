@@ -4,6 +4,24 @@
 **Phase 1:** native Windows TSF Local AI Quality Alpha
 **Overall technical progress:** **75%**
 **Public beta readiness:** **0%** until a real TSF TIP is built, registered, and tested in desktop applications.
+**Niche local-AI preview readiness:** **40%** — DLL/build/load and dry-run gates pass; real registration and one-host input smoke remain.
+
+## Short-term product goal
+
+The immediate goal is a practical AI-equipped model based on Mozc, not a
+claim of ATOK binary or data parity. The first usable target is a Windows x64
+TSF preview that:
+
+- keeps Mozc conversion, composition, candidate UI, and commit authoritative;
+- adds bounded local AI reranking, prediction, repair, and learning;
+- runs model work off the blocking key path and falls back to Mozc on timeout,
+  absence, malformed output, or stale generation; and
+- is measured against a pinned Mozc baseline for top-k quality, MRR, p95
+  latency, acceptance, fallback, and recovery.
+
+The first preview is intentionally narrow: Windows 10/11 x64, one tested
+host application, optional local AI, and MozcOnly fallback. It is not a
+commercial support or ATOK-parity claim.
 
 Progress is gate-based, not a count of source lines. A source skeleton, a
 compile-only DLL, or a Workbench does not count as a usable beta.

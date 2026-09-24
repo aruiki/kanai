@@ -100,13 +100,18 @@ try {
     $overlayDestination = Join-Path $sourceDirectory 'engine\kanai_ai'
     Copy-Item -LiteralPath $overlaySource -Destination $overlayDestination -Recurse
 
-    $patchPath = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0001-install-kanai-supplemental-model.patch'))
-    Invoke-Native -FilePath 'git' -WorkingDirectory $sourceDirectory -ArgumentList @(
-        'apply', '--check', $patchPath
+    $patchPaths = @(
+        [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0001-install-kanai-supplemental-model.patch')),
+        [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0002-kanai-tsf-identity.patch'))
     )
-    Invoke-Native -FilePath 'git' -WorkingDirectory $sourceDirectory -ArgumentList @(
-        'apply', $patchPath
-    )
+    foreach ($patchPath in $patchPaths) {
+        Invoke-Native -FilePath 'git' -WorkingDirectory $sourceDirectory -ArgumentList @(
+            'apply', '--check', $patchPath
+        )
+        Invoke-Native -FilePath 'git' -WorkingDirectory $sourceDirectory -ArgumentList @(
+            'apply', $patchPath
+        )
+    }
 }
 finally {
     if (Test-Path -LiteralPath $archivePath) {
@@ -121,7 +126,8 @@ finally {
     StagedMozcRoot = $sourceDirectory
     PatchedFiles = @(
         'src/engine/BUILD.bazel',
-        'src/engine/modules.cc'
+        'src/engine/modules.cc',
+        'src/win32/base/tsf_profile.cc'
     )
     AddedOverlay = 'src/engine/kanai_ai'
     PublicBeta = $false

@@ -19,7 +19,7 @@
     "languageId": "0x0411",
     "installerTarget": "//win32/installer:installer",
     "kanaiProductRegistrationReady": false,
-    "note": "The current overlay builds the upstream OSS identity. The separate KanaAI registration projection remains provisional and is not patched into tsf_profile.cc/resources."
+    "note": "The identity patch is staged for the developer preview, but registration identity approval and Windows application tests remain gates; the product is not a public beta."
   },
   "integration": {
     "serverSeam": "mozc::engine::SupplementalModelInterface",
@@ -34,7 +34,8 @@
     ],
     "patchedUpstreamFiles": [
       "third_party/mozc/src/engine/BUILD.bazel",
-      "third_party/mozc/src/engine/modules.cc"
+      "third_party/mozc/src/engine/modules.cc",
+      "third_party/mozc/src/win32/base/tsf_profile.cc"
     ],
     "replacedTipFiles": [],
     "modelReportsAvailable": false,

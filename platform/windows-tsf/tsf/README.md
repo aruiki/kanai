@@ -32,6 +32,9 @@ model reports unavailable and performs no I/O. A separate non-I/O
   rank policy.
 - `patches/0001-install-kanai-supplemental-model.patch`: changes only upstream
   `engine/BUILD.bazel` and `engine/modules.cc` in a disposable staged copy.
+- `patches/0002-kanai-tsf-identity.patch`: assigns the provisional KanaAI
+  text-service/profile GUIDs in the disposable staged copy; it is not approval
+  to publish or register the identity.
 - `scripts/prepare-pinned-mozc.ps1`: verifies the exact submodule commit,
   exports it, copies the KanaAI-owned overlay, and applies the patch without
   changing the submodule.
