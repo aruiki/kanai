@@ -111,7 +111,7 @@ public static class KanaAIWindowsTsfSmokeNative
         $tests += [pscustomobject]@{
             id = 'dll-exports'
             status = 'passed'
-            evidence = 'All four required COM exports resolved from the loaded module.'
+            evidence = 'The required DllGetClassObject and DllCanUnloadNow COM exports resolved from the loaded module.'
         }
     }
     finally {

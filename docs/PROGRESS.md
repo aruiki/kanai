@@ -32,8 +32,9 @@ compile-only DLL, or a Workbench does not count as a usable beta.
 - Patched server SHA-256: `e57a2df3c6f3cd6a518f38aafede130ea13129deb6667286af98b23617b26018`
 - Registration/application smoke: DLL `LoadLibraryW` passed; PE32+ x64 and dependency dump passed
 - Registration projection: x64 per-user dry-run passed with `TipDllValid=true`; no registry write performed
-- Real `ITfInputProcessorProfiles::Register` probe: returned `E_FAIL`; no keys retained
-- Remaining gate: approved KanaAI identity/resource patch, real TSF API/profile registration, and desktop input tests
+- Real `ITfInputProcessorProfiles::Register` probe: returned `E_FAIL` under the current non-admin WSL/Windows session; no keys retained
+- A temporary KanaAI-GUID identity build also returned the same result, isolating the blocker to TSF registration authority/host policy rather than the DLL loader
+- Remaining gate: approved KanaAI identity/resource patch, elevated or supported per-user TSF API/profile registration, and desktop input tests
 
 
 The current two-hour target is a **Windows x64 technical alpha**, not a public

@@ -36,7 +36,7 @@
       "id": "dll-exports",
       "required": true,
       "owner": "harness",
-      "evidence": "PE export table and dumpbin /exports contain all four required COM exports"
+      "evidence": "PE export table and dumpbin /exports contain the required DllGetClassObject and DllCanUnloadNow COM exports"
     },
     {
       "id": "tsf-host-load",
