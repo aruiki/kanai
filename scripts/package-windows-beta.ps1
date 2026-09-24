@@ -512,7 +512,8 @@ function Copy-DependencyLicenseFiles {
                 throw "Reparse points are not allowed in dependency notices: $($file.FullName)"
             }
             $relative = Get-RelativePath -BasePath $nodeModules -Path $file.FullName
-            & $copyOne $file.FullName 'npm-licenses' $relative
+            $relativeDirectory = $relative.Substring(0, $relative.Length - $file.Name.Length).TrimEnd('/')
+            & $copyOne $file.FullName 'npm-licenses' $relativeDirectory
         }
     }
 
@@ -577,8 +578,7 @@ function Copy-DependencyLicenseFiles {
                 $seenCargoDirectories[$directoryKey] = $true
                 foreach ($file in @(Get-ChildItem -LiteralPath $directory.FullName -Force -File -ErrorAction SilentlyContinue |
                     Where-Object { $_.Name -match $licensePattern })) {
-                    $cargoLabel = $directoryName + '-' + $file.Name
-                    & $copyOne $file.FullName 'rust-licenses' $cargoLabel
+                    & $copyOne $file.FullName 'rust-licenses' $directoryName
                 }
             }
         }
@@ -593,6 +593,10 @@ function New-ThirdPartyInventory {
         [Parameter(Mandatory = $true)][string]$SourceDateEpoch
     )
 
+    $inventoryPath = Join-Path $LegalRoot 'THIRD-PARTY-INVENTORY.json'
+    if (Test-Path -LiteralPath $inventoryPath -PathType Leaf) {
+        Remove-Item -LiteralPath $inventoryPath -Force
+    }
     $records = @()
     foreach ($file in Get-AllFiles -Root $LegalRoot) {
         $relative = Get-RelativePath -BasePath $LegalRoot -Path $file.FullName
