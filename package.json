@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "development:loop": "node scripts/development-loop.mjs",
     "development:supervisor": "node scripts/development-supervisor.mjs",
+    "development:dashboard": "node scripts/development-dashboard.mjs",
     "check": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && npm run test && npm run build"
   },
   "engines": {

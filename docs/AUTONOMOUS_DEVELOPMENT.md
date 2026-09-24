@@ -49,7 +49,18 @@ The loop writes ignored local state to:
 - `.development-loop/state.json` — latest machine-readable checkpoint;
 - `.development-loop/loop.log` — append-only cycle summaries.
 
-## What each cycle checks
+## Live dashboard
+
+Start the local status screen in another terminal:
+
+```sh
+npm run development:dashboard
+```
+
+Open <http://127.0.0.1:8090/>. It polls the same heartbeat and state files as the
+supervisor and shows the current cycle, command results, percentages,
+registration blocker, and recent recovery log. It is a development-only local
+surface and does not expose user data.
 
 - Git whitespace/errors;
 - Rust formatting, Clippy, and workspace tests;

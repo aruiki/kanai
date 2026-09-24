@@ -7,7 +7,14 @@ current native Windows TSF milestone is resolved. Waiting for an agent or a
 convenient idle state is not a development strategy; completed work is
 integrated directly into the main working tree and verified.
 
-## Non-negotiable directives
+## Continuation rule
+
+A milestone or successful check is not a stopping point. After every checkpoint,
+continue directly to the next incomplete implementation task. Progress updates
+are commentary-only; a final response is reserved for actual completion or a
+real blocker. The background loop is a watchdog and recovery mechanism, not a
+replacement for implementation work.
+
 
 1. Build the first usable Windows beta on the pinned upstream Mozc Windows TIP.
 2. Keep Rust responsible for broker, session/generation state, bounded local AI,
