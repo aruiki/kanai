@@ -12,8 +12,7 @@ integrated directly into the main working tree and verified.
 A milestone or successful check is not a stopping point. After every checkpoint,
 continue directly to the next incomplete implementation task. Progress updates
 are commentary-only; a final response is reserved for actual completion or a
-real blocker. The background loop is a watchdog and recovery mechanism, not a
-replacement for implementation work.
+real blocker.
 
 
 1. Build the first usable Windows beta on the pinned upstream Mozc Windows TIP.

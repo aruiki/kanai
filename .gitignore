@@ -7,6 +7,5 @@ coverage/
 target/
 .local/
 .kanai/
-.development-loop/
 *.log
 .DS_Store
