@@ -117,7 +117,7 @@ async function releaseLock() {
   }
 }
 
-function startChild(args) {
+async function startChild(args) {
   if (stopping) return;
   child = spawn(process.execPath, [
     loopScript,
@@ -130,8 +130,9 @@ function startChild(args) {
     stdio: "inherit",
     windowsHide: true,
   });
-  writeState("starting", { maxRestarts: args.maxRestarts });
+  await writeState("starting", { maxRestarts: args.maxRestarts });
   log(`started loop pid=${child.pid} restart=${restarts}`);
+  await writeState("running", { maxRestarts: args.maxRestarts });
   child.once("error", async (error) => {
     lastError = error.message;
     await writeState("child-error", { maxRestarts: args.maxRestarts });
@@ -146,13 +147,14 @@ function startChild(args) {
     }
     restarts += 1;
     if (args.maxRestarts !== 0 && restarts > args.maxRestarts) {
+      stopping = true;
       await writeState("restart-limit", { maxRestarts: args.maxRestarts });
       await log(`restart limit reached code=${code} signal=${signal}`);
       return;
     }
     await writeState("restarting", { maxRestarts: args.maxRestarts });
     await log(`loop exited code=${code} signal=${signal}; restart in ${args.backoffMs}ms`);
-    startTimer = setTimeout(() => startChild(args), args.backoffMs);
+    startTimer = setTimeout(() => { void startChild(args); }, args.backoffMs);
   });
 }
 
@@ -167,6 +169,7 @@ async function readLoopHeartbeat() {
 async function staleWatch(args) {
   setInterval(async () => {
     if (stopping || !child) return;
+    await writeState("running", { maxRestarts: args.maxRestarts });
     const state = await readLoopHeartbeat();
     const heartbeat = state?.heartbeatAt ? Date.parse(state.heartbeatAt) : 0;
     if (!heartbeat || Date.now() - heartbeat > args.staleMs) {
@@ -195,7 +198,7 @@ async function main() {
   };
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
-  startChild(args);
+  await startChild(args);
   await staleWatch(args);
   await new Promise((resolvePromise) => {
     const poll = setInterval(() => {
