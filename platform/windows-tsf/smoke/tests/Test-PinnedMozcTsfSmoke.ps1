@@ -3,6 +3,7 @@
 
 [CmdletBinding()]
 param(
+    [Alias('RepoRoot')]
     [string]$RepositoryRoot = ''
 )
 

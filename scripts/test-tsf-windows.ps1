@@ -11,10 +11,11 @@ working directory, and forwards all smoke parameters to the owned harness.
 
 [CmdletBinding()]
 param(
+    [Alias('RepoRoot')]
     [string]$RepositoryRoot = '',
     [Alias('MozcWorkspace', 'PinnedMozcStage')]
     [string]$MozcStage = '',
-    [Alias('ArtifactPath', 'MozcTipDll', 'TipDllPath')]
+    [Alias('ArtifactPath', 'Artifact', 'MozcTipDll', 'TipDllPath')]
     [string]$TipDll = '',
     [string]$RuntimeRoot = '',
     [Alias('OutputPath', 'SmokeResultPath', 'ReceiptPath')]
