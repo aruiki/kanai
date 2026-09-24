@@ -127,7 +127,7 @@ if ($actualIds.Count -ne $expectedIds.Count -or @($expectedIds | Where-Object { 
 }
 $expectedObservation = $plan.hostResultContract.observations
 if ($plan.profile.pinnedMozcCommit -ne $commit -or
-    @($plan.hostResultContract.requiredFields) -notcontains 'pinnedMozcCommit' -or
+    @($plan.hostResultContract.requiredFields) -notcontains 'mozcCommit' -or
     @($plan.hostResultContract.requiredFields) -notcontains 'tipDllPath' -or
     [string]::IsNullOrWhiteSpace([string]$expectedObservation.preedit) -or
     [string]::IsNullOrWhiteSpace([string]$expectedObservation.primaryCandidate) -or

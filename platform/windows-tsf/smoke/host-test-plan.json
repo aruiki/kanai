@@ -76,7 +76,7 @@
       "textServiceClsid",
       "languageProfileGuid",
       "languageId",
-      "pinnedMozcCommit",
+      "mozcCommit",
       "tipDllSha256",
       "observations",
       "completedAtUtc"

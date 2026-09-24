@@ -95,7 +95,7 @@ class PinnedMozcTsfSmokeContractTest(unittest.TestCase):
         self.assertEqual(PLAN["profile"]["textServiceClsid"], CONTRACT["registration"]["textServiceClsid"])
         self.assertEqual(PLAN["profile"]["languageProfileGuid"], CONTRACT["registration"]["languageProfileGuid"])
         self.assertEqual(PLAN["profile"]["pinnedMozcCommit"], CONTRACT["pinnedMozc"]["commit"])
-        self.assertIn("pinnedMozcCommit", PLAN["hostResultContract"]["requiredFields"])
+        self.assertIn("mozcCommit", PLAN["hostResultContract"]["requiredFields"])
         self.assertIn("tipDllPath", PLAN["hostResultContract"]["requiredFields"])
         observations = PLAN["hostResultContract"]["observations"]
         self.assertEqual(observations["preedit"], "かな")
