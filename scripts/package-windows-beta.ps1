@@ -475,7 +475,9 @@ function New-ThirdPartyInventory {
             sha256 = Get-Hash -Path $file.FullName
         }
     }
-    $records = @($records | Sort-Object -Property path)
+    $records = @($records | Sort-Object -Property @{
+        Expression = { ([string]$_.path).ToLowerInvariant() }
+    })
     $inventory = [ordered]@{
         schemaVersion = 1
         product = 'KanaAI'
@@ -867,20 +869,28 @@ try {
     foreach ($file in Get-PayloadFiles -Root $packageRoot) {
         $fileRecords += Get-FileRecord -Root $packageRoot -File $file
     }
-    $manifest.files = @($fileRecords | Sort-Object -Property path)
+    $manifest.files = @($fileRecords | Sort-Object -Property @{
+        Expression = { ([string]$_.path).ToLowerInvariant() }
+    })
     $manifest.fileSet.count = @($manifest.files).Count
     $manifest.fileSet.paths = @($manifest.files | ForEach-Object { [string]$_.path })
     $manifest.fileSet.sha256 = Get-TextHash -Text (($manifest.fileSet.paths -join "`n") + "`n")
     $manifestJson = $manifest | ConvertTo-Json -Depth 20
     Write-Utf8NoBom -Path (Join-Path $packageRoot 'manifest.json') -Content ($manifestJson + [Environment]::NewLine)
 
-    $checksumLines = @()
+    $checksumEntries = @()
     foreach ($file in Get-ChecksumFiles -Root $packageRoot) {
         $relative = Get-RelativePath -BasePath $packageRoot -Path $file.FullName
         Assert-SafeRelativePath -RelativePath $relative
-        $checksumLines += ((Get-Hash -Path $file.FullName) + '  ' + $relative)
+        $checksumEntries += [pscustomobject]@{
+            path = $relative
+            line = ((Get-Hash -Path $file.FullName) + '  ' + $relative)
+        }
     }
-    $checksumLines = @($checksumLines | Sort-Object)
+    $checksumEntries = @($checksumEntries | Sort-Object -Property @{
+        Expression = { ([string]$_.path).ToLowerInvariant() }
+    })
+    $checksumLines = @($checksumEntries | ForEach-Object { [string]$_.line })
     Write-Utf8NoBom -Path (Join-Path $packageRoot 'SHA256SUMS') -Content (($checksumLines -join "`n") + "`n")
 
     Assert-NoForbiddenFiles -Root $packageRoot
