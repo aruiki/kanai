@@ -4,6 +4,7 @@ members = [
     "crates/kanai-mozc",
     "crates/kanai-api",
     "crates/kanai-cli",
+    "crates/kanai-broker",
 ]
 resolver = "3"
 

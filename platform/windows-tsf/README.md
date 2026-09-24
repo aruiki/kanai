@@ -1,21 +1,26 @@
-# Windows beta and TSF roadmap
+# Windows TSF beta
 
-## Phase 1: Workbench/CLI beta
+KanaAI's first Windows beta is a native Text Services Framework (TSF) Text
+Input Processor (TIP). A browser Workbench, CLI, HTTP API, or Mozc bridge is
+not an IME beta and is not packaged as one.
 
-The current Windows beta is an unsigned, x64, per-user portable package. It
-runs the KanaAI Rust API, the pinned Mozc bridge, and the local browser
-Workbench through PowerShell scripts. It is a real conversion/AI testing path,
-but it is not a registered TSF keyboard.
+The implementation is being developed against the pinned upstream Mozc source
+in `third_party/mozc`. The TSF TIP owns Windows text-service lifecycle,
+preedit/candidate presentation, focus recovery, and the native integration
+boundary. KanaAI's Rust broker and bounded local AI remain behind that boundary
+and must never take ownership of commit, mode, or learning state.
 
-Build and install instructions are in
-[`docs/WINDOWS_BETA.md`](../../docs/WINDOWS_BETA.md). The package is deliberately
-labeled `workbench-cli-phase-1`; file presence is not treated as runtime
-verification.
+## Required beta gates
 
-## Phase 2: TSF adapter
+- x64 TIP DLL builds with MSVC/Windows SDK and required Mozc dependencies.
+- Text-service/profile registration and clean uninstall work in Windows.
+- Notepad, Edge, and Office pass composition, conversion, candidate, commit,
+  cancel, focus-loss, and restart tests.
+- Secure fields, UI Automation, high-DPI, app-container policy, and x86/x64
+  support are tested or explicitly documented as unsupported.
+- Broker/model failure falls back without losing the composition or committing
+  unexpected text.
+- SHA-256, SBOM, provenance, and signing status are published honestly.
 
-Target: a TSF Text Service/Input Processor DLL pair (x86 and x64) with a minimal COM shell around the KanaAI Rust broker.
-
-TSF-specific work includes text-service registration, COM lifecycle, preedit/candidate presentation, UI Automation, secure fields, app-container behavior, and x86/x64 registration. None of that work should duplicate Japanese conversion or local model policy.
-
-Unsigned development builds are distributed as portable archives first. A conventional `setup.exe` may be added later, but its filename does not bypass Microsoft Defender SmartScreen; signing and publisher reputation remain separate concerns.
+The product boundary and exit criteria are recorded in
+[`docs/PRODUCT_RELEASE_CONTRACT.md`](../../docs/PRODUCT_RELEASE_CONTRACT.md).

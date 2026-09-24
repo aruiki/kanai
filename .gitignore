@@ -7,6 +7,5 @@ coverage/
 target/
 .local/
 .kanai/
-windows-beta/
 *.log
 .DS_Store

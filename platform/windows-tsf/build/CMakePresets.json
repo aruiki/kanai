@@ -1,0 +1,34 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 30,
+    "patch": 6
+  },
+  "configurePresets": [
+    {
+      "name": "windows-x64-msvc",
+      "displayName": "KanaAI Windows x64 MSVC (pinned v143)",
+      "description": "Release-only TIP validation preset; registration is never performed by the harness.",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/../../../windows-beta/tsf/cmake-x64",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_GENERATOR_PLATFORM": "x64",
+        "CMAKE_GENERATOR_TOOLSET": "v143",
+        "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreadedDLL",
+        "KANAI_TSF_REFUSE_REGISTRATION": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-x64-msvc-release",
+      "configurePreset": "windows-x64-msvc",
+      "configuration": "Release"
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# This target is a Windows-only source slice. It is a library that a future
+# TIP can link into its x86 and x64 DLLs; it is not a registered TSF target.
+platform(
+    name = "windows-x86",
+    constraint_values = [
+        "@platforms//cpu:x86",
+        "@platforms//os:windows",
+    ],
+)
+
+platform(
+    name = "windows-x86_64",
+    constraint_values = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:windows",
+    ],
+)
+
+cc_library(
+    name = "candidate_window",
+    srcs = [
+        "candidate_window.cpp",
+        "candidate_window_geometry.cpp",
+        "candidate_window_uia.cpp",
+    ],
+    hdrs = [
+        "broker_dto.h",
+        "candidate_window.h",
+        "candidate_window_geometry.h",
+        "candidate_window_uia.h",
+    ],
+    includes = ["."],
+    copts = [
+        "/std:c++20",
+        "/utf-8",
+        "/W4",
+        "/WX",
+        "/permissive-",
+        "/Zc:__cplusplus",
+        "/EHsc",
+        "/DWIN32_LEAN_AND_MEAN",
+        "/DNOMINMAX",
+        "/DUNICODE",
+        "/D_UNICODE",
+        "/D_WIN32_WINNT=0x0A00",
+        "/DWINVER=0x0A00",
+    ],
+    linkopts = [
+        "-DEFAULTLIB:user32.lib",
+        "-DEFAULTLIB:gdi32.lib",
+        "-DEFAULTLIB:ole32.lib",
+        "-DEFAULTLIB:oleaut32.lib",
+        "-DEFAULTLIB:uuid.lib",
+        "-DEFAULTLIB:uiautomationcore.lib",
+    ],
+    target_compatible_with = ["@platforms//os:windows"],
+    tags = [
+        "manual",
+        "tsf-candidate-ui",
+        "technical-slice",
+    ],
+)

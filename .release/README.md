@@ -2,9 +2,10 @@
 
 This directory contains **release planning material only**. KanaAI currently
 has no public binary release, official Scoop bucket, installer, native IME, or
-code-signing identity. The repository now includes a source-buildable Windows
-portable beta path, but it does not publish a prebuilt artifact or live
-manifest. Nothing here is an installable manifest as committed.
+code-signing identity. The retired Workbench/CLI package is not a beta. The
+first Windows release candidate must be a native TSF TIP based on the pinned
+upstream Mozc Windows TIP, followed by real Windows application tests. Nothing
+here is an installable manifest as committed.
 
 The full normative release discussion is in
 [docs/DISTRIBUTION.md](../docs/DISTRIBUTION.md).

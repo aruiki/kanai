@@ -1,10 +1,17 @@
 # Local AI runtime
 
-## Principle
+## Phase 1 TSF quality mode
 
-KanaAI is local-first by design, not by a UI setting. The conversion path is fully local, and any generative model is an optional, explicitly controlled second stage.
+Phase 1 is a native Windows TSF IME based on the pinned upstream Mozc TIP.
+KanaAI adds a fast, bounded local quality layer to Mozc's existing candidates;
+it does not make the browser Workbench, CLI, or bridge the product. The normal
+path is Mozc first, then a latency-bounded ranker/policy, with optional local
+semantic assistance for ambiguity, repair, prediction, or an explicit action.
 
-The model runtime is expected to be an OpenAI-compatible loopback server such as `llama.cpp`'s `llama-server`. KanaAI does not download a model as part of the core installation and does not bundle model weights in the repository.
+The quality reference is a mature Japanese IME experience. It is evaluated with
+reproducible Japanese cases against the pinned Mozc baseline; Google Japanese
+Input's proprietary code, dictionaries, cloud data, and UI are not copied.
+
 
 ## Roles and model classes
 

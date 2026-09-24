@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "kind": "KanaAI.Windows.TsfRegistryManifest",
+  "status": "source-only",
+  "sourceOnly": true,
+  "registrationComplete": false,
+  "tipDllPresent": false,
+  "windowsTestsPassed": false,
+  "runtimeVerified": false,
+  "tsf": {
+    "status": "unimplemented",
+    "registered": false,
+    "dllIncluded": false
+  },
+  "artifactName": "KanaAI.TsfTip.dll",
+  "buildGuard": "KANAI_TSF_REFUSE_REGISTRATION=ON",
+  "readiness": {
+    "registrationComplete": false,
+    "tipDllPresent": false,
+    "windowsTestsPassed": false,
+    "runtimeVerified": false
+  },
+  "classId": "{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}",
+  "profileId": "{F3C2B7A1-6D54-4E8B-9A10-2C7D8E9F0A12}",
+  "identityStatus": "provisional-until-implementation-approval",
+  "identityApproved": false,
+  "pinnedMozcReference": {
+    "textServiceClsid": "{10A67BC8-22FA-4A59-90DC-2546652C56BF}",
+    "languageProfileGuid": "{186F700C-71CF-43FE-A00E-AACB1D9E6D3D}",
+    "mustNotBeRegisteredAsKanaAI": true
+  },
+  "languageId": "0x00000411",
+  "languageProfile": {
+    "languageTag": "ja-JP",
+    "languageIdDecimal": 1041,
+    "installLayoutOrTipString": "0x0411:{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}{F3C2B7A1-6D54-4E8B-9A10-2C7D8E9F0A12}"
+  },
+  "dllFileName": "KanaAI.TsfTip.dll",
+  "supportedArchitectures": ["x64"],
+  "plannedArchitectures": ["x86"],
+  "registryViews": {
+    "x64": "Registry64",
+    "x86": "Registry32"
+  },
+  "registryViewGuidance": {
+    "x64": "Use 64-bit PowerShell/reg.exe and RegistryView.Registry64; do not rely on WOW64 redirection.",
+    "x86": "Use 32-bit PowerShell/reg.exe and RegistryView.Registry32 when a real x86 TIP is added."
+  },
+  "registryHives": {
+    "machine": "HKEY_LOCAL_MACHINE",
+    "perUser": "HKEY_CURRENT_USER"
+  },
+  "programFiles": {
+    "x64": {
+      "primaryEnvironmentVariable": "ProgramW6432",
+      "fallbackEnvironmentVariable": "ProgramFiles",
+      "relativeDirectory": "KanaAI\\TSF",
+      "displayName": "Program Files"
+    },
+    "x86": {
+      "primaryEnvironmentVariable": "ProgramFiles(x86)",
+      "relativeDirectory": "KanaAI\\TSF",
+      "displayName": "Program Files (x86)"
+    }
+  },
+  "paths": {
+    "machine": {
+      "com": "SOFTWARE\\Classes\\CLSID\\{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}",
+      "textService": "SOFTWARE\\Microsoft\\CTF\\TIP\\{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}",
+      "profile": "SOFTWARE\\Microsoft\\CTF\\TIP\\{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}\\LanguageProfile\\0x00000411\\{F3C2B7A1-6D54-4E8B-9A10-2C7D8E9F0A12}"
+    },
+    "perUser": {
+      "com": "Software\\Classes\\CLSID\\{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}",
+      "textService": "Software\\Microsoft\\CTF\\TIP\\{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}",
+      "profile": "Software\\Microsoft\\CTF\\TIP\\{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}\\LanguageProfile\\0x00000411\\{F3C2B7A1-6D54-4E8B-9A10-2C7D8E9F0A12}"
+    }
+  },
+  "values": {
+    "textService": {
+      "Description": "KanaAI Japanese input processor",
+      "EnableCompartment": 1,
+      "LoadBehavior": 0
+    },
+    "profile": {
+      "Description": "KanaAI Japanese",
+      "Language": 1041,
+      "IconFile": "@@TIP_DLL_PATH@@",
+      "IconIndex": 0
+    },
+    "userActivation": {
+      "Enable": 1
+    }
+  },
+  "requiredApis": [
+    "ITfInputProcessorProfiles.Register",
+    "ITfInputProcessorProfiles.AddLanguageProfile",
+    "ITfInputProcessorProfileMgr.RegisterProfile",
+    "ITfCategoryMgr.RegisterCategory",
+    "InstallLayoutOrTip"
+  ],
+  "uninstallApis": [
+    "ITfInputProcessorProfiles.RemoveLanguageProfile",
+    "ITfInputProcessorProfileMgr.UnregisterProfile",
+    "ITfCategoryMgr.UnregisterCategory",
+    "ITfInputProcessorProfiles.Unregister",
+    "InstallLayoutOrTip (disable; verify it is not the last language layout)"
+  ],
+  "notes": [
+    "This manifest describes registry metadata; it does not replace the TSF registration APIs.",
+    "The x64 view is Registry64 and the future x86 view is Registry32.",
+    "The source-only state is incomplete until a real TIP DLL exists and Windows tests pass."
+  ]
+}

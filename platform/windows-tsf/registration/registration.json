@@ -1,0 +1,284 @@
+{
+  "schemaVersion": 1,
+  "kind": "KanaAI.Windows.TsfRegistration",
+  "status": "source-only",
+  "sourceOnly": true,
+  "registrationComplete": false,
+  "tipDllPresent": false,
+  "windowsTestsPassed": false,
+  "runtimeVerified": false,
+  "tsf": {
+    "status": "unimplemented",
+    "registered": false,
+    "dllIncluded": false
+  },
+  "product": {
+    "name": "KanaAI",
+    "displayName": "KanaAI Japanese",
+    "description": "KanaAI Japanese input processor",
+    "publisher": "KanaAI"
+  },
+  "readiness": {
+    "registrationComplete": false,
+    "tipDllPresent": false,
+    "windowsTestsPassed": false,
+    "runtimeVerified": false,
+    "requiredGates": [
+      "A real KanaAI.TsfTip.dll exists and is a valid x64 PE DLL.",
+      "Windows registration, COM activation, language-profile, and application tests pass.",
+      "The TIP is verified in a 64-bit Windows application; registry entries alone are not proof."
+    ],
+    "completionRule": "Registration is not complete until a real TIP DLL exists and Windows tests pass."
+  },
+  "target": {
+    "platform": "windows",
+    "architecture": "x64",
+    "targetTriple": "x86_64-pc-windows-msvc",
+    "processBitness": "64-bit",
+    "peMachine": "0x8664"
+  },
+  "artifactContract": {
+    "name": "KanaAI.TsfTip.dll",
+    "sourceMetadata": "platform/windows-tsf/build/toolchain.json",
+    "windowsSmokePlan": "platform/windows-tsf/build/smoke-test-plan.json",
+    "buildGuard": "KANAI_TSF_REFUSE_REGISTRATION=ON",
+    "productRegistrationReady": false,
+    "registrationOwner": "future-kanai-tip-registrar",
+    "note": "The build harness deliberately refuses registration; this slice supplies a separately reviewed projection and never changes that build guard."
+  },
+  "registrationIdentity": {
+    "status": "provisional-until-implementation-approval",
+    "identityApproved": false,
+    "kanaiTextServiceClsid": "{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}",
+    "kanaiLanguageProfileGuid": "{F3C2B7A1-6D54-4E8B-9A10-2C7D8E9F0A12}",
+    "pinnedMozcReference": {
+      "textServiceClsid": "{10A67BC8-22FA-4A59-90DC-2546652C56BF}",
+      "languageProfileGuid": "{186F700C-71CF-43FE-A00E-AACB1D9E6D3D}",
+      "registrationReady": false,
+      "mustNotBeRegisteredAsKanaAI": true
+    }
+  },
+  "textService": {
+    "clsid": "{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}",
+    "profileGuid": "{F3C2B7A1-6D54-4E8B-9A10-2C7D8E9F0A12}",
+    "displayName": "KanaAI Japanese",
+    "description": "KanaAI Japanese input processor",
+    "language": {
+      "tag": "ja-JP",
+      "name": "Japanese",
+      "languageId": "0x0411",
+      "languageIdDecimal": 1041,
+      "profileKeyLanguageSegment": "0x00000411",
+      "installLayoutOrTipString": "0x0411:{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}{F3C2B7A1-6D54-4E8B-9A10-2C7D8E9F0A12}"
+    },
+    "dll": {
+      "fileName": "KanaAI.TsfTip.dll",
+      "architecture": "x64",
+      "requiredExports": [
+        "DllGetClassObject",
+        "DllCanUnloadNow",
+        "DllRegisterServer",
+        "DllUnregisterServer"
+      ],
+      "presentInSourceTree": false
+    },
+    "icon": {
+      "fileName": "KanaAI.TsfTip.dll",
+      "index": 0
+    },
+    "threadingModel": "Apartment"
+  },
+  "registry": {
+    "machineTextServiceRoot": "SOFTWARE\\Microsoft\\CTF\\TIP",
+    "userTextServiceRoot": "Software\\Microsoft\\CTF\\TIP",
+    "profileSubkey": "LanguageProfile",
+    "machineComRoot": "SOFTWARE\\Classes\\CLSID",
+    "userComRoot": "Software\\Classes\\CLSID",
+    "comRootAlias": "HKEY_CLASSES_ROOT\\CLSID",
+    "textServiceValues": {
+      "Description": {
+        "type": "REG_SZ",
+        "value": "KanaAI Japanese input processor",
+        "owner": "TIP registration projection"
+      },
+      "EnableCompartment": {
+        "type": "REG_DWORD",
+        "value": 1,
+        "owner": "TIP registration projection"
+      },
+      "LoadBehavior": {
+        "type": "REG_DWORD",
+        "value": 0,
+        "owner": "TIP registration projection"
+      }
+    },
+    "profileValues": {
+      "Description": {
+        "type": "REG_SZ",
+        "value": "KanaAI Japanese"
+      },
+      "Language": {
+        "type": "REG_DWORD",
+        "value": 1041
+      },
+      "IconFile": {
+        "type": "REG_SZ",
+        "value": "@@TIP_DLL_PATH@@"
+      },
+      "IconIndex": {
+        "type": "REG_DWORD",
+        "value": 0
+      }
+    },
+    "userActivationValues": {
+      "Enable": {
+        "type": "REG_DWORD",
+        "value": 1
+      }
+    }
+  },
+  "registrationApis": [
+    {
+      "name": "ITfInputProcessorProfiles.Register",
+      "required": true,
+      "purpose": "Register the text-service CLSID with TSF."
+    },
+    {
+      "name": "ITfInputProcessorProfiles.AddLanguageProfile",
+      "required": true,
+      "purpose": "Add the Japanese language profile and icon metadata."
+    },
+    {
+      "name": "ITfInputProcessorProfileMgr.RegisterProfile",
+      "required": true,
+      "purpose": "Use the current TSF profile-manager registration entry point when building the registrar."
+    },
+    {
+      "name": "ITfCategoryMgr.RegisterCategory",
+      "required": true,
+      "purpose": "Register the TIP categories supported by the compiled TIP."
+    },
+    {
+      "name": "InstallLayoutOrTip",
+      "required": true,
+      "purpose": "Enable the profile for the current user; this is a per-user operation."
+    }
+  ],
+  "unregistrationApis": [
+    {
+      "name": "ITfInputProcessorProfiles.Unregister",
+      "required": true,
+      "purpose": "Remove the text service and its profiles on uninstall."
+    },
+    {
+      "name": "ITfInputProcessorProfiles.RemoveLanguageProfile",
+      "required": true,
+      "purpose": "Remove the language profile explicitly during uninstall."
+    },
+    {
+      "name": "ITfInputProcessorProfileMgr.UnregisterProfile",
+      "required": true,
+      "purpose": "Use the current TSF profile-manager removal entry point when building the registrar."
+    },
+    {
+      "name": "ITfCategoryMgr.UnregisterCategory",
+      "required": true,
+      "purpose": "Remove categories explicitly during uninstall."
+    },
+    {
+      "name": "InstallLayoutOrTip (disable; verify it is not the last language layout)",
+      "required": false,
+      "purpose": "Disable the current user's layout only after checking Windows language-layout safety."
+    }
+  ],
+  "categories": {
+    "guidSource": "Windows SDK msctf.h constants; resolve at compile time rather than copying registry values",
+    "entries": [
+      {
+        "symbol": "GUID_TFCAT_TIP_KEYBOARD",
+        "registration": "ITfCategoryMgr.RegisterCategory",
+        "implemented": false
+      },
+      {
+        "symbol": "GUID_TFCAT_DISPLAYATTRIBUTEPROVIDER",
+        "registration": "ITfCategoryMgr.RegisterCategory",
+        "implemented": false
+      },
+      {
+        "symbol": "GUID_TFCAT_TIPCAP_INPUTMODECOMPARTMENT",
+        "registration": "ITfCategoryMgr.RegisterCategory",
+        "implemented": false
+      },
+      {
+        "symbol": "GUID_TFCAT_TIPCAP_UIELEMENTENABLED",
+        "registration": "ITfCategoryMgr.RegisterCategory",
+        "implemented": false
+      },
+      {
+        "symbol": "GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT",
+        "registration": "ITfCategoryMgr.RegisterCategory",
+        "implemented": false
+      }
+    ]
+  },
+  "scopes": {
+    "perUser": {
+      "label": "per-user developer registration",
+      "registryHive": "HKEY_CURRENT_USER",
+      "requiresAdministrator": false,
+      "writesTipProviderMetadata": true,
+      "writesUserActivation": true,
+      "completeProviderRegistration": false,
+      "note": "This is a development overlay and activation template. Production TSF provider registration and category registration must be supplied by a real TIP registrar and verified on Windows."
+    },
+    "machine": {
+      "label": "machine-wide administrator registration",
+      "registryHive": "HKEY_LOCAL_MACHINE",
+      "requiresAdministrator": true,
+      "writesTipProviderMetadata": true,
+      "writesUserActivation": true,
+      "completeProviderRegistration": false,
+      "note": "The machine template is an explicit reviewable projection. ITfInputProcessorProfiles and ITfCategoryMgr calls, COM registration, activation, and Windows tests remain required."
+    }
+  },
+  "architectures": {
+    "x64": {
+      "supported": true,
+      "programFiles": {
+        "displayName": "Program Files",
+        "primaryEnvironmentVariable": "ProgramW6432",
+        "fallbackEnvironmentVariable": "ProgramFiles",
+        "relativeDirectory": "KanaAI\\TSF"
+      },
+      "dllPathTemplate": "%ProgramW6432%\\KanaAI\\TSF\\KanaAI.TsfTip.dll",
+      "registryView": "Registry64",
+      "blockedReason": "",
+      "registryViewGuidance": "Use a 64-bit PowerShell/reg.exe and RegistryView.Registry64. A 32-bit process must not write the x64 TIP view."
+    },
+    "x86": {
+      "supported": false,
+      "programFiles": {
+        "displayName": "Program Files (x86)",
+        "primaryEnvironmentVariable": "ProgramFiles(x86)",
+        "fallbackEnvironmentVariable": "",
+        "relativeDirectory": "KanaAI\\TSF"
+      },
+      "dllPathTemplate": "%ProgramFiles(x86)%\\KanaAI\\TSF\\KanaAI.TsfTip.dll",
+      "registryView": "Registry32",
+      "blockedReason": "The x86 TIP is not part of this slice. Do not register a 32-bit placeholder or claim x86 compatibility.",
+      "registryViewGuidance": "When an x86 TIP is later added, use a 32-bit installer/reg.exe and RegistryView.Registry32; do not point it at the x64 Program Files directory."
+    }
+  },
+  "templates": {
+    "perUser": "platform/windows-tsf/registration/templates/per-user.reg.template",
+    "administratorX64": "platform/windows-tsf/registration/templates/administrator-x64.reg.template",
+    "administratorX86Future": "platform/windows-tsf/registration/templates/administrator-x86.reg.template",
+    "windowsTestReceiptExample": "platform/windows-tsf/registration/templates/windows-test-receipt.example.json"
+  },
+  "validation": {
+    "staticTest": "platform/windows-tsf/registration/tests/Test-RegistrationSlice.ps1",
+    "requiresRealTipDll": true,
+    "requiresWindowsTestReceipt": true,
+    "registrationCompleteFieldMustRemainFalse": true
+  }
+}

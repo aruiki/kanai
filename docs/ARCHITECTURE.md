@@ -75,6 +75,31 @@ TypeScript lab UI -> loopback lab API -> Rust core in lab/simulation mode
 
 There is no production arrow from TypeScript to native adapters, Mozc, user storage, or network providers. A lab build may not be installed by the native packages.
 
+## Performance and language strategy
+
+Rust is the primary optimization language for KanaAI-owned code. The first
+performance work is not a rewrite of Mozc's C++ conversion core; it is to make
+the integration cheaper and more predictable:
+
+- keep the TSF/DLL boundary in C++/COM where Windows requires it;
+- use Rust for the broker, session/generation state, cancellation, candidate
+  validation, bounded reranking, learning policy, caches, and process supervision;
+- profile the existing Mozc IPC path before changing its protocol;
+- use release builds, allocation limits, bounded queues, and backpressure at
+  the key-to-candidate boundary; and
+- add SIMD, caching, or in-process FFI only where a measured benchmark justifies
+  the added ABI and review cost.
+
+Other emerging languages may be used for isolated offline tools when they
+provide a clear advantage, but language diversity is not a goal by itself. A
+small Zig or C++ utility is acceptable only if it has a narrow build/test
+contract; production session and AI orchestration stays in Rust.
+
+Every optimization must publish before/after measurements for p50 and p95
+keystroke-to-candidate latency, allocation count, CPU time, memory, model
+latency, and fallback rate. A faster microbenchmark that worsens TSF stability
+or Mozc correctness is rejected.
+
 ## Component topology
 
 ```mermaid

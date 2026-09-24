@@ -246,7 +246,7 @@ Also verify every shipped executable/driver/component covered by the chosen sign
 
 ### Windows
 
-The first release is expected to be unsigned. The portable ZIP and reviewed Scoop manifest are primary; Inno Setup/NSIS `setup.exe` is optional. The current Windows beta is a portable Workbench/CLI package, not a completed TSF keyboard. Communicate SmartScreen and Smart App Control behavior accurately. Later, use Authenticode with a trusted identity, Azure Artifact Signing/Trusted Signing, or SignPath under this policy.
+The first native Windows TSF release is expected to be unsigned until a trusted identity is available. A TSF TIP, installer, ZIP, or Scoop manifest is not a beta until native registration and desktop-application tests pass. Communicate SmartScreen and Smart App Control behavior accurately. Later, use Authenticode with a trusted identity, Azure Artifact Signing/Trusted Signing, or SignPath under this policy.
 
 ### macOS
 

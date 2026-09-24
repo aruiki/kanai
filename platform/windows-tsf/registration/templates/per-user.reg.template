@@ -1,0 +1,39 @@
+Windows Registry Editor Version 5.00
+
+; KanaAI TSF per-user developer registration template.
+; SOURCE-ONLY: do not import this file as-is. It contains the sentinel
+; @@TIP_DLL_PATH@@ and is not a completed TSF registration.
+;
+; The x64 view is Registry64 (reg.exe /reg:64). Render and review this file with a 64-bit
+; PowerShell/reg.exe only after a real KanaAI.TsfTip.dll exists and the Windows
+; registration tests pass. HKCU profile activation is per user; it does not
+; replace machine-wide TSF provider/category registration.
+;
+; The installer removes the sentinel and writes the actual absolute DLL path.
+; Do not replace it with %ProgramW6432%: registry string values do not expand
+; environment variables for COM loading.
+
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}]
+@="KanaAI Japanese input processor"
+
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}\InProcServer32]
+@="@@TIP_DLL_PATH@@"
+"ThreadingModel"="Apartment"
+
+; Developer overlay. A production TIP registrar must reconcile these values
+; with ITfInputProcessorProfiles and ITfCategoryMgr.
+[HKEY_CURRENT_USER\Software\Microsoft\CTF\TIP\{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}]
+"Description"="KanaAI Japanese input processor"
+"EnableCompartment"=dword:00000001
+"LoadBehavior"=dword:00000000
+
+[HKEY_CURRENT_USER\Software\Microsoft\CTF\TIP\{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}\LanguageProfile\0x00000411\{F3C2B7A1-6D54-4E8B-9A10-2C7D8E9F0A12}]
+"Description"="KanaAI Japanese"
+"Language"=dword:00000411
+"IconFile"="@@TIP_DLL_PATH@@"
+"IconIndex"=dword:00000000
+
+; LANGID 0x0411 is represented as the 0x00000411 registry segment.
+; The API spelling is ...\LanguageProfile\0x0411\{PROFILE_GUID}.
+; This value enables the profile for this user only.
+"Enable"=dword:00000001

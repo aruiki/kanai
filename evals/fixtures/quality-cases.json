@@ -1,0 +1,468 @@
+{
+  "schemaVersion": 1,
+  "name": "kanai-synthetic-quality",
+  "corpusVersion": "2026-09-25.v1",
+  "description": "Small synthetic Japanese candidate-reranking corpus. No personal data or production documents are included.",
+  "seed": 0,
+  "mozc": {
+    "revision": "13c98988247aa711d99db9e348ec2a597d14b5cd",
+    "engineVersion": "3.34.6239.100 / engine 24",
+    "source": "versioned synthetic capture attributed to the pinned upstream Mozc gitlink"
+  },
+  "policy": {
+    "name": "deterministic-local-context",
+    "version": "1",
+    "maxRankShift": 2
+  },
+  "ai": {
+    "name": "fixture-reranker",
+    "model": "fixture-reranker-v1",
+    "modelTier": "compact"
+  },
+  "cases": [
+    {
+      "id": "homophone-kyou-context",
+      "slice": "homophone",
+      "romaji": "kyouhahajimetowojimeru",
+      "reading": "きょうはしごとをはじめる",
+      "contextBefore": "会議の開始は",
+      "contextAfter": "。",
+      "secureField": false,
+      "expectedAction": "rank",
+      "goldCandidateId": 102,
+      "baseline": {
+        "runtimeMs": 1.1,
+        "candidates": [
+          { "id": 101, "text": "京は", "reading": "きょうは", "cost": 120 },
+          { "id": 102, "text": "今日は", "reading": "きょうは", "cost": 118 },
+          { "id": 103, "text": "強は", "reading": "きょうは", "cost": 116 },
+          { "id": 104, "text": "京は仕事", "reading": "きょうはしごと", "cost": 140 },
+          { "id": 105, "text": "今日", "reading": "きょう", "cost": 130 }
+        ]
+      },
+      "policy": {
+        "preferredCandidateIds": [102],
+        "runtimeMs": 0.2
+      },
+      "ai": {
+        "status": "applied",
+        "candidateIds": [102, 101, 103, 104, 105],
+        "confidence": 0.94,
+        "reasonCode": "semantic_context",
+        "runtimeMs": 12.4
+      }
+    },
+    {
+      "id": "homophone-kanji-context",
+      "slice": "homophone",
+      "romaji": "kanka-ku",
+      "reading": "かんかく",
+      "contextBefore": "用户体验の",
+      "contextAfter": "_encoding",
+      "secureField": false,
+      "expectedAction": "rank",
+      "goldCandidateId": 202,
+      "baseline": {
+        "runtimeMs": 1.3,
+        "candidates": [
+          { "id": 201, "text": "監", "reading": "かん", "cost": 130 },
+          { "id": 202, "text": "感覚", "reading": "かんかく", "cost": 122 },
+          { "id": 203, "text": "艦", "reading": "かん", "cost": 121 },
+          { "id": 204, "text": "寛", "reading": "かん", "cost": 119 },
+          { "id": 205, "text": "官", "reading": "かん", "cost": 118 }
+        ]
+      },
+      "policy": {
+        "preferredCandidateIds": [202],
+        "runtimeMs": 0.2
+      },
+      "ai": {
+        "status": "applied",
+        "candidateIds": [202, 201, 203, 204, 205],
+        "confidence": 0.91,
+        "reasonCode": "ambiguous_homophone",
+        "runtimeMs": 14.8
+      }
+    },
+    {
+      "id": "technical-api-term",
+      "slice": "technical",
+      "romaji": "atarashieppointo",
+      "reading": "あたらしいえんどぽいんと",
+      "contextBefore": "新しいエンドポイントの",
+      "contextAfter": "設定",
+      "secureField": false,
+      "expectedAction": "rank",
+      "goldCandidateId": 302,
+      "baseline": {
+        "runtimeMs": 1.0,
+        "candidates": [
+          { "id": 301, "text": "エーピーアイ", "reading": "えーぴーあい", "cost": 124 },
+          { "id": 302, "text": "API", "reading": "えーぴーあい", "cost": 119 },
+          { "id": 303, "text": "API接続", "reading": "えーぴーあいせつぞく", "cost": 121 },
+          { "id": 304, "text": "あぴーあい", "reading": "あぴーあい", "cost": 118 },
+          { "id": 305, "text": "アピアイ", "reading": "あぴあい", "cost": 117 }
+        ]
+      },
+      "policy": {
+        "preferredCandidateIds": [302],
+        "runtimeMs": 0.3
+      },
+      "ai": {
+        "status": "applied",
+        "candidateIds": [302, 301, 303, 304, 305],
+        "confidence": 0.89,
+        "reasonCode": "domain_term",
+        "runtimeMs": 18.2
+      }
+    },
+    {
+      "id": "business-meeting-context",
+      "slice": "business",
+      "romaji": "ashitanoyoteiwakaigi",
+      "reading": "あしたのよていはかいぎ",
+      "contextBefore": "明日の予定は",
+      "contextAfter": "です",
+      "secureField": false,
+      "expectedAction": "rank",
+      "goldCandidateId": 402,
+      "baseline": {
+        "runtimeMs": 1.2,
+        "candidates": [
+          { "id": 401, "text": "経緯", "reading": "かいき", "cost": 129 },
+          { "id": 402, "text": "会議", "reading": "かいぎ", "cost": 123 },
+          { "id": 403, "text": "改義", "reading": "かいぎ", "cost": 121 },
+          { "id": 404, "text": "解题", "reading": "かいぎ", "cost": 120 },
+          { "id": 405, "text": "海岸", "reading": "かいがん", "cost": 119 }
+        ]
+      },
+      "policy": {
+        "preferredCandidateIds": [402],
+        "runtimeMs": 0.2
+      },
+      "ai": {
+        "status": "applied",
+        "candidateIds": [402, 401, 403, 404, 405],
+        "confidence": 0.93,
+        "reasonCode": "intent_fit",
+        "runtimeMs": 11.7
+      }
+    },
+    {
+      "id": "user-name-collision",
+      "slice": "user_dictionary",
+      "romaji": "apputounosha",
+      "reading": "あぷとのうしゃ",
+      "contextBefore": "アプリの登録者は",
+      "contextAfter": "です",
+      "secureField": false,
+      "expectedAction": "rank",
+      "goldCandidateId": 502,
+      "baseline": {
+        "runtimeMs": 1.4,
+        "candidates": [
+          { "id": 501, "text": "棚中", "reading": "たなか", "cost": 131 },
+          { "id": 502, "text": "田中", "reading": "たなか", "cost": 127 },
+          { "id": 503, "text": "多家", "reading": "たなか", "cost": 125 },
+          { "id": 504, "text": "他中", "reading": "たなか", "cost": 124 },
+          { "id": 505, "text": "タナカ", "reading": "たなか", "cost": 123 }
+        ]
+      },
+      "policy": {
+        "preferredCandidateIds": [502],
+        "runtimeMs": 0.4
+      },
+      "ai": {
+        "status": "applied",
+        "candidateIds": [502, 501, 503, 504, 505],
+        "confidence": 0.96,
+        "reasonCode": "intent_fit",
+        "runtimeMs": 16.1
+      }
+    },
+    {
+      "id": "date-number-punctuation",
+      "slice": "numbers",
+      "romaji": "shimekiriwa2026nen4gatsu10nichi",
+      "reading": "しめきりは2026ねん4がつ10にち",
+      "contextBefore": "締め切りは",
+      "contextAfter": "です",
+      "secureField": false,
+      "expectedAction": "rank",
+      "goldCandidateId": 602,
+      "baseline": {
+        "runtimeMs": 1.0,
+        "candidates": [
+          { "id": 601, "text": "二〇二六年四月十日", "reading": "にせんにじゅうろくねんしがつじゅうにち", "cost": 132 },
+          { "id": 602, "text": "2026年4月10日", "reading": "2026ねん4がつ10にち", "cost": 126 },
+          { "id": 603, "text": "二千二十六年四月十日", "reading": "にせんにじゅうろくねんしがつじゅうにち", "cost": 124 },
+          { "id": 604, "text": "2026年4月10日です", "reading": "2026ねん4がつ10にちです", "cost": 123 },
+          { "id": 605, "text": "締め切り", "reading": "しめきり", "cost": 122 }
+        ]
+      },
+      "policy": {
+        "preferredCandidateIds": [602],
+        "runtimeMs": 0.2
+      },
+      "ai": {
+        "status": "applied",
+        "candidateIds": [602, 601, 603, 604, 605],
+        "confidence": 0.9,
+        "reasonCode": "domain_term",
+        "runtimeMs": 21.3
+      }
+    },
+    {
+      "id": "katakana-homophone",
+      "slice": "katakana",
+      "romaji": "kuroneko",
+      "reading": "くろねこ",
+      "contextBefore": "画像の説明は",
+      "contextAfter": "です",
+      "secureField": false,
+      "expectedAction": "rank",
+      "goldCandidateId": 702,
+      "baseline": {
+        "runtimeMs": 1.1,
+        "candidates": [
+          { "id": 701, "text": "暮猫", "reading": "くれねこ", "cost": 128 },
+          { "id": 702, "text": "黒猫", "reading": "くろねこ", "cost": 121 },
+          { "id": 703, "text": "車猫", "reading": "しゃねこ", "cost": 120 },
+          { "id": 704, "text": "クロネコ", "reading": "くろねこ", "cost": 119 },
+          { "id": 705, "text": "黒子", "reading": "くろこ", "cost": 118 }
+        ]
+      },
+      "policy": {
+        "preferredCandidateIds": [702],
+        "runtimeMs": 0.2
+      },
+      "ai": {
+        "status": "applied",
+        "candidateIds": [702, 701, 703, 704, 705],
+        "confidence": 0.88,
+        "reasonCode": "semantic_context",
+        "runtimeMs": 19.6
+      }
+    },
+    {
+      "id": "punctuation-ascii-list",
+      "slice": "punctuation",
+      "romaji": "chekkodoristwa",
+      "reading": "ちぇっこりすとは",
+      "contextBefore": "チェックリストは",
+      "contextAfter": "3件",
+      "secureField": false,
+      "expectedAction": "rank",
+      "goldCandidateId": 801,
+      "baseline": {
+        "runtimeMs": 0.9,
+        "candidates": [
+          { "id": 801, "text": "TODO-123!", "reading": "トドー123", "cost": 110 },
+          { "id": 802, "text": "TO DO-123", "reading": "ト ドー 123", "cost": 114 },
+          { "id": 803, "text": "トドー123", "reading": "とどー123", "cost": 116 },
+          { "id": 804, "text": "Todo 123", "reading": "トド123", "cost": 118 },
+          { "id": 805, "text": "トド123!", "reading": "とど123", "cost": 120 }
+        ]
+      },
+      "policy": {
+        "preferredCandidateIds": [],
+        "runtimeMs": 0.1
+      },
+      "ai": {
+        "status": "abstain",
+        "candidateIds": [],
+        "confidence": 0.93,
+        "reasonCode": "abstain",
+        "runtimeMs": 7.4
+      }
+    },
+    {
+      "id": "abstain-no-reliable-answer",
+      "slice": "abstention",
+      "romaji": "u-n",
+      "reading": "うん",
+      "contextBefore": "うーん、まだ",
+      "contextAfter": "…",
+      "secureField": false,
+      "expectedAction": "abstain",
+      "baseline": {
+        "runtimeMs": 0.8,
+        "candidates": [
+          { "id": 901, "text": "運", "reading": "うん", "cost": 120 },
+          { "id": 902, "text": "運河", "reading": "うんが", "cost": 122 },
+          { "id": 903, "text": "雲", "reading": "くも", "cost": 124 },
+          { "id": 904, "text": "運休", "reading": "うんきゅう", "cost": 126 },
+          { "id": 905, "text": "うん", "reading": "うん", "cost": 128 }
+        ]
+      },
+      "policy": {
+        "preferredCandidateIds": [],
+        "runtimeMs": 0.1
+      },
+      "ai": {
+        "status": "abstain",
+        "candidateIds": [],
+        "confidence": 0.84,
+        "reasonCode": "abstain",
+        "runtimeMs": 6.8
+      }
+    },
+    {
+      "id": "ai-timeout-fallback",
+      "slice": "fault-injection",
+      "romaji": "kaigi",
+      "reading": "かいぎ",
+      "contextBefore": "定例は",
+      "contextAfter": "です",
+      "secureField": false,
+      "expectedAction": "rank",
+      "goldCandidateId": 1001,
+      "baseline": {
+        "runtimeMs": 1.2,
+        "candidates": [
+          { "id": 1001, "text": "会議", "reading": "かいぎ", "cost": 100 },
+          { "id": 1002, "text": "経緯", "reading": "かいき", "cost": 110 },
+          { "id": 1003, "text": "改義", "reading": "かいぎ", "cost": 112 },
+          { "id": 1004, "text": "解题", "reading": "かいぎ", "cost": 114 },
+          { "id": 1005, "text": "海岸", "reading": "かいがん", "cost": 116 }
+        ]
+      },
+      "policy": {
+        "preferredCandidateIds": [],
+        "runtimeMs": 0.2
+      },
+      "ai": {
+        "status": "timedOut",
+        "reasonCode": "modelTimedOut",
+        "runtimeMs": 250.0
+      }
+    },
+    {
+      "id": "ai-invalid-candidate-id-fallback",
+      "slice": "fault-injection",
+      "romaji": "setsumeikai",
+      "reading": "せつめいかい",
+      "contextBefore": "次の",
+      "contextAfter": "は",
+      "secureField": false,
+      "expectedAction": "rank",
+      "goldCandidateId": 1102,
+      "baseline": {
+        "runtimeMs": 1.1,
+        "candidates": [
+          { "id": 1101, "text": "設計会", "reading": "せつめいかい", "cost": 108 },
+          { "id": 1102, "text": "説明会", "reading": "せつめいかい", "cost": 109 },
+          { "id": 1103, "text": "雪盟会", "reading": "せつめいかい", "cost": 111 },
+          { "id": 1104, "text": "摂盟会", "reading": "せつめいかい", "cost": 113 },
+          { "id": 1105, "text": "せつめいかい", "reading": "せつめいかい", "cost": 115 }
+        ]
+      },
+      "policy": {
+        "preferredCandidateIds": [1102],
+        "runtimeMs": 0.2
+      },
+      "ai": {
+        "status": "rejected",
+        "candidateIds": [1101, 999999, 1103, 1104, 1105],
+        "confidence": 0.95,
+        "reasonCode": "semantic_context",
+        "runtimeMs": 4.2
+      }
+    },
+    {
+      "id": "secure-password-field",
+      "slice": "secure-field",
+      "romaji": "pass123",
+      "reading": "pass123",
+      "contextBefore": "PW-SECRET-ALPHA-7Q",
+      "contextAfter": "",
+      "secureField": true,
+      "fieldClass": "password",
+      "redactionMarkers": [
+        "PW-SECRET-ALPHA-7Q",
+        "keyboard-layout-token"
+      ],
+      "expectedAction": "rank",
+      "goldCandidateId": 1201,
+      "baseline": {
+        "runtimeMs": 0.7,
+        "candidates": [
+          { "id": 1201, "text": "PW-SECRET-ALPHA-7Q", "reading": "pass123", "cost": 100 },
+          { "id": 1202, "text": "password", "reading": "password", "cost": 110 },
+          { "id": 1203, "text": "PASS123", "reading": "pass123", "cost": 112 },
+          { "id": 1204, "text": "パス123", "reading": "pasu123", "cost": 114 },
+          { "id": 1205, "text": "パスワード", "reading": "pasuwado", "cost": 116 }
+        ]
+      },
+      "policy": {
+        "preferredCandidateIds": [1201],
+        "runtimeMs": 0.1
+      },
+      "ai": {
+        "status": "secureField",
+        "reasonCode": "secureField",
+        "runtimeMs": 0.0
+      }
+    },
+    {
+      "id": "secure-protected-field",
+      "slice": "secure-field",
+      "romaji": "patient",
+      "reading": "patient",
+      "contextBefore": "PATIENT-REDACT-42",
+      "contextAfter": "",
+      "secureField": true,
+      "fieldClass": "protected",
+      "redactionMarkers": [
+        "PATIENT-REDACT-42",
+        "protected-window-token"
+      ],
+      "expectedAction": "rank",
+      "goldCandidateId": 1301,
+      "baseline": {
+        "runtimeMs": 0.6,
+        "candidates": [
+          { "id": 1301, "text": "患者", "reading": "かんじゃ", "cost": 100 },
+          { "id": 1302, "text": "患者", "reading": "かんじゃ", "cost": 101 },
+          { "id": 1303, "text": "完寿", "reading": "かんじゅ", "cost": 102 },
+          { "id": 1304, "text": "寛寿", "reading": "かんじゅ", "cost": 103 },
+          { "id": 1305, "text": "かんじゃ", "reading": "かんじゃ", "cost": 104 }
+        ]
+      },
+      "policy": {
+        "preferredCandidateIds": [],
+        "runtimeMs": 0.1
+      },
+      "ai": {
+        "status": "secureField",
+        "reasonCode": "secureField",
+        "runtimeMs": 0.0
+      }
+    },
+    {
+      "id": "optional-ai-not-configured",
+      "slice": "optional",
+      "romaji": "setsumei",
+      "reading": "せつめい",
+      "contextBefore": "授業の",
+      "contextAfter": "を",
+      "secureField": false,
+      "expectedAction": "rank",
+      "goldCandidateId": 1402,
+      "baseline": {
+        "runtimeMs": 1.0,
+        "candidates": [
+          { "id": 1401, "text": "説明", "reading": "せつめい", "cost": 108 },
+          { "id": 1402, "text": "設計", "reading": "せっけい", "cost": 109 },
+          { "id": 1403, "text": "雪明", "reading": "せつめい", "cost": 110 },
+          { "id": 1404, "text": "摂明", "reading": "せつめい", "cost": 112 },
+          { "id": 1405, "text": "せつめい", "reading": "せつめい", "cost": 114 }
+        ]
+      },
+      "policy": {
+        "preferredCandidateIds": [1402],
+        "runtimeMs": 0.2
+      }
+    }
+  ]
+}

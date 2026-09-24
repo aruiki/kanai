@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "architecture": "x64",
+  "windowsTestsPassed": false,
+  "tipDll": {
+    "fileName": "KanaAI.TsfTip.dll",
+    "sha256": "<64-character-sha256-from-the-tested-dll>"
+  },
+  "note": "This is an example only. A receipt with false or placeholder values cannot authorize -Apply."
+}

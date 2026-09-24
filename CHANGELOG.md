@@ -35,9 +35,8 @@ claim that a binary is available.
 - Public issue forms, pull-request checklist, security policy, contribution
   guide, and Code of Conduct.
 - MIT and Apache-2.0 project license texts.
-- A source-buildable Windows portable beta package path and placeholder Scoop
-  manifest for a future unsigned ZIP. No prebuilt release artifact or live
-  manifest exists.
+- Native Windows TSF integration work is based on the pinned upstream Mozc
+  Windows TIP; no TSF DLL, installer, or public beta artifact exists yet.
 
 ### Changed
 
@@ -61,7 +60,7 @@ claim that a binary is available.
   native key-path feature; no model weights or native integration ship yet.
 - Encrypted canonical storage, password/secure-field enforcement, Protect Mode,
   sync, and crash recovery remain release work.
-- No published Windows ZIP, installer, Scoop package, or code-signed binary is
-  available yet; the repository provides a source-buildable beta path only.
+- No published Windows TSF TIP, ZIP, installer, Scoop package, or code-signed
+  binary is available yet; the retired Workbench/CLI path is not a beta.
 - Mozc has no stable upstream release channel; KanaAI therefore builds against
   the exact pinned submodule revision and requires explicit review for updates.

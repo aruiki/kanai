@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "name": "kanai-windows-tsf-candidate-ui",
+  "status": "technical-slice",
+  "scope": "candidate-window-only",
+  "transport": "TIP-owned private broker adapter; normalized display DTO after wire/JSON decode",
+  "upstreamRerankContract": "platform/windows-tsf/tsf/metadata/broker-contract-v1.md",
+  "mapping": "The TSF host maps Mozc/rerank records into these display DTOs; this layer never parses the wire frame",
+  "encoding": "UTF-16LE in the C++ DTO structs",
+  "generation": {
+    "required": true,
+    "type": "uint64",
+    "rule": "request_id is nonzero; the UI drops a page with an older generation and request_id breaks ties within one generation"
+  },
+  "candidateId": {
+    "type": "int64 in this slice",
+    "scope": "request/generation only",
+    "rule": "opaque, never persisted, never reused as a Mozc rank"
+  },
+  "page": {
+    "required": [
+      "contractVersion",
+      "generation",
+      "requestId",
+      "pageIndex",
+      "pageCount",
+      "candidates"
+    ],
+    "candidateTextEncoding": "UTF-16 after broker decode",
+    "focusedIndex": "optional zero-based index into candidates"
+  },
+  "commands": {
+    "outbound": [
+      "commit(candidateId)",
+      "nextPage(pageIndex)",
+      "previousPage(pageIndex)",
+      "cancel"
+    ],
+    "rule": "The window never ranks, converts, commits text, or performs I/O"
+  },
+  "notImplementedHere": [
+    "private pipe/client",
+    "JSON decoder and schema negotiation",
+    "TSF registration and COM lifecycle",
+    "complete UI Automation child tree and selection events",
+    "secure-field policy and app-container integration"
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "platform": "windows",
+  "architecture": "x64",
+  "target": "x86_64-pc-windows-msvc",
+  "generator": "Visual Studio 17 2022",
+  "configuration": "Release",
+  "msvc": {
+    "visualStudioMajor": "17",
+    "toolset": "v143",
+    "compiler": "cl.exe",
+    "minimumCompilerVersion": "19.40",
+    "targetArchitecture": "x64"
+  },
+  "windowsSdk": {
+    "version": "10.0.26100.0",
+    "requiredHeaders": [
+      "msctf.h",
+      "textserv.h"
+    ],
+    "requiredLibraries": [
+      "MsCtfMonitor.lib",
+      "ole32.lib",
+      "oleaut32.lib",
+      "uuid.lib"
+    ]
+  },
+  "cmake": {
+    "version": "3.31.6",
+    "generator": "Visual Studio 17 2022",
+    "platform": "x64",
+    "toolset": "v143",
+    "runtime": "MultiThreadedDLL"
+  },
+  "firstTarget": {
+    "architecture": "x64",
+    "bazel": "//win32/tip:mozc_tip64",
+    "forbiddenTargetPatterns": [
+      "x86",
+      "arm64",
+      "installer",
+      "uia"
+    ]
+  },
+  "bazel": {
+    "version": "9.0.2",
+    "platform": "//:windows-x86_64",
+    "cpu": "x64",
+    "releaseConfig": "release_build",
+    "msvcConfig": "compiler_msvc_like",
+    "msvcToolchain": "@local_config_cc//:cc-toolchain-x64_windows",
+    "targetDefine": "TARGET=oss_windows",
+    "noRunfilesFallbackFlags": [
+      "--nowindows_enable_symlinks",
+      "--nobuild_runfile_links",
+      "--nobuild_runfile_manifests",
+      "--enable_runfiles=false"
+    ]
+  },
+  "python": {
+    "minimumVersion": "3.10"
+  },
+  "cache": {
+    "reuseByDefault": true,
+    "resetRequiresExplicitSwitch": true
+  },
+  "mozc": {
+    "submodule": "third_party/mozc",
+    "gitlink": "13c98988247aa711d99db9e348ec2a597d14b5cd",
+    "workspace": "third_party/mozc/src",
+    "bazelVersion": "9.0.2"
+  },
+  "dll": {
+    "name": "KanaAI.TsfTip",
+    "requiredExports": [
+      "DllGetClassObject",
+      "DllCanUnloadNow"
+    ],
+    "registrationExports": [
+      "DllRegisterServer",
+      "DllUnregisterServer"
+    ]
+  },
+  "sourceContract": {
+    "requiredMarkers": [
+      "msctf.h",
+      "ITfThreadMgr",
+      "ITfTextInputProcessor",
+      "DllGetClassObject",
+      "DllCanUnloadNow"
+    ],
+    "refuseNonTsfSeam": true
+  }
+}

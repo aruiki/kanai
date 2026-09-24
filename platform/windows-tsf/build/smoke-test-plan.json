@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "name": "KanaAI Windows x64 TSF TIP smoke tests",
+  "platform": "windows",
+  "architecture": "x64",
+  "claimPolicy": {
+    "nativeBetaRequires": "windowsSmokeTests.status == passed",
+    "requiredTestIds": [
+      "pe-x64-pe32plus",
+      "dll-load",
+      "dll-exports",
+      "tsf-host-load",
+      "tsf-lifecycle",
+      "candidate-ui",
+      "secure-field",
+      "app-container",
+      "focus-teardown"
+    ],
+    "filePresenceIsNotVerification": true,
+    "registrationIsNotPerformedByHarness": true
+  },
+  "tests": [
+    {
+      "id": "pe-x64-pe32plus",
+      "required": true,
+      "owner": "harness",
+      "evidence": "dumpbin/PE parser reports machine 0x8664, PE32+ magic 0x20b, and IMAGE_FILE_DLL"
+    },
+    {
+      "id": "dll-load",
+      "required": true,
+      "owner": "harness",
+      "evidence": "LoadLibraryExW succeeds in a 64-bit Windows process and the module is released"
+    },
+    {
+      "id": "dll-exports",
+      "required": true,
+      "owner": "harness",
+      "evidence": "PE export table and dumpbin /exports contain all four required COM exports"
+    },
+    {
+      "id": "tsf-host-load",
+      "required": true,
+      "owner": "windows-test-host",
+      "evidence": "A real TSF host loads the TIP and creates its text-service class"
+    },
+    {
+      "id": "tsf-lifecycle",
+      "required": true,
+      "owner": "windows-test-host",
+      "evidence": "Activate/deactivate, focus transitions, edit sessions, and shutdown complete without a crash"
+    },
+    {
+      "id": "candidate-ui",
+      "required": true,
+      "owner": "windows-test-host",
+      "evidence": "Candidate presentation, selection, commit, and cancellation work in a desktop application"
+    },
+    {
+      "id": "secure-field",
+      "required": true,
+      "owner": "windows-test-host",
+      "evidence": "Secure/Protect input follows the reviewed TSF policy and does not leak input"
+    },
+    {
+      "id": "app-container",
+      "required": true,
+      "owner": "windows-test-host",
+      "evidence": "The TIP behaves within an app-container process boundary without bypassing restrictions"
+    },
+    {
+      "id": "focus-teardown",
+      "required": true,
+      "owner": "windows-test-host",
+      "evidence": "Focus loss, workspace/app switch, and teardown recover without stale UI or callbacks"
+    }
+  ],
+  "resultContract": {
+    "path": "windows-smoke-result.json",
+    "statusValues": [
+      "passed",
+      "failed",
+      "not-run"
+    ],
+    "eachRequiredTestMustBe": "passed"
+  }
+}

@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/ScoopInstaller/Scoop/master/schema.json",
   "version": "X.Y.Z",
-  "description": "KanaAI local-first Japanese Workbench/CLI developer beta (unsigned portable build; not a TSF IME)",
+  "description": "KanaAI local-first Japanese TSF IME (unsigned native Windows preview; not a Workbench)",
   "homepage": "https://github.com/aruiki/kanai",
   "license": "MIT OR Apache-2.0",
   "notes": "This build is unsigned. Verify the full SHA-256 digest and artifact attestation before running it.",

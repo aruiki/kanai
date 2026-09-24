@@ -1,0 +1,67 @@
+# KanaAI-owned overlay for the pinned upstream Mozc workspace.
+#
+# prepare-pinned-mozc.ps1 copies this directory to
+# <staged-mozc>/src/engine/kanai_ai so upstream visibility permits reuse of its
+# supplemental-model interface and result types.
+# The accompanying engine patch is the only integration point; no file in
+# win32/tip is replaced or reimplemented.
+
+load(
+    "//:build_defs.bzl",
+    "MOZC_TAGS",
+    "mozc_cc_library",
+    "mozc_cc_test",
+)
+
+package(default_visibility = ["//visibility:private"])
+
+mozc_cc_library(
+    name = "broker_contract",
+    srcs = ["broker_contract.cc"],
+    hdrs = ["broker_contract.h"],
+)
+
+mozc_cc_library(
+    name = "rank_policy",
+    srcs = ["rank_policy.cc"],
+    hdrs = ["rank_policy.h"],
+    deps = [":broker_contract"],
+)
+
+# Optional-executor transport only. kanai_supplemental_model does not depend on
+# this target, so no key/preedit callback can call it synchronously.
+mozc_cc_library(
+    name = "pipe_broker_client",
+    srcs = ["pipe_broker_client.cc"],
+    hdrs = ["pipe_broker_client.h"],
+    linkopts = ["bcrypt.lib"],
+    tags = MOZC_TAGS.WIN_ONLY,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [":broker_contract"],
+)
+
+# Compile-only host seam. The implementation reports unavailable until an
+# upstream session/generation token bridge and async executor exist.
+mozc_cc_library(
+    name = "kanai_supplemental_model",
+    srcs = ["kanai_supplemental_model.cc"],
+    hdrs = ["kanai_supplemental_model.h"],
+    visibility = ["//engine:__pkg__"],
+    deps = [
+        ":broker_contract",
+        ":rank_policy",
+        "//engine:supplemental_model_interface",
+        "//prediction:result",
+        "//request:conversion_request",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+mozc_cc_test(
+    name = "kanai_supplemental_model_test",
+    srcs = ["kanai_supplemental_model_test.cc"],
+    deps = [
+        ":kanai_supplemental_model",
+        "//testing:gunit_main",
+    ],
+)

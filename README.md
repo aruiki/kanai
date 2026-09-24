@@ -12,12 +12,11 @@ explainable personalization, and optional local AI.
 [Security](SECURITY.md)
 
 > [!IMPORTANT]
-> **KanaAI is an engineering preview, not a released input method yet.** The
-> repository contains a Rust workbench, an optional web lab, and an isolated
-> bridge to the pinned Mozc source tree. It does **not** yet ship an Fcitx5
-> add-on, Windows TSF IME, macOS InputMethodKit app, installer, portable ZIP,
-> Scoop package, or AI model. Source metadata uses version `0.1.0` as a
-> development version; no public `v0.1.0` release is claimed.
+> **KanaAI is not a released input method yet.** The retired Workbench/CLI
+> package is not a beta or an IME. The first public Windows beta must be a
+> native TSF TIP that works in ordinary desktop applications. The repository
+> currently contains shared Rust/Mozc contracts and development tooling, but
+> no public TSF installer, ZIP, or AI model.
 
 KanaAI is an open-source effort to put a mature Japanese conversion engine
 first and add a small, visible policy layer around it:
@@ -46,58 +45,38 @@ open-source project and does not provide a stable release channel.
 | Local model tier catalog | Implemented as hardware/capacity guidance; no model is included |
 | OpenAI-compatible local assistant | Implemented as an optional `/api/assist` path; not required for conversion |
 | Constrained local semantic reranker | Experimental API path: opt-in, loopback-only, bounded, and fallback-safe; no model is included and it is not a native key-path feature |
-| Native Linux/Windows/macOS IME shells | **Roadmap only** |
+| Native Linux/Windows/macOS IME shells | Windows TSF is the first release target; **no native beta is published** |
 | Encrypted profile store, sync, and secure-field enforcement | Target architecture; not a current end-user feature |
-| Windows portable ZIP and Scoop manifest | Source-buildable beta scripts are in development; no published artifact or live manifest |
+| Windows TSF installer, ZIP, and Scoop manifest | Not published; native TIP and Windows validation are required first |
 
 The current web TypeScript application is a development workbench, not an IME
-runtime. Native shells are planned to call the shared Rust core through thin
-platform adapters.
-
-## Windows beta
-
-The current Windows beta is a **portable Workbench/CLI build**, not a completed
-TSF keyboard. It packages the Rust loopback API, the pinned Mozc bridge, and
-the local workbench with per-user PowerShell install/start/stop scripts. See
-[docs/WINDOWS_BETA.md](docs/WINDOWS_BETA.md) for the build and installation
-flow, SmartScreen expectations, and the native TSF limitations. The complete
-beta-to-TSF product boundary is recorded in
-[docs/PRODUCT_RELEASE_CONTRACT.md](docs/PRODUCT_RELEASE_CONTRACT.md).
-
-The beta is unsigned unless a separately reviewed release is produced with a
-trusted publisher certificate. A `setup.exe` filename does not bypass Windows
-security warnings.
+runtime. The Workbench/CLI beta has been retired; native TSF work calls the
+shared Rust/Mozc contracts through a private broker and is the only Windows
+beta candidate.
 
 ## Architecture
 
 ```text
-Production target (roadmap):
+Production target:
 
-Fcitx5 / TSF / InputMethodKit
-            │
-     thin native shell
-            │
-   Rust session core ───► pinned Mozc conversion backend
-            │
-  local policy + state   ───► optional local/approved AI service
+Windows TSF TIP (x64 first) ── private broker ──► Rust session/AI core
+          │                                           │
+          └──────────────► pinned Mozc conversion ◄───┘
 
-Current developer path:
-
-Web workbench ──loopback intended──► local Rust API
-                                      │
-                               Rust core
-                                      │
-                                 Mozc bridge
+Future platform shells (Fcitx5 / InputMethodKit) use the same core contracts.
 ```
 
 Core repository areas:
 
 | Path | Purpose |
 | --- | --- |
-| `crates/kanai-core` | Conversion contracts, transparent ranking, learning state, and model-tier metadata |
+| `crates/kanai-core` | Conversion contracts, transparent ranking, bounded local quality policy, learning state, and model-tier metadata |
 | `crates/kanai-mozc` | Process supervision and line-protocol adapter for the isolated Mozc bridge |
+| `crates/kanai-broker` | Versioned, generation-checked native-shell/broker protocol contracts |
 | `crates/kanai-api` | Local HTTP API, hardware guidance, optional constrained reranking, and optional assistant client |
 | `crates/kanai-cli` | Small conversion and health CLI |
+| `platform/windows-tsf/` | Native TSF integration slices based on the pinned upstream Mozc Windows TIP |
+| `evals/` | Synthetic quality, fallback, and secure-field evaluation fixtures |
 | `src/` | TypeScript development workbench |
 | `third_party/mozc` | Pinned upstream Mozc submodule; not KanaAI-owned code |
 | `docs/` | Architecture, privacy, integration, distribution, and platform roadmap |
@@ -328,28 +307,27 @@ or real dictionaries in a public issue. Follow [SECURITY.md](SECURITY.md).
 | `npm test` | Run Vitest tests |
 | `npm run build` | Type-check and build the web workbench |
 | `bazelisk build //kanai:kanai_mozc_bridge` | Build the pinned C++ bridge from `third_party/mozc/src` |
-| `pwsh ./scripts/build-windows-beta.ps1 -Version 0.1.0-beta.1 -Package` | Build the source-based Windows portable beta ZIP on Windows |
+| `pwsh ./scripts/build-tsf-windows.ps1` | Build and validate the native Windows TSF slices on Windows |
 
 The repository's source checks cover the Rust workspace and the web
 workbench separately. GitHub Actions activation is pending the account's
 `workflow` scope; the checks do not build or certify the large Mozc target or
 publish a native IME.
 
-## Windows portable ZIP and Scoop plan
+## Windows TSF release plan
 
-There is **no published prebuilt binary or Scoop package today**. The source
-now includes a Windows portable beta build path for maintainers; a release ZIP
-must still be built and reviewed on Windows. The first published Windows
-distribution is expected to be a versioned, **unsigned**, x64 portable ZIP,
-followed by a hash-pinned Scoop manifest in a project-controlled bucket. A
-release is expected to include the tested payload, project license files,
-required third-party notices, `SHA256SUMS`, an SBOM, a build manifest, and a
-GitHub artifact attestation where available.
+There is **no published Windows IME binary or Scoop package today**. The first
+release candidate is a native TSF TIP built from the pinned upstream Mozc
+Windows TIP and must pass the native beta gates in
+[`docs/PRODUCT_RELEASE_CONTRACT.md`](docs/PRODUCT_RELEASE_CONTRACT.md). A
+browser Workbench or CLI artifact is not a Windows beta.
 
-A future Scoop manifest verifies that the downloaded ZIP matches a reviewed
-hash. It is not an Authenticode signature, does not establish publisher trust,
-and does not suppress SmartScreen or Smart App Control. Users must not be told
-to disable those protections.
+After the TIP passes clean Windows registration and application tests, the
+project may publish a versioned **unsigned** x64 package with project notices,
+`SHA256SUMS`, an SBOM, a build manifest, and provenance where available. A
+Scoop manifest can follow only after the native package and upgrade/uninstall
+path are verified. A future manifest verifies a hash; it is not an Authenticode
+signature or a SmartScreen bypass.
 
 The non-negotiable release details and a deliberately incomplete manifest
 template are in [.release/README.md](.release/README.md). They are release

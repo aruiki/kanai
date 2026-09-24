@@ -25,9 +25,7 @@ required Japanese content before publication.
 
 - Do not add fake download buttons or claim that a Windows TSF IME is shipped.
 - Do not bundle model weights, API keys, local profiles, or user text.
-- Keep the Windows beta labeled as a portable Workbench/CLI beta until the TSF
-  exit gates pass.
-- Update the page whenever the README's capability table or Windows beta boundary
-  changes.
+- State clearly that no Windows beta exists until the native TSF exit gates pass.
+- Update the page whenever the README's capability table or TSF boundary changes.
 - The `gh-pages` branch is generated from `site-assets/`; do not hand-edit the
   deployed copy without applying the change back to the source directory.

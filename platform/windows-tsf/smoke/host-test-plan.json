@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "id": "pinned-mozc-notepad-preedit-candidate-commit",
+  "purpose": "Smallest useful real-host vertical slice for the pinned Mozc x64 TIP. It proves TSF activation, composition preedit, candidate presentation, and commit; it is not the complete release test matrix.",
+  "application": {
+    "default": "System32/Notepad.exe",
+    "requirement": "A visible, editable, non-secure desktop text control in an x64 Windows process."
+  },
+  "profile": {
+    "owner": "pinned-upstream-mozc",
+    "pinnedMozcCommit": "13c98988247aa711d99db9e348ec2a597d14b5cd",
+    "textServiceClsid": "{10A67BC8-22FA-4A59-90DC-2546652C56BF}",
+    "languageProfileGuid": "{186F700C-71CF-43FE-A00E-AACB1D9E6D3D}",
+    "languageId": "0x0411"
+  },
+  "preconditions": [
+    "Run the exact DLL that the harness hashed in an x64 PowerShell process.",
+    "Use the 64-bit Windows TSF registry view and the pinned upstream Mozc profile.",
+    "Start from a new untitled document with no existing text or selection.",
+    "Do not use a password, secure-desktop, elevated, or restricted-token field for this minimal slice."
+  ],
+  "steps": [
+    {
+      "order": 1,
+      "id": "activate-profile",
+      "action": "Focus the text control and activate the pinned Mozc Japanese profile with the normal Windows language/profile UI or shortcut.",
+      "expected": "Mozc Japanese input is active; no KanaAI identity is claimed."
+    },
+    {
+      "order": 2,
+      "id": "preedit",
+      "action": "Type the ASCII letters kana without pressing Space.",
+      "expectedPreedit": "かな",
+      "evidence": "The three-character reading is visible as inline preedit, and the document has not committed Latin text."
+    },
+    {
+      "order": 3,
+      "id": "candidate",
+      "action": "Press Space once.",
+      "expectedPrimaryCandidate": "変換",
+      "evidence": "A candidate window is visible and its primary candidate is 変換."
+    },
+    {
+      "order": 4,
+      "id": "commit",
+      "action": "Press Enter once.",
+      "expectedCommittedText": "変換",
+      "evidence": "The document contains 変換, the reading preedit and candidate window are gone, and focus remains in the text control."
+    },
+    {
+      "order": 5,
+      "id": "teardown",
+      "action": "Close the document without saving and confirm the host process exits cleanly.",
+      "evidence": "No crash dialog, stale candidate window, or orphan Mozc process remains."
+    }
+  ],
+  "hostResultContract": {
+    "schemaVersion": 1,
+    "driverParameters": [
+      "ResultPath",
+      "TestPlanPath",
+      "ApplicationPath",
+      "TipDllPath",
+      "TextServiceClsid",
+      "LanguageProfileGuid",
+      "LanguageId",
+      "MozcCommit",
+      "TipDllSha256"
+    ],
+    "status": "passed",
+    "testId": "preedit-candidate-commit",
+    "requiredFields": [
+      "applicationPath",
+      "applicationProcessId",
+      "tipDllPath",
+      "textServiceClsid",
+      "languageProfileGuid",
+      "languageId",
+      "pinnedMozcCommit",
+      "tipDllSha256",
+      "observations",
+      "completedAtUtc"
+    ],
+    "observations": {
+      "tsfHostLoad": true,
+      "profileActivated": true,
+      "preedit": "かな",
+      "primaryCandidate": "変換",
+      "committedText": "変換",
+      "compositionClosed": true,
+      "focusRetained": true,
+      "cleanTeardown": true
+    }
+  },
+  "notCovered": [
+    "secure fields",
+    "AppContainer and UAC boundaries",
+    "UI Automation and screen-reader semantics",
+    "high-DPI behavior",
+    "Office and Chromium hosts",
+    "x86 TIP loading",
+    "performance, learning, broker, or AI quality"
+  ],
+  "failureGuidance": [
+    "If the profile cannot be activated, report registration-live failure and do not treat DLL load as TSF proof.",
+    "If preedit is absent, report host failure and retain the exact profile/app/artifact evidence.",
+    "If candidates are absent, verify mozc_server.exe and the complete runtime before retrying.",
+    "If commit differs, report the observed text verbatim; do not normalize it to the expected value."
+  ]
+}

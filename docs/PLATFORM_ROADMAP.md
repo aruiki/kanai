@@ -157,13 +157,16 @@ The TIP DLL is intentionally thin. It implements required COM/TSF objects, trans
 
 ### Current Windows beta boundary
 
-Before the TSF pilot is complete, KanaAI will publish a portable Windows beta
-containing the Rust API, the pinned Mozc bridge, and the local browser
-workbench. It is installable and usable through PowerShell, but it is not yet a
-registered system IME. The package must show this boundary in its first-run
-screen and release notes. The TSF TIP, x86/x64 registration, candidate window,
-and secure-field behavior remain native beta exit gates. Build and per-user
-install instructions are in [`WINDOWS_BETA.md`](./WINDOWS_BETA.md).
+The first Windows beta is a native TSF TIP built on the pinned upstream Mozc
+Windows TIP. The KanaAI-specific layer is limited to bounded AI reranking,
+broker/session integration, learning policy, and privacy controls. The retired
+Workbench/CLI package is development material only and is not a beta,
+download, or substitute for a registered text service.
+
+The TSF TIP, x86/x64 registration, candidate window, secure-field behavior,
+and real application tests are release gates. No public TSF artifact exists
+until those gates pass. The exact contract is in
+[`PRODUCT_RELEASE_CONTRACT.md`](./PRODUCT_RELEASE_CONTRACT.md).
 
 
 - TSF text-service and input-processor-profile registration.
@@ -299,7 +302,7 @@ Every public release, on every platform, must satisfy:
 |---|---|---|
 | Developer lab | Synthetic fixtures and explicit local test data; TypeScript allowed. | No production profile/credentials. |
 | Internal alpha | Linux native shell, crash diagnostics, opt-in local profile. | Telemetry off; manual export. |
-| Windows portable beta | Per-user Workbench/CLI package; no TSF registration | No model or network by default; unsigned warning visible |
+| Windows TSF beta | Native x64 TIP based on pinned upstream Mozc; real registration and app tests required | Local conversion; AI/network opt-in and bounded |
 | Public beta | Signed native package, support workflow, transparent notices. | Cloud/AI/sync individually opt-in. |
 | Stable | Reviewed release, staged update/rollback, published hashes/SBOM. | Local conversion always available. |
 | Enterprise (future) | Managed policies and organization domain packs. | Separate policy/admin design; not implied by the first release. |

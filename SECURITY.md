@@ -2,11 +2,11 @@
 
 ## Project status
 
-KanaAI is an engineering preview. The repository includes a source-buildable
-Windows Workbench/CLI beta path, but there is no stable release, native IME,
-supported release channel, or public signing identity today. Security fixes are
-handled on a best-effort basis for the current development line until a
-supported release policy is established.
+KanaAI is an engineering project. The retired Workbench/CLI path is not a
+Windows beta or IME, and no native TSF installer, supported release channel, or
+public signing identity exists today. Security fixes are handled on a
+best-effort basis for the current development line until a supported release
+policy is established.
 
 Do not assume that source availability, a checksum, a Scoop manifest, or a
 GitHub artifact attestation proves that a binary is vulnerability-free. See the
@@ -77,11 +77,12 @@ Particular attention should be paid to:
 - dependency, CI, release, Scoop, update, and artifact provenance behavior; and
 - third-party or model data entering a release without required review.
 
-The current API is unauthenticated and loopback-bound. Do not expose it to an
-untrusted network or treat loopback binding as authentication. The Windows
-portable beta is unsigned until a trusted publisher signature exists; verify
-its digest and source before running it. These are known preview limitations,
-not evidence that the service is safe for production deployment.
+The current developer API is unauthenticated and loopback-bound. Do not expose
+it to an untrusted network or treat loopback binding as authentication. A
+future Windows TSF package must be treated as unsigned until a trusted publisher
+signature exists; verify its digest and source before running it. These are
+known development limitations, not evidence that the service is safe for
+production deployment.
 
 ## Out of scope
 

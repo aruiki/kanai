@@ -97,9 +97,11 @@ cargo run -p kanai-api --release
 Then open <http://127.0.0.1:8787>. This is still a developer service, not a
 native IME release.
 
-For the source-buildable Windows portable beta, see
-[`docs/WINDOWS_BETA.md`](docs/WINDOWS_BETA.md). It is a Workbench/CLI package,
-not a completed TSF keyboard.
+For the native Windows direction, see
+[`docs/PLATFORM_ROADMAP.md`](docs/PLATFORM_ROADMAP.md) and
+[`platform/windows-tsf/README.md`](platform/windows-tsf/README.md). The retired
+Workbench/CLI package is not a Windows beta or IME; the first beta must be a
+registered TSF TIP based on the pinned upstream Mozc Windows TIP.
 
 ## Required checks
 

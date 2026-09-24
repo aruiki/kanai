@@ -1,0 +1,328 @@
+#ifndef _WIN32
+#error "KanaAI's named-pipe broker client is Windows-only."
+#endif
+
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#include "engine/kanai_ai/pipe_broker_client.h"
+
+#include <windows.h>
+#include <bcrypt.h>
+
+#include <algorithm>
+#include <array>
+#include <chrono>
+#include <cstdint>
+#include <iterator>
+#include <limits>
+#include <span>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+#include "engine/kanai_ai/broker_contract.h"
+
+namespace kanai::tsf {
+namespace {
+
+using Clock = std::chrono::steady_clock;
+
+constexpr std::uint32_t kMinimumTimeoutMilliseconds = 1;
+constexpr std::uint32_t kMaximumTimeoutMilliseconds = 2000;
+constexpr std::size_t kMaximumTransportFrameSize =
+    kBrokerFrameHeaderSize + kBrokerMaxPayloadSize;
+
+// This is a public capability marker, not a shared secret. The server-side
+// PeerAuthenticator must separately validate GetNamedPipeClientProcessId's
+// user/elevation token and the user-only pipe ACL.
+constexpr std::string_view kPeerProof = "KanaAI.Tsf.TokenPeer.v1";
+
+class UniqueHandle {
+ public:
+  UniqueHandle() = default;
+  explicit UniqueHandle(HANDLE handle) : handle_(handle) {}
+  ~UniqueHandle() { reset(); }
+
+  UniqueHandle(const UniqueHandle&) = delete;
+  UniqueHandle& operator=(const UniqueHandle&) = delete;
+
+  UniqueHandle(UniqueHandle&& other) noexcept
+      : handle_(std::exchange(other.handle_, nullptr)) {}
+  UniqueHandle& operator=(UniqueHandle&& other) noexcept {
+    if (this != &other) {
+      reset();
+      handle_ = std::exchange(other.handle_, nullptr);
+    }
+    return *this;
+  }
+
+  HANDLE get() const { return handle_; }
+  void reset(HANDLE handle = nullptr) {
+    if (valid()) {
+      ::CloseHandle(handle_);
+    }
+    handle_ = handle;
+  }
+
+  bool valid() const {
+    return handle_ != nullptr && handle_ != INVALID_HANDLE_VALUE;
+  }
+
+ private:
+  HANDLE handle_ = nullptr;
+};
+
+std::wstring ReadConfiguredPipeName() {
+  std::wstring default_name;
+  DWORD session_id = 0;
+  if (::ProcessIdToSessionId(::GetCurrentProcessId(), &session_id)) {
+    default_name.assign(
+        kBrokerWidePipeNamePrefix,
+        std::char_traits<wchar_t>::length(kBrokerWidePipeNamePrefix));
+    default_name += std::to_wstring(session_id);
+  }
+
+  std::vector<wchar_t> buffer(256);
+  const DWORD copied = ::GetEnvironmentVariableW(
+      L"KANAI_AI_TSF_PIPE", buffer.data(),
+      static_cast<DWORD>(buffer.size()));
+  if (copied == 0 || copied >= buffer.size()) {
+    return default_name;
+  }
+  std::wstring configured(buffer.data(), copied);
+  const std::wstring allowed_prefix(
+      kBrokerWidePipeNamePrefix,
+      std::char_traits<wchar_t>::length(kBrokerWidePipeNamePrefix));
+  if (configured.starts_with(allowed_prefix) &&
+      configured.size() > allowed_prefix.size()) {
+    return configured;
+  }
+  return default_name;
+}
+
+std::uint32_t RemainingMilliseconds(Clock::time_point deadline) {
+  const auto now = Clock::now();
+  if (now >= deadline) {
+    return 0;
+  }
+  const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             deadline - now)
+                             .count();
+  if (remaining <= 0) {
+    return 1;
+  }
+  return static_cast<std::uint32_t>(std::min<std::int64_t>(
+      remaining, std::numeric_limits<std::uint32_t>::max()));
+}
+
+bool CompleteOverlapped(HANDLE handle, HANDLE event, OVERLAPPED* overlapped,
+                         Clock::time_point deadline, DWORD* bytes_transferred) {
+  if (bytes_transferred == nullptr || overlapped == nullptr) {
+    return false;
+  }
+  const DWORD wait_result =
+      ::WaitForSingleObject(event, RemainingMilliseconds(deadline));
+  if (wait_result == WAIT_TIMEOUT) {
+    ::CancelIoEx(handle, overlapped);
+    DWORD ignored = 0;
+    ::GetOverlappedResult(handle, overlapped, &ignored, TRUE);
+    return false;
+  }
+  if (wait_result != WAIT_OBJECT_0) {
+    return false;
+  }
+  return ::GetOverlappedResult(handle, overlapped, bytes_transferred, FALSE) !=
+         FALSE;
+}
+
+bool ConnectPipe(const std::wstring& pipe_name, Clock::time_point deadline,
+                 UniqueHandle* pipe) {
+  if (pipe == nullptr || pipe_name.empty() ||
+      RemainingMilliseconds(deadline) == 0) {
+    return false;
+  }
+  if (!::WaitNamedPipeW(pipe_name.c_str(), RemainingMilliseconds(deadline))) {
+    return false;
+  }
+  UniqueHandle handle(::CreateFileW(
+      pipe_name.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+      FILE_FLAG_OVERLAPPED, nullptr));
+  if (!handle.valid()) {
+    return false;
+  }
+  DWORD mode = PIPE_READMODE_BYTE;
+  if (!::SetNamedPipeHandleState(handle.get(), &mode, nullptr, nullptr)) {
+    return false;
+  }
+  *pipe = std::move(handle);
+  return true;
+}
+
+bool ReadExactly(HANDLE pipe, HANDLE event, void* buffer, DWORD requested,
+                 Clock::time_point deadline) {
+  auto* bytes = static_cast<std::uint8_t*>(buffer);
+  DWORD offset = 0;
+  while (offset < requested) {
+    if (!::ResetEvent(event)) {
+      return false;
+    }
+    OVERLAPPED overlapped = {};
+    DWORD transferred = 0;
+    const BOOL started = ::ReadFile(pipe, bytes + offset, requested - offset,
+                                   &transferred, &overlapped);
+    if (started) {
+      if (!::GetOverlappedResult(pipe, &overlapped, &transferred, FALSE) ||
+          transferred == 0) {
+        return false;
+      }
+    } else {
+      const DWORD error = ::GetLastError();
+      if (error != ERROR_IO_PENDING ||
+          !CompleteOverlapped(pipe, event, &overlapped, deadline, &transferred) ||
+          transferred == 0) {
+        return false;
+      }
+    }
+    offset += transferred;
+  }
+  return true;
+}
+
+bool WriteExactly(HANDLE pipe, HANDLE event, const std::uint8_t* buffer,
+                  DWORD requested, Clock::time_point deadline) {
+  DWORD offset = 0;
+  while (offset < requested) {
+    OVERLAPPED overlapped = {};
+    DWORD transferred = 0;
+    const BOOL started = ::WriteFile(pipe, buffer + offset, requested - offset,
+                                    &transferred, &overlapped);
+    if (started) {
+      if (!::GetOverlappedResult(pipe, &overlapped, &transferred, FALSE) ||
+          transferred == 0) {
+        return false;
+      }
+    } else {
+      const DWORD error = ::GetLastError();
+      if (error != ERROR_IO_PENDING ||
+          !CompleteOverlapped(pipe, event, &overlapped, deadline, &transferred) ||
+          transferred == 0) {
+        return false;
+      }
+    }
+    offset += transferred;
+  }
+  return true;
+}
+
+bool SendPayload(HANDLE pipe, HANDLE event, std::string_view json,
+                 Clock::time_point deadline) {
+  const std::optional<std::vector<std::uint8_t>> frame =
+      EncodeBrokerFrame(json);
+  return frame.has_value() && frame->size() <= kMaximumTransportFrameSize &&
+         WriteExactly(pipe, event, frame->data(),
+                      static_cast<DWORD>(frame->size()), deadline);
+}
+
+bool ReceivePayload(HANDLE pipe, HANDLE event, Clock::time_point deadline,
+                    std::string* payload) {
+  if (payload == nullptr) {
+    return false;
+  }
+  std::array<std::uint8_t, kBrokerFrameHeaderSize> header{};
+  if (!ReadExactly(pipe, event, header.data(),
+                   static_cast<DWORD>(header.size()), deadline)) {
+    return false;
+  }
+  const std::uint32_t payload_size =
+      (static_cast<std::uint32_t>(header[4]) << 24) |
+      (static_cast<std::uint32_t>(header[5]) << 16) |
+      (static_cast<std::uint32_t>(header[6]) << 8) |
+      static_cast<std::uint32_t>(header[7]);
+  if (payload_size == 0 || payload_size > kBrokerMaxPayloadSize) {
+    return false;
+  }
+  std::vector<std::uint8_t> frame(kBrokerFrameHeaderSize + payload_size);
+  std::copy(header.begin(), header.end(), frame.begin());
+  if (!ReadExactly(pipe, event, frame.data() + kBrokerFrameHeaderSize,
+                   payload_size, deadline)) {
+    return false;
+  }
+  const std::optional<std::string> decoded = DecodeBrokerFrame(frame);
+  if (!decoded.has_value()) {
+    return false;
+  }
+  *payload = std::move(*decoded);
+  return true;
+}
+
+bool Authenticate(HANDLE pipe, HANDLE event, const std::string& client_id,
+                  Clock::time_point deadline) {
+  AuthRequest request;
+  request.client_id = client_id;
+  request.nonce.resize(kBrokerMaxAuthNonceBytes);
+  if (BCryptGenRandom(nullptr, request.nonce.data(),
+                      static_cast<ULONG>(request.nonce.size()),
+                      BCRYPT_USE_SYSTEM_PREFERRED_RNG) < 0) {
+    return false;
+  }
+  request.proof.assign(kPeerProof.begin(), kPeerProof.end());
+  const std::optional<std::string> auth_json = EncodeAuthRequestJson(request);
+  std::string auth_response_json;
+  if (!auth_json.has_value() || !SendPayload(pipe, event, *auth_json, deadline) ||
+      !ReceivePayload(pipe, event, deadline, &auth_response_json)) {
+    return false;
+  }
+  const std::optional<AuthResponse> auth_response =
+      DecodeAuthResponseJson(auth_response_json, client_id);
+  return auth_response.has_value() && auth_response->accepted;
+}
+
+}  // namespace
+
+PipeBrokerClient::PipeBrokerClient(std::uint32_t timeout_milliseconds)
+    : pipe_name_(ReadConfiguredPipeName()),
+      timeout_milliseconds_(std::clamp(
+          timeout_milliseconds, kMinimumTimeoutMilliseconds,
+          kMaximumTimeoutMilliseconds)) {}
+
+bool PipeBrokerClient::Rerank(const RerankRequest& request,
+                              RerankResponse* response) const {
+  if (response == nullptr || pipe_name_.empty()) {
+    return false;
+  }
+  const std::optional<std::string> request_json =
+      EncodeRerankRequestJson(request);
+  if (!request_json.has_value()) {
+    return false;
+  }
+
+  const auto deadline =
+      Clock::now() + std::chrono::milliseconds(timeout_milliseconds_);
+  UniqueHandle pipe;
+  if (!ConnectPipe(pipe_name_, deadline, &pipe)) {
+    return false;
+  }
+  UniqueHandle event(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+  if (!event.valid() || !Authenticate(pipe.get(), event.get(), client_id_, deadline) ||
+      !SendPayload(pipe.get(), event.get(), *request_json, deadline)) {
+    return false;
+  }
+
+  std::string response_json;
+  if (!ReceivePayload(pipe.get(), event.get(), deadline, &response_json)) {
+    return false;
+  }
+  const std::optional<RerankResponse> decoded =
+      DecodeRerankResponseJson(response_json, request);
+  if (!decoded.has_value()) {
+    return false;
+  }
+  *response = *decoded;
+  return true;
+}
+
+}  // namespace kanai::tsf

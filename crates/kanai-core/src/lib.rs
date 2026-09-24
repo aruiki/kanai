@@ -9,8 +9,15 @@ mod learning;
 mod types;
 
 pub use ai::{
-    HardwareCapabilities, ModelProfile, ModelTier, Quantization, recommend_tier,
-    recommend_tier_for_memory,
+    BoundedLocalContext, CandidateIdOrder, CandidateOrderError, DEFAULT_FAST_RANK_DEADLINE,
+    DEFAULT_SEMANTIC_RERANK_DEADLINE, FastRankOutcome, FastRankStatus, HardwareCapabilities,
+    LocalDataPolicy, LocalQualityConfig, LocalQualityEngine, LocalQualityRequest,
+    MAX_FAST_RANK_DEADLINE, MAX_LOCAL_QUALITY_CACHE_ENTRIES, MAX_LOCAL_QUALITY_CANDIDATES,
+    MAX_LOCAL_QUALITY_CONTEXT_CHARS, MAX_LOCAL_QUALITY_RANK_SHIFT, MIN_SEMANTIC_RERANK_CONFIDENCE,
+    ModelProfile, ModelTier, NoCandidatePatch, Quantization, RerankRejection,
+    SemanticProviderError, SemanticRerankAction, SemanticRerankAdmission, SemanticRerankApply,
+    SemanticRerankDecision, SemanticRerankPlan, SemanticRerankReason, SemanticRerankResolution,
+    SemanticRerankSnapshot, recommend_tier, recommend_tier_for_memory,
 };
 pub use learning::{LearningState, UserProfile, UserWord};
 pub use types::{

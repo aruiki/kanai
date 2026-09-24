@@ -1,0 +1,14 @@
+KanaAI Windows TSF registration slice
+====================================
+
+This is source-only registration metadata and dry-run tooling.
+
+It does not contain a TIP DLL, does not register an IME by itself, and does
+not establish runtime readiness. The planned CLSID/profile identity is still
+provisional. The planned artifact is
+KanaAI.TsfTip.dll (x64). Registry templates contain unresolved rendering
+sentinels and must not be imported as-is.
+
+Registration is not complete until a real TIP DLL exists and the Windows
+registration, COM, language-profile, activation, and application tests pass.
+A successful registry query or a file-presence check is not proof.

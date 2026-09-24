@@ -1,26 +1,24 @@
 # Distribution and release guide
 
-**Status:** source-buildable portable beta path plus a proposed release contract
-for an open-source build that does not currently have a public code-signing
-identity.
+**Status:** native Windows TSF beta is in development; no public installer,
+portable ZIP, Scoop manifest, or signed artifact exists yet.
 
-This document describes a distribution strategy; it does **not** create a ZIP, `setup.exe`, Scoop manifest, installer script, or other release binary. Those are build outputs and must be produced by a reviewed release workflow. See [`OPEN_SOURCE_GUIDELINES.md`](./OPEN_SOURCE_GUIDELINES.md) for project governance, licensing, security, and signing-secret policy.
+This document describes a distribution strategy; it does **not** create a ZIP,
+`setup.exe`, Scoop manifest, installer script, or other release binary. Those are
+build outputs and must be produced by a reviewed release workflow. See
+[`OPEN_SOURCE_GUIDELINES.md`](./OPEN_SOURCE_GUIDELINES.md) for project
+governance, licensing, security, and signing-secret policy.
 
-See [`WINDOWS_BETA.md`](./WINDOWS_BETA.md) for the current per-user portable
-beta boundary and PowerShell workflow.
-
-
-The first Windows beta is a **portable KanaAI Workbench/CLI package**, not a
-completed Windows TSF keyboard. It packages the Rust local API, the pinned
-Mozc bridge, and the browser workbench behind a PowerShell launcher. This gives
-Windows users a reproducible install/remove flow while the TSF TIP, candidate
-window, secure-field integration, and x86/x64 registration remain explicit
-follow-up gates. The beta must be labeled accordingly in the UI, release notes,
-and download page; it must not be presented as a system-wide IME replacement.
+The first Windows beta is a native TSF TIP based on the pinned upstream Mozc
+Windows TIP. The KanaAI layer adds bounded AI reranking, broker/session
+integration, and policy without replacing Mozc's conversion or text-service
+lifecycle. A browser Workbench, CLI, HTTP API, or bridge is not a beta artifact
+and must not be presented as an IME.
 
 The beta package is unsigned unless a release build is produced with a legitimate
 publisher certificate. A `setup.exe` filename is not a trust or SmartScreen
-bypass.
+bypass. The complete beta gates are in
+[`PRODUCT_RELEASE_CONTRACT.md`](./PRODUCT_RELEASE_CONTRACT.md).
 
 
 ## 1. Decision summary

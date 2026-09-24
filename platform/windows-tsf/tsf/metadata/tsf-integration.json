@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 2,
+  "status": "development-seam-not-public-beta",
+  "host": {
+    "type": "pinned-upstream-mozc",
+    "path": "third_party/mozc",
+    "commit": "13c98988247aa711d99db9e348ec2a597d14b5cd",
+    "licenseFile": "third_party/mozc/LICENSE",
+    "x64TipTarget": "//win32/tip:mozc_tip64",
+    "x64ServerTarget": "//server:mozc_server_win",
+    "qualityReferenceOnly": true
+  },
+  "registration": {
+    "owner": "pinned-upstream-mozc",
+    "ossTextServiceClsid": "{10A67BC8-22FA-4A59-90DC-2546652C56BF}",
+    "ossLanguageProfileGuid": "{186F700C-71CF-43FE-A00E-AACB1D9E6D3D}",
+    "provisionalKanaAiTextServiceClsid": "{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}",
+    "provisionalKanaAiProfileGuid": "{F3C2B7A1-6D54-4E8B-9A10-2C7D8E9F0A12}",
+    "languageId": "0x0411",
+    "installerTarget": "//win32/installer:installer",
+    "kanaiProductRegistrationReady": false,
+    "note": "The current overlay builds the upstream OSS identity. The separate KanaAI registration projection remains provisional and is not patched into tsf_profile.cc/resources."
+  },
+  "integration": {
+    "serverSeam": "mozc::engine::SupplementalModelInterface",
+    "activeMethods": [],
+    "compileOnlyMethods": [
+      "PostCorrect",
+      "RescoreResults"
+    ],
+    "futureNonblockingSeams": [
+      "ApplyRerankToResults",
+      "semanticAssist"
+    ],
+    "patchedUpstreamFiles": [
+      "third_party/mozc/src/engine/BUILD.bazel",
+      "third_party/mozc/src/engine/modules.cc"
+    ],
+    "replacedTipFiles": [],
+    "modelReportsAvailable": false,
+    "synchronousBrokerCallsFromModel": false,
+    "reasonModelInert": "SupplementalModelInterface does not carry the per-context kanai-broker sessionId/generation required for safe admission."
+  },
+  "broker": {
+    "canonicalContractSources": [
+      "crates/kanai-broker/src/frame.rs",
+      "crates/kanai-broker/src/protocol.rs",
+      "crates/kanai-broker/src/transport.rs",
+      "crates/kanai-broker/src/enhancement.rs"
+    ],
+    "transport": "private-windows-named-pipe",
+    "protocolVersion": 1,
+    "frameMagic": "KBF1",
+    "frameHeaderBytes": 8,
+    "payload": "utf-8-json",
+    "maxPayloadBytes": 1048576,
+    "pipePattern": "\\\\.\\pipe\\KanaAI.TsfBroker.v1.<windows-session-id>",
+    "nativeMaxRerankedCandidates": 5,
+    "defaultDeadlineMilliseconds": 250,
+    "maximumDeadlineMilliseconds": 2000,
+    "remoteClients": "rejected",
+    "serverAcl": "interactive-user-only",
+    "authHandshake": "AuthRequest/AuthResponse with OS token peer validation",
+    "surroundingTextSent": false,
+    "incognitoRequestsSent": false,
+    "failOpenToMozc": true
+  },
+  "publicBetaGates": {
+    "sessionGenerationBridgeImplemented": false,
+    "asyncEnhancementExecutorImplemented": false,
+    "measuredBaselineAndAiTopK": false,
+    "latencyP95Measured": false,
+    "timeoutAndCrashFallbackTested": false,
+    "learningIsolationTested": false,
+    "secureFieldMatrixPassed": false,
+    "uiaCandidateWindowPassed": false,
+    "restartAndUpgradePassed": false,
+    "kanaiRegistrationIdentityApproved": false,
+    "x86CompatibilityPassed": false
+  }
+}

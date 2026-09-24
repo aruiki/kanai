@@ -10,16 +10,19 @@ The product promise is:
 
 > **「変換の速さ」と「LOCAL AIの理解」を、モード破壊なしに一つにつなぐ。**
 
-## Windows beta and release boundary
+## Windows beta boundary
 
-The first Windows deliverable is a per-user portable Workbench/CLI package. It
-makes the Rust core, Mozc bridge, local AI policy, and learning UI testable on
-Windows without administrator privileges. It is deliberately not described as
-a system-wide TSF IME until the TIP DLL, x86/x64 registration, candidate window,
-secure-field policy, and app-container tests pass. The detailed product contract
-is in [`PRODUCT_RELEASE_CONTRACT.md`](PRODUCT_RELEASE_CONTRACT.md); the
-install/trust details are in [`WINDOWS_BETA.md`](WINDOWS_BETA.md) and
-[`DISTRIBUTION.md`](DISTRIBUTION.md).
+The first Windows deliverable is a native TSF TIP, not a Workbench/CLI package.
+The existing Mozc Windows TIP is the host; KanaAI adds a narrow AI/broker
+integration without replacing Mozc's conversion or Windows text-service
+lifecycle. A source bridge, HTTP API, browser page, or command-line tool is not
+an IME beta.
+
+A beta is publishable only after the TIP is registered and tested in ordinary
+desktop applications, including preedit/candidate behavior, commit/cancel,
+focus recovery, secure fields, UIA, and x86/x64 packaging. The complete gate is
+in [`PRODUCT_RELEASE_CONTRACT.md`](PRODUCT_RELEASE_CONTRACT.md) and the native
+implementation plan is in [`PLATFORM_ROADMAP.md`](PLATFORM_ROADMAP.md).
 
 
 ```text
@@ -36,7 +39,30 @@ physical key
 
 The user should feel the system becoming more personal, not feel that an AI chatbot has been inserted into the keyboard.
 
-## Non-negotiable state boundary
+## Phase 1 local AI quality model
+
+Phase 1 is a native Windows TSF IME built on pinned upstream Mozc. The target
+is the practical quality and convenience users expect from a mature Japanese
+IME, with modern local AI added only where it improves the measured result.
+Google Japanese Input is a product-quality reference; its proprietary
+implementation and data are not copied.
+
+The normal path is:
+
+```text
+Mozc composition/conversion
+  → bounded fast local policy and candidate rerank
+  → optional asynchronous local semantic assist
+  → TSF candidate presentation
+  → explicit commit and learning
+```
+
+The first AI mode must optimize for useful quality and low latency rather than
+model size. A per-key LLM call is out of scope for the normal path. Timeout,
+model absence, malformed output, and stale generations all fall back to Mozc.
+The quality gate is a reproducible comparison against the pinned Mozc baseline,
+not a subjective claim of Google Japanese Input parity.
+
 
 AI never owns:
 

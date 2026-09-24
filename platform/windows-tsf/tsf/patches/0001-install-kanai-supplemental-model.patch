@@ -1,0 +1,42 @@
+diff --git a/engine/BUILD.bazel b/engine/BUILD.bazel
+index 40a1058..b3b7257 100644
+--- a/engine/BUILD.bazel
++++ b/engine/BUILD.bazel
+@@ -173,7 +173,9 @@ mozc_cc_library(
+         "@com_google_absl//absl/types:span",
+     ] + mozc_select_enable_supplemental_model([
+         "//supplemental_model:supplemental_model_factory",
+-    ]),
++    ]) + mozc_select(
++        windows = ["//engine/kanai_ai:kanai_supplemental_model"],
++    ),
+ )
+
+ mozc_cc_test(
+diff --git a/engine/modules.cc b/engine/modules.cc
+index a6ee0db..48695b0 100644
+--- a/engine/modules.cc
++++ b/engine/modules.cc
+@@ -58,6 +58,9 @@
+ #include "engine/supplemental_model_interface.h"
+ #include "prediction/suggestion_filter.h"
+ #include "prediction/user_history_storage.h"
++#ifdef _WIN32
++#include "kanai_ai/kanai_supplemental_model.h"
++#endif  // _WIN32
+
+
+ using ::mozc::dictionary::DictionaryImpl;
+@@ -185,8 +188,12 @@ absl::Status Modules::Init(std::unique_ptr<const DataManager> data_manager) {
+     static std::shared_ptr<engine::SupplementalModelInterface>
+         g_supplemental_model =
+             []() -> std::unique_ptr<engine::SupplementalModelInterface> {
++#ifdef _WIN32
++      return std::make_unique<kanai::tsf::KanaAiSupplementalModel>();
++#else
+       DLOG(INFO) << "Placeholder of supplemental model stub is loaded";
+       return std::make_unique<engine::SupplementalModelStub>();
++#endif  // _WIN32
+     }();
+     supplemental_model_ = g_supplemental_model;
+   }

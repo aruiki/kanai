@@ -75,11 +75,11 @@
               KanaAIは、Mozcの確かな日本語変換を土台に、説明できるローカルポリシーと任意のローカルAIを重ねるIME产品规格です。チャットボックスの代わりに、キーボードの途中から自然に動くことを目指します。
             </p>
             <div class="hero-actions">
-              <a class="button button-primary" href="#beta">Phase 1を試す手順 <span aria-hidden="true">↓</span></a>
+              <a class="button button-primary" href="#beta">TSF betaの進捗を見る <span aria-hidden="true">↓</span></a>
               <a class="button button-quiet" href="https://github.com/aruiki/kanai" target="_blank" rel="noreferrer">GitHubでソースを見る <span aria-hidden="true">↗</span></a>
-              <a class="text-arrow-link" href="https://github.com/aruiki/kanai/blob/main/docs/WINDOWS_BETA.md" target="_blank" rel="noreferrer">Windows beta build guide <span aria-hidden="true">↗</span></a>
+              <a class="text-arrow-link" href="https://github.com/aruiki/kanai/blob/main/docs/PLATFORM_ROADMAP.md" target="_blank" rel="noreferrer">Windows TSF roadmap <span aria-hidden="true">↗</span></a>
             </div>
-            <p class="hero-note">Windows版はソースから組み立てるWorkbench/CLI betaです。公式binary、installer、公開ZIPはまだありません。</p>
+            <p class="hero-note">公開可能なWindows IME betaはまだありません。既存Mozc TIPをhostに、TSF native betaを実装中です。Workbench/CLIをIME betaとは呼びません。</p>
             <div class="hero-facts" aria-label="KanaAIの原則">
               <div class="hero-fact"><span class="fact-number">01</span><span>アカウント不要</span></div>
               <div class="hero-fact"><span class="fact-number">02</span><span>ネットワーク不要</span></div>
@@ -123,8 +123,8 @@
       <section class="preview-notice" aria-label="プロジェクトの現在地">
         <div class="container notice-inner">
           <span class="notice-icon" aria-hidden="true">i</span>
-          <p><strong>Engineering preview</strong><span>— フェーズ1では、ソースからビルドしたWindows Workbench/CLIでMozc変換を試験できます。OS全体に登録するネイティブIMEではありません。</span></p>
-          <a href="#beta">Phase 1を見る <span aria-hidden="true">↓</span></a>
+          <p><strong>Engineering preview</strong><span>— 最初の公開betaはWindows TSF TIPです。OS全体に登録できる実機buildと検証が完了するまで、ダウンロード可能なIME betaは公開しません。</span></p>
+          <a href="#beta">TSF roadmapを見る <span aria-hidden="true">↓</span></a>
         </div>
       </section>
 
@@ -385,7 +385,7 @@
           <ol class="roadmap-list reveal">
             <li class="roadmap-step roadmap-current">
               <div class="roadmap-marker"><span>NOW</span></div>
-              <div class="roadmap-content"><p class="roadmap-phase">PHASE 1 / WINDOWS</p><h3>Workbench/CLI betaを検証する</h3><p>Windows x64のsource-buildで、local Workbench、CLI、pinned Mozc bridgeを试验します。TSF/native shellは次の開発対象です。</p><span class="status-label status-label-current">進行中 / source-built beta</span></div>
+              <div class="roadmap-content"><p class="roadmap-phase">PHASE 1 / WINDOWS TSF</p><h3>Windows TSF betaを実装する</h3><p>既存Mozc Windows TIPをhostに、KanaAI AI/broker接続、x64 TIP、candidate UI、実機登録を実装します。</p><span class="status-label status-label-current">進行中 / TSF native</span></div>
             </li>
             <li class="roadmap-step">
               <div class="roadmap-marker"><span>M1–M3</span></div>
@@ -414,136 +414,61 @@
         <div class="container">
           <div class="section-heading split-heading beta-heading reveal">
             <div>
-              <p class="section-kicker">07 / PHASE 1 — TRY IT NOW</p>
-              <h2 id="beta-title">IMEを体系へ入れる前に、<br /><span>変換を確かめる。</span></h2>
+              <p class="section-kicker">07 / WINDOWS TSF BETA</p>
+              <h2 id="beta-title">IMEとして使えるまで、<br /><span>ベータとは呼びません。</span></h2>
             </div>
             <div class="beta-heading-note">
-              <span class="beta-label">WINDOWS x64 / WORKBENCH + CLI</span>
-              <p>技術ユーザー向けのポータブルbetaです。Mozc変換とランキングの根拠を、ブラウザまたはCLIで検査できます。</p>
-              <p class="beta-availability"><strong>SOURCE-BUILT</strong><span>公式binary・installer・公開ZIPはまだありません。</span></p>
+              <span class="beta-label">TSF NATIVE / IN DEVELOPMENT</span>
+              <p>次の公開ベータは、Windowsのすべてのアプリに接続するTSF TIPです。Workbench/CLIをIMEと表記したmiddleware版は公開しません。</p>
+              <p class="beta-availability"><strong>NO BINARY YET</strong><span>Windows build、安装、署名取得、実機検証は次のgateです。</span></p>
             </div>
           </div>
-
           <div class="beta-stage reveal">
             <div class="beta-try">
               <div class="beta-panel-heading">
-                <div>
-                  <p class="beta-panel-kicker">AVAILABLE TODAY</p>
-                  <h3>今日、実際に試せること</h3>
-                </div>
-                <span class="beta-phase-mark" aria-hidden="true">P1</span>
+                <div><p class="beta-panel-kicker">RELEASE TARGET</p><h3>必要なのは、変換DLLだけではありません。</h3></div>
+                <span class="beta-phase-mark" aria-hidden="true">TSF</span>
               </div>
               <ul class="beta-capability-list">
-                <li>
-                  <span class="beta-index" aria-hidden="true">01</span>
-                  <div>
-                    <h4>Local Workbenchで変換する</h4>
-                    <p>ローマ字入力、候補選択、文書への確定・直前のundoを確認。Mozcの候補と、順位スコア・由来・latencyの解説を同じ画面で見られます。</p>
-                  </div>
-                </li>
-                <li>
-                  <span class="beta-index" aria-hidden="true">02</span>
-                  <div>
-                    <h4>CLIで変換結果を検証する</h4>
-                    <p><code>health</code>、ローマ字変換、<code>--explain</code>、<code>--json</code>、candidate IDによる<code>commit</code>をスクリプトから実行できます。</p>
-                  </div>
-                </li>
-                <li>
-                  <span class="beta-index" aria-hidden="true">03</span>
-                  <div>
-                    <h4>個人化の流れを観察する</h4>
-                    <p>ユーザー辞書、確定履歴、専門語、個人化の強さを調整し、再順位の変化を追えます。previewの学習状態はWorkbenchのbrowser <code>localStorage</code>に保存されます。</p>
-                  </div>
-                </li>
-                <li>
-                  <span class="beta-index" aria-hidden="true">04</span>
-                  <div>
-                    <h4>任意のlocal AIだけを接続する</h4>
-                    <p>利用者が用意したOpenAI-compatible loopback modelだけを接続し、tierとfallbackを確認。model weightsは同梱・自動downloadしません。</p>
-                  </div>
-                </li>
+                <li><span class="beta-index" aria-hidden="true">01</span><div><h4>Mozc変換とlocal AI policy</h4><p>共通Rust coreの変換・再順位付け・学習を維持し、TSF shellはイベントとcandidate表示だけを担当します。</p></div></li>
+                <li><span class="beta-index" aria-hidden="true">02</span><div><h4>Windows text service</h4><p>COM/TSF lifecycle、x86/x64 TIP、text-service registration、preedit、candidate window、確定を実装します。</p></div></li>
+                <li><span class="beta-index" aria-hidden="true">03</span><div><h4>実アプリでの回復性</h4><p>Notepad、Edge、Office、secure field、focus loss、bridge再起動、upgrade/uninstallを実機で検証します。</p></div></li>
+                <li><span class="beta-index" aria-hidden="true">04</span><div><h4>Open distribution</h4><p>checksum、SBOM、provenanceを添付したpreview ZIP可以作为最初の公開βにします。</p></div></li>
               </ul>
             </div>
-
             <aside class="beta-boundary" aria-labelledby="beta-boundary-title">
-              <p class="beta-panel-kicker">NOT A TSF / IME</p>
-              <h3 id="beta-boundary-title">全アプリで使える<br />IMEではありません。</h3>
-              <p>このbetaは <code>127.0.0.1</code> でWorkbenchとCLIを起動します。Windowsのkeyboard listにも他アプリにも入りません。</p>
+              <p class="beta-panel-kicker">NOT A TSF / IME — CURRENTLY NOT A BETA</p>
+              <h3 id="beta-boundary-title">ダウンロード可能な<br />Windows IMEはありません。</h3>
+              <p>現在公開できるのは、Mozc/Rust/local AIのsourceと開発環境のみです。TSF native betaの完成までは、IMEとしてインストールできない成果物をベータと呼いません。</p>
               <ul class="beta-boundary-list">
-                <li>Windows設定にTSF TIP / DLLを登録しない</li>
-                <li>すべてのアプリにpreedit・candidate windowを統合しない</li>
-                <li>x86/x64両方の登録を検証していない</li>
-                <li>secure field、installer signing、auto updateがない</li>
+                <li>TSF TIP / DLLは未実装</li>
+                <li>OS全体へのpreedit・candidate統合は未実装</li>
+                <li>secure field、UIA、app-container testは未実装</li>
+                <li>署名済みWindows artifactは未作成</li>
               </ul>
-              <p class="beta-boundary-note">この境界は不具合ではなく、native shell完成までのproduct boundaryです。</p>
+              <p class="beta-boundary-note">目标是完成度，不是把未完成のWorkbenchをIMEと呼ぶことです。</p>
             </aside>
           </div>
-
           <div class="beta-build reveal" aria-labelledby="beta-build-title">
             <div class="beta-build-grid">
               <div class="beta-build-copy">
-                <p class="beta-panel-kicker">WINDOWS / BUILD FROM SOURCE</p>
-                <h3 id="beta-build-title">Windowsで、3つのcommand。</h3>
-                <p>clean checkoutでRust API/CLI、web Workbench、pinned Mozc bridgeをbuildし、検証用portable ZIPを生成します。installはper-userで、管理者権限は不要です。</p>
-                <ul class="beta-prereqs" aria-label="Windows betaのビルド前提">
-                  <li><span>OS</span><strong>Windows 10 21H2+ / 11 x64</strong></li>
-                  <li><span>SHELL</span><strong>PowerShell 5.1 / 7</strong></li>
-                  <li><span>CORE</span><strong>Git submodules、Rust stable、Node.js 22.14+</strong></li>
-                  <li><span>NATIVE</span><strong>VS 2022 C++、Windows SDK、Python 3.12+、Bazelisk</strong></li>
-                </ul>
+                <p class="beta-panel-kicker">NEXT BUILD GATE</p>
+                <h3 id="beta-build-title">まず x64 TSFを実機で通す。</h3>
+                <p>TSF shell、private broker、session/generation state、candidate UI、secure-field policyのexit gateを追跡します。</p>
+                <ul class="beta-prereqs" aria-label="TSF betaの実装前提"><li><span>SHELL</span><strong>Windows 10/11 x64、MSVC、Windows SDK</strong></li><li><span>CORE</span><strong>Rust、Mozc submodule、Bazelisk</strong></li><li><span>NATIVE</span><strong>TSF / COM / UIA / app-container tests</strong></li><li><span>RELEASE</span><strong>未署名previewから署名betaへ</strong></li></ul>
               </div>
-              <div class="command-copy beta-command">
-                <div class="beta-command-head">
-                  <span>PowerShell / x64 MSVC developer host</span>
-                  <span>output: windows-beta/dist</span>
-                </div>
-                <pre tabindex="0" aria-label="Windows beta source build commands"><code>git clone --recurse-submodules https://github.com/aruiki/kanai.git
-Set-Location kanai
-./scripts/build-windows-beta.ps1 -Version 0.1.0-beta.1 -Package</code></pre>
-                <div class="beta-command-actions">
-                  <button class="copy-button" type="button" data-copy="git clone --recurse-submodules https://github.com/aruiki/kanai.git&#10;Set-Location kanai&#10;./scripts/build-windows-beta.ps1 -Version 0.1.0-beta.1 -Package">PowerShellをコピー</button>
-                  <a class="text-arrow-link" href="https://github.com/aruiki/kanai/blob/main/docs/WINDOWS_BETA.md" target="_blank" rel="noreferrer">build guideの全文 <span aria-hidden="true">↗</span></a>
-                  <p class="copy-status" role="status" aria-live="polite"></p>
-                </div>
+              <div class="beta-build-copy">
+                <p class="beta-panel-kicker">SOURCE OF TRUTH</p>
+                <h3>進捗を隠さない。</h3>
+                <p>設計、 Roadmap、privacy、TSFの未完了項目をGitHubで管理します。存在しないダウンロードボタンや「すでにIMEです」という表現は使いません。</p>
+                <a class="text-arrow-link" href="https://github.com/aruiki/kanai/blob/main/docs/PLATFORM_ROADMAP.md" target="_blank" rel="noreferrer">Windows roadmapを読む <span aria-hidden="true">↗</span></a>
               </div>
-            </div>
-
-            <ol class="beta-run-row" aria-label="ビルドしたbetaの起動手順">
-              <li>
-                <span class="beta-run-index">01</span>
-                <div><strong>ZIPを展開してper-user install</strong><p>guideに従ってZIPを展開し、package rootで<code>.\Install-KanaAI.ps1</code>を実行します。</p></div>
-              </li>
-              <li>
-                <span class="beta-run-index">02</span>
-                <div><strong>local Workbenchを起動</strong><p><code>.\Start-KanaAI.ps1</code>がloopback APIを起動し、browser Workbenchを開きます。</p></div>
-              </li>
-              <li>
-                <span class="beta-run-index">03</span>
-                <div><strong>CLIでも変換を検査</strong><p><code>.\Run-KanaAI-Cli.ps1 kyou &quot;変換を試す&quot; --explain</code>。停止は<code>Stop-KanaAI.ps1</code>です。</p></div>
-              </li>
-            </ol>
-            <div class="beta-security-note">
-              <span aria-hidden="true">!</span>
-              <p><strong>Previewの安全境界:</strong> 生成物とexecutableは未署名です。SmartScreen等が出た場合は検証を止めて確認し、security controlを無効化しないでください。developer APIはloopback限定でも未認証なので、信頼できるmachineだけで使ってください。</p>
             </div>
           </div>
-
           <aside class="reference-note reveal" aria-labelledby="reference-title">
             <div class="reference-label"><span>POSITIONING NOTE</span><span>INDEPENDENT / NOT AFFILIATED</span></div>
-            <div class="reference-main">
-              <span class="reference-glyph" aria-hidden="true">対</span>
-              <div>
-                <p class="beta-panel-kicker">PRODUCT REFERENCE</p>
-                <h3 id="reference-title">Google 日本語入力を、<br />完成度の物差しに。</h3>
-                <p>Google 日本語入力は、Mozc ecosystemを土台に、変換・辞書・設定・端末統合を一つの製品として仕上げた、完成度の高いリファレンスです。KanaAIが参考にするのは、起動から確定までのUX、変換品質、feedback、privacyの扱い方であり、Googleの製品そのものではありません。</p>
-                <a class="text-arrow-link" href="https://sh.google.android/ime/" target="_blank" rel="noreferrer">Google 日本語入力の公式製品 <span aria-hidden="true">↗</span></a>
-              </div>
-            </div>
-            <div class="reference-boundary">
-              <div><span>PRODUCT LESSONS / KEEP</span><p>完成した入力 loop、辞書の管理、個人化、端末ごとの細かな設定。</p></div>
-              <div><span>PROPRIETARY CODE + DATA / DO NOT REUSE</span><p>Google 日本語入力のproprietary code / data、ユーザー情報、学習・評価データをKanaAIへコピー・再配布しません。</p></div>
-            </div>
-            <p class="reference-footnote">KanaAIが使うのは、固定したopen-source Mozcと、各componentのlicenseを守るKanaAI-owned contractsだけです。</p>
+            <div class="reference-main"><span class="reference-glyph" aria-hidden="true">対</span><div><p class="beta-panel-kicker">PRODUCT REFERENCE</p><h3 id="reference-title">Google 日本語入力を、<br />完成度の物差しに。</h3><p>Google日本語入力はMozc ecosystem上の完成済みconsumer IMEです。KanaAIが参考にするのはUX、辞書品質、feedback、端末統合の完成度であり、proprietary code/dataをコピーする対象ではありません。</p></div></div>
+            <div class="reference-boundary"><div><span>PRODUCT LESSONS / KEEP</span><p>完成した入力loop、辞書管理、個人化、端末ごとの設定。</p></div><div><span>PROPRIETARY CODE + DATA / DO NOT REUSE</span><p>Google 日本語入力の実装・ユーザー情報・私有データを取り込みません。</p></div></div>
           </aside>
         </div>
       </section>
@@ -558,7 +483,7 @@ Set-Location kanai
             <p class="section-intro-copy">early-stage projectのpreviewとして、期待と現実を同じ場所に置きます。</p>
           </div>
           <div class="limitations-grid reveal">
-            <article><span class="limitation-index">01</span><h3>ネイティブIMEは roadmap only</h3><p>フェーズ1のWindows版は、local WorkbenchとCLIのsource-build previewです。OSへのIME登録、system-wide candidate window、secure field behaviorを存在するものとして扱うことはできません。</p></article>
+            <article><span class="limitation-index">01</span><h3>ネイティブIMEは roadmap only</h3><p>公開betaはWindows TSF native版のみです。OSへのIME登録、system-wide candidate window、secure field behaviorを存在するものとして扱うことはできません。</p></article>
             <article><span class="limitation-index">02</span><h3>Mozcはbuild prerequisite</h3><p>pinned submoduleからC++ bridgeをbuildします。floatingなMozcやBazel versionを同じものとみなさず、現時点でstableなupstream releaseはありません。</p></article>
             <article><span class="limitation-index">03</span><h3>AI modelは別物</h3><p>モデルの重みは同梱・ダウンロードしません。model sizeは目安で、品質、速度、互換性を保証しません。誤変換は起こり得ます。</p></article>
             <article><span class="limitation-index">04</span><h3>privacyは目標とpreviewが違う</h3><p>encrypted profile、Protect Mode、secure-field enforcement、sync、削除の証明、release hardeningはtarget architectureです。dev APIをproduction扱いしないでください。</p></article>
@@ -584,7 +509,7 @@ Set-Location kanai
             </details>
             <details>
               <summary><span>ダウンロードしてインストールできますか？</span><span class="summary-mark" aria-hidden="true">+</span></summary>
-              <div class="faq-answer"><p>Windows Workbench/CLI betaは、PowerShellでソースからbuildする開発者向けpreviewです。公式binary、installer、published portable ZIP、Scoop packageはまだありません。存在しないダウンロードをボタンで示すのではなく、build guideとsourceだけを案内します。release artifactができるまでは、source metadataの <code>0.1.0</code> を公開版とみなさないでください。</p></div>
+              <div class="faq-answer"><p>現在、Windows TSF native betaのbuildと実機検証を進めています。Workbench/CLI、HTTP API、Mozc bridgeだけではIME betaとは呼びません。TSF DLLの登録、候補、確定、secure field、回復処理がWindows appで通るまで、公式binary、installer、ZIP、Scoop packageは公開しません。source metadataの <code>0.1.0</code> も公開版とはみなされません。</p></div>
             </details>
             <details>
               <summary><span>入力した文章はデフォルトで送られますか？</span><span class="summary-mark" aria-hidden="true">+</span></summary>

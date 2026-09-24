@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "id": "kanai-pinned-mozc-x64-tsf-phase1-slice",
+  "title": "KanaAI Phase 1 pinned-Mozc Windows x64 TSF vertical slice",
+  "scope": "Pinned upstream Mozc TIP host only; this is not a KanaAI registration or public-beta claim.",
+  "pinnedMozc": {
+    "submodule": "third_party/mozc",
+    "workspace": "third_party/mozc/src",
+    "commit": "13c98988247aa711d99db9e348ec2a597d14b5cd",
+    "bazelVersion": "9.0.2",
+    "x64TipTarget": "//win32/tip:mozc_tip64",
+    "serverTarget": "//server:mozc_server_win",
+    "branding": "Mozc"
+  },
+  "artifact": {
+    "fileName": "mozc_tip64.dll",
+    "architecture": "x64",
+    "peMachine": "0x8664",
+    "peMagic": "0x20b",
+    "requiredExports": [
+      "DllGetClassObject",
+      "DllCanUnloadNow"
+    ],
+    "hashPolicy": "Record the tested SHA-256; an explicit -ExpectedTipSha256 pins the exact bytes when the caller has a reviewed receipt."
+  },
+  "registration": {
+    "owner": "pinned-upstream-mozc",
+    "textServiceClsid": "{10A67BC8-22FA-4A59-90DC-2546652C56BF}",
+    "languageProfileGuid": "{186F700C-71CF-43FE-A00E-AACB1D9E6D3D}",
+    "languageId": "0x0411",
+    "languageIdDecimal": 1041,
+    "registryView": "Registry64",
+    "threadingModel": "Apartment",
+    "kanaiIdentityApproved": false,
+    "mustNotRegisterAsKanaAI": true
+  },
+  "runtime": {
+    "tsfRuntime": "System32/msctf.dll",
+    "defaultApplication": "System32/Notepad.exe",
+    "hostTestRequired": true,
+    "hostTestId": "preedit-candidate-commit"
+  },
+  "staticTestIds": [
+    "pinned-mozc-source",
+    "mozc-tip-x64-pe",
+    "mozc-tip-exports",
+    "registration-metadata",
+    "dll-dependencies"
+  ],
+  "windowsRequiredTestIds": [
+    "pinned-mozc-source",
+    "mozc-tip-x64-pe",
+    "mozc-tip-exports",
+    "registration-metadata",
+    "registration-live",
+    "dll-load",
+    "dll-dependencies",
+    "tsf-host-runtime",
+    "app-host",
+    "preedit-candidate-commit"
+  ],
+  "resultContract": {
+    "statusValues": [
+      "passed",
+      "failed",
+      "not-run"
+    ],
+    "testStatusValues": [
+      "passed",
+      "failed",
+      "not-run"
+    ],
+    "everyWindowsRequiredTestMustBe": "passed",
+    "filePresenceIsVerification": false,
+    "registryMetadataIsRuntimeProof": false
+  }
+}

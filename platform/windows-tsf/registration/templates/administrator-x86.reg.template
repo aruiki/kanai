@@ -1,0 +1,27 @@
+Windows Registry Editor Version 5.00
+
+; KanaAI TSF machine-wide administrator registration template (x86 future).
+; BLOCKED: the x86 TIP is not part of this source slice. Do not import this
+; file and do not copy the x64 DLL into Program Files (x86).
+;
+; When a real x86 TIP is added, render it under Program Files (x86) using a
+; 32-bit elevated installer/reg.exe and RegistryView.Registry32 (reg.exe
+; /reg:32). The same
+; logical CLSID may be used, but COM and TSF registration must be performed
+; independently in the 32-bit view.
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}]
+@="KanaAI Japanese input processor (x86 placeholder; do not import)"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}\InProcServer32]
+@="@@X86_TIP_DLL_PATH@@"
+"ThreadingModel"="Apartment"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\CTF\TIP\{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}]
+"Description"="KanaAI Japanese input processor (x86 not implemented)"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\CTF\TIP\{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}\LanguageProfile\0x00000411\{F3C2B7A1-6D54-4E8B-9A10-2C7D8E9F0A12}]
+"Description"="KanaAI Japanese (x86 not implemented)"
+"Language"=dword:00000411
+"IconFile"="@@X86_TIP_DLL_PATH@@"
+"IconIndex"=dword:00000000
