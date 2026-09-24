@@ -534,7 +534,7 @@ function Copy-DependencyLicenseFiles {
         $currentVersion = ''
         $currentSource = ''
         foreach ($line in Get-Content -LiteralPath $cargoLock) {
-            if ($line -match '^\\[\\[package\\]\\]') {
+            if ($line -match '^\[\[package\]\]') {
                 if (-not [string]::IsNullOrWhiteSpace($currentName) -and
                     -not [string]::IsNullOrWhiteSpace($currentVersion) -and
                     $currentSource -match '^registry\+') {
@@ -544,13 +544,13 @@ function Copy-DependencyLicenseFiles {
                 $currentVersion = ''
                 $currentSource = ''
             }
-            elseif ($line -match '^name\\s*=\\s*"([^"]+)"') {
+            elseif ($line -match '^name\s*=\s*"([^"]+)"') {
                 $currentName = $Matches[1]
             }
-            elseif ($line -match '^version\\s*=\\s*"([^"]+)"') {
+            elseif ($line -match '^version\s*=\s*"([^"]+)"') {
                 $currentVersion = $Matches[1]
             }
-            elseif ($line -match '^source\\s*=\\s*"([^"]+)"') {
+            elseif ($line -match '^source\s*=\s*"([^"]+)"') {
                 $currentSource = $Matches[1]
             }
         }
