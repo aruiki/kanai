@@ -33,11 +33,13 @@ Other packaged inputs
 
 The `legal/` directory also contains the KanaAI license files, the lockfiles
 used to resolve Rust and web dependencies, and the exact Mozc bridge patch.
-The build may add a deterministic lockfile/third-party inventory.  Dependency
-license metadata and any transitive notices must still be reviewed for the
-exact dependency set selected by the release build.  The package does not
-claim that a checksum, a portable ZIP, or this inventory is a publisher
-signature.
+When the locked build inputs are available, the packager copies license and
+notice files from the installed npm and Cargo dependency trees into
+`npm-licenses/` and `rust-licenses/`, and records their hashes in
+`THIRD-PARTY-INVENTORY.json`.  Dependency license metadata and any transitive
+notices must still be reviewed for the exact dependency set selected by the
+release build.  The package does not claim that a checksum, a portable ZIP, or
+this inventory is a publisher signature.
 
 TSF boundary
 ------------

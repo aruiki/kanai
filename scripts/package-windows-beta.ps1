@@ -71,6 +71,21 @@ function Get-RelativePath {
     return $pathFull.Substring($prefix.Length).Replace('\', '/')
 }
 
+function Join-RelativePath {
+    param(
+        [Parameter(Mandatory = $true)][string]$BasePath,
+        [Parameter(Mandatory = $true)][string]$RelativePath
+    )
+
+    $current = $BasePath
+    foreach ($part in ($RelativePath -split '/')) {
+        if (-not [string]::IsNullOrWhiteSpace($part)) {
+            $current = Join-Path $current $part
+        }
+    }
+    return $current
+}
+
 function Assert-SafeRelativePath {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
 
@@ -458,6 +473,112 @@ function Copy-LegalInput {
     }
 }
 
+function Copy-DependencyLicenseFiles {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string]$LegalRoot
+    )
+
+    $licensePattern = '^(LICENSE|LICENCE|NOTICE|COPYING)([.-].*)?$'
+    $copyOne = {
+        param([string]$SourcePath, [string]$Category, [string]$Label)
+        $sourceDirectory = Split-Path -Parent $SourcePath
+        $sourceName = Split-Path -Leaf $SourcePath
+        $flatLabel = ($Label + '-' + $sourceName) -replace '[^A-Za-z0-9._-]', '_'
+        $destinationDirectory = Join-Path $LegalRoot $Category
+        New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
+        $destination = Join-Path $destinationDirectory $flatLabel
+        if (Test-Path -LiteralPath $destination -PathType Leaf) {
+            if ((Get-Hash -Path $destination) -cne (Get-Hash -Path $SourcePath)) {
+                $destination = Join-Path $destinationDirectory ($flatLabel + '-' + (Get-Hash -Path $SourcePath).Substring(0, 12))
+            }
+        }
+        if (-not (Test-Path -LiteralPath $destination -PathType Leaf)) {
+            Copy-Item -LiteralPath $SourcePath -Destination $destination -Force
+        }
+    }
+
+    $nodeModules = Join-Path $RepositoryRoot 'node_modules'
+    if (Test-Path -LiteralPath $nodeModules -PathType Container) {
+        foreach ($file in @(Get-ChildItem -LiteralPath $nodeModules -Recurse -Force -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match $licensePattern })) {
+            if (($file.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "Reparse points are not allowed in dependency notices: $($file.FullName)"
+            }
+            $relative = Get-RelativePath -BasePath $nodeModules -Path $file.FullName
+            & $copyOne $file.FullName 'npm-licenses' $relative
+        }
+    }
+
+    # Cargo license files are present after a locked Rust build on the release
+    # host.  Copy them when available without making a source archive depend on
+    # a particular CARGO_HOME layout.
+    $cargoRoots = @()
+    if (-not [string]::IsNullOrWhiteSpace($env:CARGO_HOME)) {
+        $cargoRoots += (Join-Path $env:CARGO_HOME 'registry\src')
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+        $cargoRoots += (Join-Path $env:USERPROFILE '.cargo\registry\src')
+    }
+    $cargoLock = Join-Path $RepositoryRoot 'Cargo.lock'
+    if ((Test-Path -LiteralPath $cargoLock -PathType Leaf) -and $cargoRoots.Count -gt 0) {
+        $packages = @()
+        $currentName = ''
+        $currentVersion = ''
+        $currentSource = ''
+        foreach ($line in Get-Content -LiteralPath $cargoLock) {
+            if ($line -match '^\\[\\[package\\]\\]') {
+                if (-not [string]::IsNullOrWhiteSpace($currentName) -and
+                    -not [string]::IsNullOrWhiteSpace($currentVersion) -and
+                    $currentSource -match '^registry\+') {
+                    $packages += [pscustomobject]@{ name = $currentName; version = $currentVersion }
+                }
+                $currentName = ''
+                $currentVersion = ''
+                $currentSource = ''
+            }
+            elseif ($line -match '^name\\s*=\\s*"([^"]+)"') {
+                $currentName = $Matches[1]
+            }
+            elseif ($line -match '^version\\s*=\\s*"([^"]+)"') {
+                $currentVersion = $Matches[1]
+            }
+            elseif ($line -match '^source\\s*=\\s*"([^"]+)"') {
+                $currentSource = $Matches[1]
+            }
+        }
+        if (-not [string]::IsNullOrWhiteSpace($currentName) -and
+            -not [string]::IsNullOrWhiteSpace($currentVersion) -and
+            $currentSource -match '^registry\+') {
+            $packages += [pscustomobject]@{ name = $currentName; version = $currentVersion }
+        }
+        $seenCargoDirectories = @{}
+        foreach ($cargoRoot in ($cargoRoots | Select-Object -Unique)) {
+            if (-not (Test-Path -LiteralPath $cargoRoot -PathType Container)) {
+                continue
+            }
+            foreach ($package in $packages) {
+                $directoryName = $package.name + '-' + $package.version
+                $directoryKey = $directoryName.ToLowerInvariant()
+                if ($seenCargoDirectories.ContainsKey($directoryKey)) {
+                    continue
+                }
+                $directory = Get-ChildItem -LiteralPath $cargoRoot -Recurse -Force -Directory -Filter $directoryName -ErrorAction SilentlyContinue |
+                    Select-Object -First 1
+                if ($null -eq $directory) {
+                    continue
+                }
+                $seenCargoDirectories[$directoryKey] = $true
+                foreach ($file in @(Get-ChildItem -LiteralPath $directory.FullName -Force -File -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -match $licensePattern })) {
+                    $cargoLabel = $directoryName + '-' + $file.Name
+                    & $copyOne $file.FullName 'rust-licenses' $cargoLabel
+                }
+            }
+        }
+    }
+}
+
 function New-ThirdPartyInventory {
     param(
         [Parameter(Mandatory = $true)][string]$LegalRoot,
@@ -762,6 +883,7 @@ try {
     if (Test-Path -LiteralPath $noticeTemplate -PathType Leaf) {
         Copy-Item -LiteralPath $noticeTemplate -Destination (Join-Path $legalRoot 'THIRD-PARTY-NOTICES.txt') -Force
     }
+    Copy-DependencyLicenseFiles -RepositoryRoot $repositoryRoot -LegalRoot $legalRoot
     if (-not $AllowIncomplete) {
         $requiredLegal = @(
             'LICENSE', 'LICENSE-MIT', 'LICENSE-APACHE', 'Mozc-LICENSE.txt', 'Mozc-AUTHORS.txt',
