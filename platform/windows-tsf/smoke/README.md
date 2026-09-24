@@ -13,7 +13,8 @@ identity. A result is not a public-beta or complete Phase 1 release result.
 
 Translate the PowerShell script and Windows-local Bazel stage paths before
 launching Windows PowerShell. The script accepts Linux absolute paths as an
-additional convenience and translates them with `wsl.exe wslpath -w`.
+additional convenience and translates them with `wsl.exe wslpath -w`. For an
+installed/copied TIP, set `MOZC_TIP_SHA256` to the reviewed digest first.
 
 ```bash
 WIN_SCRIPT="$(wslpath -w scripts/test-tsf-windows.ps1)"
@@ -78,7 +79,8 @@ Windows PowerShell also parses every script and exercises the pure PE header
 parser with synthetic x64/x86 images:
 
 ```powershell
-pwsh -File platform/windows-tsf/smoke/tests/Test-PinnedMozcTsfSmoke.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File platform/windows-tsf/smoke/tests/Test-PinnedMozcTsfSmoke.ps1
 ```
 
 Neither static check loads a TIP, edits registration, or substitutes for the

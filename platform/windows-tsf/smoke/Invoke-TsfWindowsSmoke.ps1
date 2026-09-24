@@ -343,7 +343,7 @@ function Test-PinnedMozcSource {
             throw "Unable to inspect the pinned Mozc checkout: $($status.Text)"
         }
         $trackedChanges = @($status.Output | Where-Object {
-            [string]$_ -match '^[ MADRCU?!]{2}\s+'
+            [string]$_ -match '^[ MADRCU?!madrcu?]{2}\s+'
         })
         if ($trackedChanges.Count -ne 0) {
             throw "The pinned Mozc checkout has tracked changes and is not reproducible:`n$($trackedChanges -join "`n")"
@@ -1024,6 +1024,11 @@ try {
     }
     if (-not [string]::IsNullOrWhiteSpace($HostTestPath)) {
         $HostTestPath = Resolve-TsfSmokePath -Path $HostTestPath -BasePath $repository
+    }
+    $details.host = [ordered]@{
+        testPath = $HostTestPath
+        applicationPath = $ApplicationPath
+        receiptPath = if ([string]::IsNullOrWhiteSpace($ResultPath)) { '' } else { $ResultPath + '.host.json' }
     }
 
     try {
