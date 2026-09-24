@@ -303,7 +303,7 @@ foreach ($record in @($manifest.files)) {
     if (-not (Test-Path -LiteralPath $filePath -PathType Leaf)) {
         throw "Manifest file is missing: $relative"
     }
-    $fileInfo = Get-Item -LiteralPath $filePath
+    $fileInfo = Get-Item -LiteralPath $filePath -Force
     if ([int64]$record.bytes -ne [int64]$fileInfo.Length) {
         throw "Manifest byte count differs for ${relative}: $($record.bytes) / $($fileInfo.Length)"
     }
