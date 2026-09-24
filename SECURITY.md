@@ -2,7 +2,8 @@
 
 ## Project status
 
-KanaAI is an engineering preview. There is no stable release, native IME,
+KanaAI is an engineering preview. The repository includes a source-buildable
+Windows Workbench/CLI beta path, but there is no stable release, native IME,
 supported release channel, or public signing identity today. Security fixes are
 handled on a best-effort basis for the current development line until a
 supported release policy is established.
@@ -76,9 +77,11 @@ Particular attention should be paid to:
 - dependency, CI, release, Scoop, update, and artifact provenance behavior; and
 - third-party or model data entering a release without required review.
 
-The current API is unauthenticated and binds all interfaces. Do not expose it
-to an untrusted network. Treat that as a known preview limitation, not evidence
-that the service is safe for production deployment.
+The current API is unauthenticated and loopback-bound. Do not expose it to an
+untrusted network or treat loopback binding as authentication. The Windows
+portable beta is unsigned until a trusted publisher signature exists; verify
+its digest and source before running it. These are known preview limitations,
+not evidence that the service is safe for production deployment.
 
 ## Out of scope
 
@@ -109,9 +112,11 @@ Good-faith research is welcome when it:
   disclosure; and
 - follows applicable law and GitHub's acceptable-use rules.
 
-Do not download an unsigned release or weaken Defender, Smart App Control,
-Gatekeeper, SmartScreen, antivirus, or enterprise policy to test KanaAI. Build
-from reviewed source instead.
+Do not weaken Defender, Smart App Control, Gatekeeper, SmartScreen, antivirus,
+or enterprise policy to test KanaAI. If a separately published unsigned beta is
+available, download it only from the canonical release, verify its external
+SHA-256 and provenance, and stop if they do not match. Build from reviewed
+source when no trusted artifact is available.
 
 ## Disclosure and release handling
 

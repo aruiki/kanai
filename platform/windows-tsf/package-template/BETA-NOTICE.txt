@@ -1,0 +1,50 @@
+KanaAI Windows Workbench/CLI beta (unsigned)
+================================================
+
+This archive is an explicitly unsigned, portable phase-1 beta.  It is not a
+finished Windows IME and it has not been certified as a system input method.
+
+What it is:
+  * a loopback KanaAI service and local web Workbench, when the matching web
+    bundle is present;
+  * a KanaAI command-line Workbench; and
+  * a locally built Mozc conversion bridge when the complete payload is staged.
+
+What it is not:
+  * it is not a registered Windows TSF Text Service/TIP;
+  * installing or extracting it does not add an input method to Windows;
+  * it does not provide TSF candidate UI, secure-field/Protect Mode behavior,
+    app-container integration, or a production persistence policy; and
+  * the optional native shell bridge is a console/workbench seam, not a TSF
+    DLL.
+
+The package is intentionally labeled an unverified beta.  A future TSF DLL
+must be built, reviewed, and registered through a separate native release
+path; no TSF implementation is claimed here.
+
+Usage:
+  1. Obtain the ZIP SHA-256 and provenance through the trusted GitHub release
+     channel. Verify-KanaAI.ps1 checks the exact internal file set and hashes;
+     it is not a publisher signature or authenticity proof.
+  2. Run Install-KanaAI.ps1 to copy the payload to a per-user directory.
+  3. Edit %LOCALAPPDATA%\KanaAI\config\kanai.env, then run
+     Start-KanaAI.ps1.
+  4. Open the printed http://127.0.0.1 address to use the Workbench.
+  5. Use Run-KanaAI-Cli.ps1 health or Run-KanaAI-Cli.ps1 kyou --explain
+     for the local CLI without manually exporting environment variables.
+
+The archive is not code-signed. Windows may display an unsigned-application,
+SmartScreen, Smart App Control, or antivirus warning. Do not disable those
+protections. Verify the complete SHA-256 digest and obtain it through a trusted
+release channel before running an artifact.
+
+No model weights, API keys, user dictionaries, logs, or developer profile data
+are bundled. The optional local AI endpoint is disabled unless the user
+configures it explicitly.
+
+Payload-file presence is recorded separately from readiness.  The manifest's
+payloadFilesPresent/payloadPresent fields are inventory facts only.
+conversionReady and runtimeVerified remain false until the target Windows
+machine runs a real API health and Mozc conversion smoke test.  Packaging does
+not infer runtime readiness from a filename and does not certify a TSF
+integration.

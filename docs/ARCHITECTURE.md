@@ -3,7 +3,7 @@
 **Status:** normative target architecture
 **Research access date for external documentation:** 2026-09-24
 
-KanaAI is a local-first Japanese language runtime embedded in an IME. It is not an ATOK clone and not a chat assistant attached to a converter. This document defines the product boundaries, data model, data flow, latency strategy, and privacy boundaries. It is not a claim that the current repository scaffold already implements every component.
+KanaAI is a local-first Japanese language runtime embedded in an IME. It is not an ATOK clone and not a chat assistant attached to a converter. This document defines the product boundaries, data model, data flow, latency strategy, and privacy boundaries. The current repository implements the core, Mozc bridge, API, and development workbench; native shells and production persistence remain roadmap work.
 
 ## Product boundary: IME, not chatbot
 

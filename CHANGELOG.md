@@ -30,13 +30,14 @@ claim that a binary is available.
 - Pinned Mozc source submodule and KanaAI bridge target for local C++ builds.
 - Architecture, privacy, platform-roadmap, Mozc-integration, distribution, and
   open-source design documentation.
-- Rust formatting, Clippy, and test CI; locked web dependency, test, and build
-  CI.
+- Rust formatting, Clippy, and test commands; locked web dependency, test, and
+  build checks.
 - Public issue forms, pull-request checklist, security policy, contribution
   guide, and Code of Conduct.
 - MIT and Apache-2.0 project license texts.
-- A release contract and placeholder Scoop manifest for a future unsigned
-  Windows portable ZIP. No release artifact or live manifest exists.
+- A source-buildable Windows portable beta package path and placeholder Scoop
+  manifest for a future unsigned ZIP. No prebuilt release artifact or live
+  manifest exists.
 
 ### Changed
 
@@ -49,8 +50,7 @@ claim that a binary is available.
 
 - No KanaAI telemetry or bundled model is included.
 - External AI endpoints are rejected unless remote use is explicitly enabled.
-- Documented that the developer API is currently unauthenticated, binds all
-  interfaces, and must not be exposed to an untrusted network.
+- Documented that the developer API is loopback-only and currently unauthenticated; it must not be exposed to an untrusted network.
 - Documented that the current Mozc profile is isolated but is not the planned
   encrypted KanaAI persistence layer.
 
@@ -61,6 +61,7 @@ claim that a binary is available.
   native key-path feature; no model weights or native integration ship yet.
 - Encrypted canonical storage, password/secure-field enforcement, Protect Mode,
   sync, and crash recovery remain release work.
-- No installer, portable ZIP, Scoop package, or code-signed binary is available.
+- No published Windows ZIP, installer, Scoop package, or code-signed binary is
+  available yet; the repository provides a source-buildable beta path only.
 - Mozc has no stable upstream release channel; KanaAI therefore builds against
   the exact pinned submodule revision and requires explicit review for updates.

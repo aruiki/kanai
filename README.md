@@ -7,7 +7,7 @@
 A local-first Japanese IME project built on Mozc, with Rust orchestration,
 explainable personalization, and optional local AI.
 
-[Source](https://github.com/aruiki/kanai) · [Roadmap](docs/PLATFORM_ROADMAP.md) ·
+[Source](https://github.com/aruiki/kanai) · [日本語製品ページ](https://aruiki.github.io/kanai/) · [Roadmap](docs/PLATFORM_ROADMAP.md) ·
 [Architecture](docs/ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) ·
 [Security](SECURITY.md)
 
@@ -48,11 +48,25 @@ open-source project and does not provide a stable release channel.
 | Constrained local semantic reranker | Experimental API path: opt-in, loopback-only, bounded, and fallback-safe; no model is included and it is not a native key-path feature |
 | Native Linux/Windows/macOS IME shells | **Roadmap only** |
 | Encrypted profile store, sync, and secure-field enforcement | Target architecture; not a current end-user feature |
-| Windows portable ZIP and Scoop manifest | Release contract/template only; **no artifact is available yet** |
+| Windows portable ZIP and Scoop manifest | Source-buildable beta scripts are in development; no published artifact or live manifest |
 
 The current web TypeScript application is a development workbench, not an IME
 runtime. Native shells are planned to call the shared Rust core through thin
 platform adapters.
+
+## Windows beta
+
+The current Windows beta is a **portable Workbench/CLI build**, not a completed
+TSF keyboard. It packages the Rust loopback API, the pinned Mozc bridge, and
+the local workbench with per-user PowerShell install/start/stop scripts. See
+[docs/WINDOWS_BETA.md](docs/WINDOWS_BETA.md) for the build and installation
+flow, SmartScreen expectations, and the native TSF limitations. The complete
+beta-to-TSF product boundary is recorded in
+[docs/PRODUCT_RELEASE_CONTRACT.md](docs/PRODUCT_RELEASE_CONTRACT.md).
+
+The beta is unsigned unless a separately reviewed release is produced with a
+trusted publisher certificate. A `setup.exe` filename does not bypass Windows
+security warnings.
 
 ## Architecture
 
@@ -99,7 +113,7 @@ There is no promised release calendar.
 
 - Git with submodule support
 - Rust and `rustfmt`/`clippy` 1.88 or newer
-- Node.js 22.14 or newer and npm
+- Node.js 22.22.2 or newer and npm
 - A C++ toolchain and [Bazelisk](https://github.com/bazelbuild/bazelisk) for
   the Mozc bridge
 - The native packages required by the pinned Mozc revision
@@ -292,8 +306,8 @@ privacy implementation:
 - The web workbench stores its current learning/profile state in browser
   `localStorage`. That is transparent developer behavior, not an encrypted
   KanaAI store, and scripts on the same origin can access it.
-- The current developer API is unauthenticated and all-interface bound, as
-  noted above.
+- The current developer API is unauthenticated and loopback-bound, as noted
+  above.
 - The current isolated Mozc profile is not KanaAI's future encrypted canonical
   store. Review the profile location and remove it explicitly when no longer
   needed.
@@ -314,14 +328,19 @@ or real dictionaries in a public issue. Follow [SECURITY.md](SECURITY.md).
 | `npm test` | Run Vitest tests |
 | `npm run build` | Type-check and build the web workbench |
 | `bazelisk build //kanai:kanai_mozc_bridge` | Build the pinned C++ bridge from `third_party/mozc/src` |
+| `pwsh ./scripts/build-windows-beta.ps1 -Version 0.1.0-beta.1 -Package` | Build the source-based Windows portable beta ZIP on Windows |
 
-CI currently checks the Rust workspace and the web workbench separately. It
-does not build or certify the large Mozc target or publish a native IME.
+The repository's source checks cover the Rust workspace and the web
+workbench separately. GitHub Actions activation is pending the account's
+`workflow` scope; the checks do not build or certify the large Mozc target or
+publish a native IME.
 
 ## Windows portable ZIP and Scoop plan
 
-There is **no official binary or Scoop package to install today**. The first
-planned Windows distribution is a versioned, **unsigned**, x64 portable ZIP,
+There is **no published prebuilt binary or Scoop package today**. The source
+now includes a Windows portable beta build path for maintainers; a release ZIP
+must still be built and reviewed on Windows. The first published Windows
+distribution is expected to be a versioned, **unsigned**, x64 portable ZIP,
 followed by a hash-pinned Scoop manifest in a project-controlled bucket. A
 release is expected to include the tested payload, project license files,
 required third-party notices, `SHA256SUMS`, an SBOM, a build manifest, and a

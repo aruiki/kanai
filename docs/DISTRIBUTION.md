@@ -1,8 +1,27 @@
 # Distribution and release guide
 
-**Status:** proposed release contract for an open-source build that does not currently have a public code-signing identity.
+**Status:** source-buildable portable beta path plus a proposed release contract
+for an open-source build that does not currently have a public code-signing
+identity.
 
 This document describes a distribution strategy; it does **not** create a ZIP, `setup.exe`, Scoop manifest, installer script, or other release binary. Those are build outputs and must be produced by a reviewed release workflow. See [`OPEN_SOURCE_GUIDELINES.md`](./OPEN_SOURCE_GUIDELINES.md) for project governance, licensing, security, and signing-secret policy.
+
+See [`WINDOWS_BETA.md`](./WINDOWS_BETA.md) for the current per-user portable
+beta boundary and PowerShell workflow.
+
+
+The first Windows beta is a **portable KanaAI Workbench/CLI package**, not a
+completed Windows TSF keyboard. It packages the Rust local API, the pinned
+Mozc bridge, and the browser workbench behind a PowerShell launcher. This gives
+Windows users a reproducible install/remove flow while the TSF TIP, candidate
+window, secure-field integration, and x86/x64 registration remain explicit
+follow-up gates. The beta must be labeled accordingly in the UI, release notes,
+and download page; it must not be presented as a system-wide IME replacement.
+
+The beta package is unsigned unless a release build is produced with a legitimate
+publisher certificate. A `setup.exe` filename is not a trust or SmartScreen
+bypass.
+
 
 ## 1. Decision summary
 
@@ -17,7 +36,10 @@ A release may be useful before it is signed, but it must be honest about its tru
 
 ## 2. Naming and release identity
 
-Use one canonical product and repository name for release assets. The architecture documents use KanaAI, while package and Cargo metadata still contain names such as `nagi-ime`, NAGI IME, and `kanapilot`; settle that naming decision before publishing. A missing naming decision is a release blocker because it makes the Scoop manifest, release URL, support instructions, and provenance identity ambiguous.
+Use one canonical product and repository name for release assets. KanaAI is the
+canonical name in the current package and Cargo metadata. Older drafts may
+mention names such as `nagi-ime` or `kanapilot`; those names must not leak into
+release URLs, manifests, or support instructions.
 
 Use a predictable, architecture-specific naming scheme, for example:
 
@@ -119,7 +141,12 @@ scoop install <project>/<manifest-name>
 scoop update <project>/<manifest-name>
 ```
 
-The bucket and manifest names are placeholders until the canonical project name is chosen. A maintainer must review URL, version, hash, extraction path, and launcher path as a single change. The manifest's hash protects download integrity; it does not authenticate the maintainer, replace Authenticode, or suppress SmartScreen when the launcher is eventually run. Scoop users should still follow the verification guidance below.
+The bucket and manifest names remain placeholders until a maintainer selects a
+project-controlled bucket. A maintainer must review URL, version, hash,
+extraction path, and launcher path as a single change. The manifest's hash
+protects download integrity; it does not authenticate the maintainer, replace
+Authenticode, or suppress SmartScreen when the launcher is eventually run.
+Scoop users should still follow the verification guidance below.
 
 ## 5. Optional Inno Setup or NSIS `setup.exe`
 

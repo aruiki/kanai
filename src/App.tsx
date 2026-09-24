@@ -141,7 +141,7 @@ export default function App() {
               <span>か</span>
               <i />
             </span>
-            <span className="brand-copy"><strong>KanaAI</strong><small>Local Japanese IME</small></span>
+            <span className="brand-copy"><strong>KanaAI</strong><small>Workbench Developer Beta</small></span>
           </a>
 
           <nav className={`header-actions ${mobileMenuOpen ? "is-open" : ""}`} aria-label="メインナビゲーション">

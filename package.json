@@ -17,7 +17,7 @@
     "check": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && npm run test && npm run build"
   },
   "engines": {
-    "node": ">=22.14.0"
+    "node": ">=22.22.2"
   },
   "packageManager": "npm@11.19.0",
   "dependencies": {

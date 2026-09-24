@@ -59,7 +59,12 @@ A contributor must not include credentials, signing material, private user data,
 
 ### License consistency is a release requirement
 
-Before the first public binary, reconcile the repository’s license declarations and ship the complete applicable text. At the time of writing, the root `LICENSE` is MIT while the Rust workspace metadata declares `MIT OR Apache-2.0`. Do not silently publish one interpretation or remove a license declaration. Decide the intended license, add the required license text/notice, and update package metadata in a reviewed change.
+The KanaAI-authored source is currently declared `MIT OR Apache-2.0` in the
+workspace/package metadata, with both complete texts and a root license
+pointer. Before the first public binary, re-check that every package metadata
+field, notice, and generated artifact uses the same expression. Do not apply
+the KanaAI project license to Mozc, dictionaries, models, or other third-party
+components; ship their applicable terms separately.
 
 The source archive and every binary package must include:
 
@@ -241,7 +246,7 @@ Also verify every shipped executable/driver/component covered by the chosen sign
 
 ### Windows
 
-The first release is expected to be unsigned. The portable ZIP and reviewed Scoop manifest are primary; Inno Setup/NSIS `setup.exe` is optional. Communicate SmartScreen and Smart App Control behavior accurately. Later, use Authenticode with a trusted identity, Azure Artifact Signing/Trusted Signing, or SignPath under this policy.
+The first release is expected to be unsigned. The portable ZIP and reviewed Scoop manifest are primary; Inno Setup/NSIS `setup.exe` is optional. The current Windows beta is a portable Workbench/CLI package, not a completed TSF keyboard. Communicate SmartScreen and Smart App Control behavior accurately. Later, use Authenticode with a trusted identity, Azure Artifact Signing/Trusted Signing, or SignPath under this policy.
 
 ### macOS
 

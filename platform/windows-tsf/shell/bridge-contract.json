@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "name": "kanai-windows-shell-bridge",
+  "status": "scaffold",
+  "transport": "http",
+  "baseUrl": "http://127.0.0.1:8787",
+  "endpoints": {
+    "health": "/api/health",
+    "convert": "/api/convert"
+  },
+  "request": {
+    "romaji": "ASCII Latin letters",
+    "contextBefore": "bounded UTF-8 text",
+    "contextAfter": "bounded UTF-8 text",
+    "limit": "integer 1..30",
+    "aiMode": "off|auto|onDemand"
+  },
+  "security": {
+    "bind": "127.0.0.1",
+    "authentication": "none in the current developer service",
+    "remoteAssist": "disabled unless explicitly configured by the user"
+  },
+  "tsf": {
+    "registered": false,
+    "dllIncluded": false,
+    "candidateUi": false,
+    "secureFields": false
+  }
+}

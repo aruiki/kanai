@@ -83,8 +83,9 @@ npm run dev
 ```
 
 Open <http://127.0.0.1:5173>. The current Rust developer API is
-unauthenticated and binds all interfaces. Run it only on a trusted development
-machine or network; never expose or port-forward it.
+unauthenticated and loopback-bound. Run it only on a trusted development
+machine; loopback binding is not authentication, so never expose or port-forward
+it.
 
 For a production-like local bundle:
 
@@ -95,6 +96,10 @@ cargo run -p kanai-api --release
 
 Then open <http://127.0.0.1:8787>. This is still a developer service, not a
 native IME release.
+
+For the source-buildable Windows portable beta, see
+[`docs/WINDOWS_BETA.md`](docs/WINDOWS_BETA.md). It is a Workbench/CLI package,
+not a completed TSF keyboard.
 
 ## Required checks
 

@@ -8,9 +8,19 @@ Mozc remains the deterministic Japanese input engine. KanaAI adds a bounded loca
 
 The product promise is:
 
-> **「変換emorandumbases」と「LOCAL AIの理解」を、モード破壊なしに一つにつなぐ。**
+> **「変換の速さ」と「LOCAL AIの理解」を、モード破壊なしに一つにつなぐ。**
 
-## User-visible loop
+## Windows beta and release boundary
+
+The first Windows deliverable is a per-user portable Workbench/CLI package. It
+makes the Rust core, Mozc bridge, local AI policy, and learning UI testable on
+Windows without administrator privileges. It is deliberately not described as
+a system-wide TSF IME until the TIP DLL, x86/x64 registration, candidate window,
+secure-field policy, and app-container tests pass. The detailed product contract
+is in [`PRODUCT_RELEASE_CONTRACT.md`](PRODUCT_RELEASE_CONTRACT.md); the
+install/trust details are in [`WINDOWS_BETA.md`](WINDOWS_BETA.md) and
+[`DISTRIBUTION.md`](DISTRIBUTION.md).
+
 
 ```text
 physical key

@@ -16,7 +16,7 @@ KanaAI will ship one conversion/policy core in Rust and thin native input-method
 
 ## Current baseline
 
-The repository already contains a pinned Mozc source submodule and Rust/TypeScript build metadata, but the core source directories are a scaffold. The architecture in [ARCHITECTURE.md](ARCHITECTURE.md) is therefore a target. No document here claims that an Fcitx5 addon, TSF DLL, InputMethodKit bundle, installer, sync service, or production writing assistant currently exists.
+The repository contains a pinned Mozc source submodule, Rust core/API, a source-buildable Mozc bridge, and a TypeScript workbench. The native platform shells are still a target. No document here claims that an Fcitx5 addon, TSF DLL, InputMethodKit bundle, installer, sync service, or production writing assistant currently exists.
 
 ## Target platform order
 
@@ -155,7 +155,16 @@ flowchart LR
 
 The TIP DLL is intentionally thin. It implements required COM/TSF objects, translates key/edit/commit callbacks, presents the owned candidate window, and forwards normalized commands to the Rust broker. Network, long dictionary work, sync, and generative requests are broker work and never occur implicitly in the loaded DLL.
 
-### Required Windows work
+### Current Windows beta boundary
+
+Before the TSF pilot is complete, KanaAI will publish a portable Windows beta
+containing the Rust API, the pinned Mozc bridge, and the local browser
+workbench. It is installable and usable through PowerShell, but it is not yet a
+registered system IME. The package must show this boundary in its first-run
+screen and release notes. The TSF TIP, x86/x64 registration, candidate window,
+and secure-field behavior remain native beta exit gates. Build and per-user
+install instructions are in [`WINDOWS_BETA.md`](./WINDOWS_BETA.md).
+
 
 - TSF text-service and input-processor-profile registration.
 - Side-by-side 32-bit and 64-bit DLLs. Microsoft states DLLs are bit-specific and recommends parallel x86/x64 DLLs with the same file name so 64-bit Windows exposes one logical IME ([Microsoft 64-bit TSF guidance](https://learn.microsoft.com/en-us/windows/win32/tsf/64-bit-platform-considerations), accessed 2026-09-24).
@@ -290,6 +299,7 @@ Every public release, on every platform, must satisfy:
 |---|---|---|
 | Developer lab | Synthetic fixtures and explicit local test data; TypeScript allowed. | No production profile/credentials. |
 | Internal alpha | Linux native shell, crash diagnostics, opt-in local profile. | Telemetry off; manual export. |
+| Windows portable beta | Per-user Workbench/CLI package; no TSF registration | No model or network by default; unsigned warning visible |
 | Public beta | Signed native package, support workflow, transparent notices. | Cloud/AI/sync individually opt-in. |
 | Stable | Reviewed release, staged update/rollback, published hashes/SBOM. | Local conversion always available. |
 | Enterprise (future) | Managed policies and organization domain packs. | Separate policy/admin design; not implied by the first release. |
