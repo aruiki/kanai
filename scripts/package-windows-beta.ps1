@@ -86,6 +86,14 @@ function Join-RelativePath {
     return $current
 }
 
+function Sort-PathOrdinal {
+    param([string[]]$Paths)
+
+    $normalized = [string[]]@($Paths | ForEach-Object { ([string]$_).Replace('\', '/').ToLowerInvariant() })
+    [Array]::Sort($normalized, [System.StringComparer]::Ordinal)
+    return ,$normalized
+}
+
 function Assert-SafeRelativePath {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
 
@@ -192,11 +200,20 @@ function Get-AllFiles {
     param([Parameter(Mandatory = $true)][string]$Root)
 
     $files = @(Get-ChildItem -LiteralPath $Root -Recurse -Force -File)
-    return @($files | Sort-Object -Property @{
-        Expression = {
-            (Get-RelativePath -BasePath $Root -Path $_.FullName).ToLowerInvariant()
+    $byPath = @{}
+    foreach ($file in $files) {
+        $relative = (Get-RelativePath -BasePath $Root -Path $file.FullName).ToLowerInvariant()
+        if ($byPath.ContainsKey($relative)) {
+            throw "Package contains a case-colliding file path: $relative"
         }
-    })
+        $byPath[$relative] = $file
+    }
+    $orderedPaths = Sort-PathOrdinal -Paths @($byPath.Keys)
+    $orderedFiles = @()
+    foreach ($relative in $orderedPaths) {
+        $orderedFiles += $byPath[$relative]
+    }
+    return $orderedFiles
 }
 
 function Get-PayloadFiles {
@@ -238,7 +255,7 @@ function Get-TextHash {
 function Get-NormalizedPathSet {
     param([string[]]$Paths)
 
-    return @($Paths | ForEach-Object { ([string]$_).Replace('\', '/').ToLowerInvariant() } | Sort-Object)
+    return @(Sort-PathOrdinal -Paths $Paths)
 }
 
 function Assert-ExactPathSet {
@@ -606,9 +623,16 @@ function New-ThirdPartyInventory {
             sha256 = Get-Hash -Path $file.FullName
         }
     }
-    $records = @($records | Sort-Object -Property @{
-        Expression = { ([string]$_.path).ToLowerInvariant() }
-    })
+    $sortedRecordPaths = Sort-PathOrdinal -Paths @($records | ForEach-Object { [string]$_.path })
+    $recordsByPath = @{}
+    foreach ($record in $records) {
+        $recordsByPath[([string]$record.path).ToLowerInvariant()] = $record
+    }
+    $sortedRecords = @()
+    foreach ($recordPath in $sortedRecordPaths) {
+        $sortedRecords += $recordsByPath[$recordPath]
+    }
+    $records = @($sortedRecords)
     $lockfiles = @()
     foreach ($lockName in @('Cargo.lock', 'package-lock.json')) {
         $lockPath = Join-Path $RepositoryRoot $lockName
@@ -1027,9 +1051,16 @@ try {
     foreach ($file in Get-PayloadFiles -Root $packageRoot) {
         $fileRecords += Get-FileRecord -Root $packageRoot -File $file
     }
-    $manifest.files = @($fileRecords | Sort-Object -Property @{
-        Expression = { ([string]$_.path).ToLowerInvariant() }
-    })
+    $manifestFilePaths = Sort-PathOrdinal -Paths @($fileRecords | ForEach-Object { [string]$_.path })
+    $fileRecordsByPath = @{}
+    foreach ($fileRecord in $fileRecords) {
+        $fileRecordsByPath[([string]$fileRecord.path).ToLowerInvariant()] = $fileRecord
+    }
+    $sortedFileRecords = @()
+    foreach ($fileRecordPath in $manifestFilePaths) {
+        $sortedFileRecords += $fileRecordsByPath[$fileRecordPath]
+    }
+    $manifest.files = @($sortedFileRecords)
     $manifest.fileSet.count = @($manifest.files).Count
     $manifest.fileSet.paths = @($manifest.files | ForEach-Object { [string]$_.path })
     $manifest.fileSet.sha256 = Get-TextHash -Text (($manifest.fileSet.paths -join "`n") + "`n")
@@ -1045,9 +1076,16 @@ try {
             line = ((Get-Hash -Path $file.FullName) + '  ' + $relative)
         }
     }
-    $checksumEntries = @($checksumEntries | Sort-Object -Property @{
-        Expression = { ([string]$_.path).ToLowerInvariant() }
-    })
+    $checksumPaths = Sort-PathOrdinal -Paths @($checksumEntries | ForEach-Object { [string]$_.path })
+    $checksumsByPath = @{}
+    foreach ($checksumEntry in $checksumEntries) {
+        $checksumsByPath[([string]$checksumEntry.path).ToLowerInvariant()] = $checksumEntry
+    }
+    $sortedChecksumEntries = @()
+    foreach ($checksumPath in $checksumPaths) {
+        $sortedChecksumEntries += $checksumsByPath[$checksumPath]
+    }
+    $checksumEntries = @($sortedChecksumEntries)
     $checksumLines = @($checksumEntries | ForEach-Object { [string]$_.line })
     Write-Utf8NoBom -Path (Join-Path $packageRoot 'SHA256SUMS') -Content (($checksumLines -join "`n") + "`n")
 

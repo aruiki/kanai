@@ -113,9 +113,17 @@ function Get-NormalizedUtcString {
         [Globalization.DateTimeStyles]::RoundtripKind).UtcDateTime.ToString('o')
 }
 
+function Sort-PathOrdinal {
+    param([string[]]$Paths)
+
+    $normalized = [string[]]@($Paths | ForEach-Object { ([string]$_).Replace('\', '/').ToLowerInvariant() })
+    [Array]::Sort($normalized, [System.StringComparer]::Ordinal)
+    return ,$normalized
+}
+
 function Get-NormalizedPathSet {
     param([string[]]$Paths)
-    return @($Paths | ForEach-Object { ([string]$_).Replace('\', '/').ToLowerInvariant() } | Sort-Object)
+    return @(Sort-PathOrdinal -Paths $Paths)
 }
 
 function Assert-ExactPathSet {
@@ -144,7 +152,7 @@ function Assert-PathOrder {
     )
 
     $normalized = @($Paths | ForEach-Object { ([string]$_).Replace('\', '/').ToLowerInvariant() })
-    $sorted = @($normalized | Sort-Object)
+    $sorted = @(Sort-PathOrdinal -Paths $normalized)
     for ($index = 0; $index -lt $normalized.Count; $index++) {
         if ($normalized[$index] -cne $sorted[$index]) {
             throw "$Description is not in deterministic sorted order at index $index."
