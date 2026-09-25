@@ -116,6 +116,7 @@ export function postAssist(
 
 export function postCommit(
   candidateId: number,
+  revision: number,
   reading: string,
   expectedText: string,
   context: string,
@@ -125,7 +126,7 @@ export function postCommit(
     "/api/commit",
     {
       method: "POST",
-      body: JSON.stringify({ candidateId, reading, expectedText, context, state }),
+      body: JSON.stringify({ candidateId, revision, reading, expectedText, context, state }),
     },
     8_000,
   );

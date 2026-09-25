@@ -14,10 +14,14 @@ using kanai::tsf::AuthRequest;
 using kanai::tsf::AuthResponse;
 using kanai::tsf::BrokerCandidate;
 using kanai::tsf::DecodeAuthResponseJson;
+using kanai::tsf::DecodeGenerationResponseJson;
+using kanai::tsf::DecodeFocusLostResponseJson;
 using kanai::tsf::DecodeBrokerFrame;
 using kanai::tsf::DecodeRerankResponseJson;
 using kanai::tsf::EncodeAuthRequestJson;
 using kanai::tsf::EncodeBrokerFrame;
+using kanai::tsf::EncodePrepareRerankSessionJson;
+using kanai::tsf::EncodeReleaseRerankSessionJson;
 using kanai::tsf::EncodeRerankRequestJson;
 using kanai::tsf::EnhancementStatus;
 using kanai::tsf::IsValidUtf8;
@@ -25,6 +29,9 @@ using kanai::tsf::kBrokerFrameHeaderSize;
 using kanai::tsf::MakeBrokerPipeName;
 using kanai::tsf::RerankRequest;
 using kanai::tsf::RerankResponse;
+using kanai::tsf::GenerationResponse;
+using kanai::tsf::PrepareRerankSessionRequest;
+using kanai::tsf::ReleaseRerankSessionRequest;
 
 void Check(bool condition, const char* message) {
   if (!condition) {
@@ -96,6 +103,43 @@ void TestAuthProjection() {
         "canonical AuthResponse accepts matching peer");
   Check(!DecodeAuthResponseJson(accepted, "other-client").has_value(),
         "auth peer identity mismatch rejected");
+}
+
+void TestPrepareRerankSessionProjection() {
+  PrepareRerankSessionRequest request;
+  request.request_id = 42;
+  request.session_id = 7;
+  request.generation = 3;
+  const std::optional<std::string> json =
+      EncodePrepareRerankSessionJson(request);
+  Check(json.has_value(), "prepare rerank session request encodes");
+  const std::string expected =
+      R"({"version":1,"requestId":42,"command":{"operation":"prepareRerankSession","payload":{"sessionId":7,"generation":3,"fieldClass":"regular"}}})";
+  Check(*json == expected, "prepare request matches canonical serde order");
+
+  const std::string response_json =
+      R"({"version":1,"requestId":42,"generation":3,"outcome":{"success":{"operation":"generation","payload":{"sessionId":7,"generation":3}}}})";
+  const std::optional<GenerationResponse> response =
+      DecodeGenerationResponseJson(response_json, request);
+  Check(response.has_value() && response->session_id == 7 &&
+            response->generation == 3,
+        "prepare response decodes and correlates");
+  std::string wrong_generation = response_json;
+  const std::string generation = "\"generation\":3";
+  const std::size_t position = wrong_generation.find(generation);
+  Check(position != std::string::npos, "response fixture contains generation");
+  wrong_generation.replace(position, generation.size(), "\"generation\":4");
+  Check(!DecodeGenerationResponseJson(wrong_generation, request).has_value(),
+        "prepare generation mutation rejected");
+
+  ReleaseRerankSessionRequest release{43, 7, 3};
+  const std::optional<std::string> release_json =
+      EncodeReleaseRerankSessionJson(release);
+  Check(release_json.has_value(), "release rerank session request encodes");
+  const std::string release_response =
+      R"({"version":1,"requestId":43,"generation":3,"outcome":{"success":{"operation":"focusLost","payload":{"sessionId":7,"generation":3}}}})";
+  Check(DecodeFocusLostResponseJson(release_response, release).has_value(),
+        "release response decodes and correlates");
 }
 
 void TestCanonicalRerankRequest() {
@@ -200,6 +244,7 @@ int main() {
   TestUtf8AndPipeName();
   TestKbf1Frame();
   TestAuthProjection();
+  TestPrepareRerankSessionProjection();
   TestCanonicalRerankRequest();
   TestCanonicalRerankResponse();
   std::cout << "broker_contract_test: PASS\n";

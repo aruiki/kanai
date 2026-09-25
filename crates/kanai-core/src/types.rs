@@ -222,5 +222,17 @@ pub trait ConversionProvider: Send + Sync {
     async fn convert(&self, request: &ConversionRequest)
     -> Result<ConversionResult, ProviderError>;
     async fn commit(&self, candidate_id: i32) -> Result<CommitResult, ProviderError>;
+    /// Commit a candidate only if it belongs to the supplied generation.
+    ///
+    /// Providers that do not yet expose a generation may use the default
+    /// implementation, but the Mozc adapter overrides it so a stale UI
+    /// selection cannot address a newer one-shot composition.
+    async fn commit_at(
+        &self,
+        candidate_id: i32,
+        _revision: u64,
+    ) -> Result<CommitResult, ProviderError> {
+        self.commit(candidate_id).await
+    }
     async fn reset(&self) -> Result<(), ProviderError>;
 }

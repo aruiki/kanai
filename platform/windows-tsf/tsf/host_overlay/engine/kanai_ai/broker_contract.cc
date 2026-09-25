@@ -730,6 +730,117 @@ std::optional<AuthResponse> DecodeAuthResponseJson(
   return response;
 }
 
+std::optional<std::string> EncodePrepareRerankSessionJson(
+    const PrepareRerankSessionRequest& request) {
+  if (request.request_id == 0 || request.session_id == 0) {
+    return std::nullopt;
+  }
+  std::string json = "{\"version\":1,\"requestId\":";
+  AppendU64Json(&json, request.request_id);
+  json += ",\"command\":{\"operation\":\"prepareRerankSession\",\"payload\":{";
+  json += "\"sessionId\":";
+  AppendU64Json(&json, request.session_id);
+  json += ",\"generation\":";
+  AppendU64Json(&json, request.generation);
+  json += ",\"fieldClass\":\"regular\"}}}";
+  return json;
+}
+
+std::optional<GenerationResponse> DecodeGenerationResponseJson(
+    std::string_view json,
+    const PrepareRerankSessionRequest& expected_request) {
+  const std::optional<JsonValue> root = JsonParser(json).Parse();
+  if (!root.has_value() || root->type != JsonValue::Type::kObject) {
+    return std::nullopt;
+  }
+  std::uint64_t version = 0;
+  std::uint64_t request_id = 0;
+  if (!ReadU64(*root, "version", &version) ||
+      version != kBrokerProtocolVersion ||
+      !ReadU64(*root, "requestId", &request_id) ||
+      request_id != expected_request.request_id) {
+    return std::nullopt;
+  }
+  const JsonValue* envelope_generation = root->Find("generation");
+  if (envelope_generation == nullptr ||
+      envelope_generation->type != JsonValue::Type::kNumber ||
+      envelope_generation->number != expected_request.generation) {
+    return std::nullopt;
+  }
+  const JsonValue* outcome = FindTyped(*root, "outcome", JsonValue::Type::kObject);
+  const JsonValue* success =
+      outcome == nullptr ? nullptr : FindTyped(*outcome, "success", JsonValue::Type::kObject);
+  if (success == nullptr) {
+    return std::nullopt;
+  }
+  std::string operation;
+  const JsonValue* payload =
+      FindTyped(*success, "payload", JsonValue::Type::kObject);
+  GenerationResponse response;
+  if (payload == nullptr || !ReadString(*success, "operation", &operation) ||
+      operation != "generation" ||
+      !ReadU64(*payload, "sessionId", &response.session_id) ||
+      !ReadU64(*payload, "generation", &response.generation) ||
+      response.session_id != expected_request.session_id ||
+      response.generation != expected_request.generation) {
+    return std::nullopt;
+  }
+  return response;
+}
+
+std::optional<std::string> EncodeReleaseRerankSessionJson(
+    const ReleaseRerankSessionRequest& request) {
+  if (request.request_id == 0 || request.session_id == 0) {
+    return std::nullopt;
+  }
+  std::string json = "{\"version\":1,\"requestId\":";
+  AppendU64Json(&json, request.request_id);
+  json += ",\"command\":{\"operation\":\"focusLost\",\"payload\":{";
+  json += "\"sessionId\":";
+  AppendU64Json(&json, request.session_id);
+  json += ",\"generation\":";
+  AppendU64Json(&json, request.generation);
+  json += "}}}";
+  return json;
+}
+
+std::optional<GenerationResponse> DecodeFocusLostResponseJson(
+    std::string_view json,
+    const ReleaseRerankSessionRequest& expected_request) {
+  const std::optional<JsonValue> root = JsonParser(json).Parse();
+  if (!root.has_value() || root->type != JsonValue::Type::kObject) {
+    return std::nullopt;
+  }
+  std::uint64_t version = 0;
+  std::uint64_t request_id = 0;
+  const JsonValue* envelope_generation = root->Find("generation");
+  if (!ReadU64(*root, "version", &version) ||
+      version != kBrokerProtocolVersion ||
+      !ReadU64(*root, "requestId", &request_id) ||
+      request_id != expected_request.request_id ||
+      envelope_generation == nullptr ||
+      envelope_generation->type != JsonValue::Type::kNumber ||
+      envelope_generation->number != expected_request.generation) {
+    return std::nullopt;
+  }
+  const JsonValue* outcome = FindTyped(*root, "outcome", JsonValue::Type::kObject);
+  const JsonValue* success =
+      outcome == nullptr ? nullptr : FindTyped(*outcome, "success", JsonValue::Type::kObject);
+  const JsonValue* payload =
+      success == nullptr ? nullptr : FindTyped(*success, "payload", JsonValue::Type::kObject);
+  std::string operation;
+  GenerationResponse response;
+  if (payload == nullptr || !ReadString(*success, "operation", &operation) ||
+      operation != "focusLost" ||
+      !ReadU64(*payload, "sessionId", &response.session_id) ||
+      !ReadU64(*payload, "generation", &response.generation) ||
+      response.session_id != expected_request.session_id ||
+      response.generation != expected_request.generation) {
+    return std::nullopt;
+  }
+  return response;
+}
+
 std::optional<std::string> EncodeRerankRequestJson(
     const RerankRequest& request) {
   if (!ValidateRerankRequest(request)) {

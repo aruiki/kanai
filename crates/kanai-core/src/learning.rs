@@ -125,9 +125,14 @@ impl LearningState {
         self.history.truncate(self.profile.history_limit);
     }
 
-    /// Adds explainable local adjustments and orders the complete candidate set.
+    /// Adds explainable local adjustments while preserving the provider order.
+    ///
+    /// The fast candidate ranker needs the original Mozc order as its baseline.
+    /// Keeping this operation separate from [`Self::personalize`] prevents a
+    /// learning policy from silently becoming an unbounded reordering stage
+    /// before the bounded ranker has validated the candidate window.
     #[must_use]
-    pub fn personalize(
+    pub fn personalize_ordered(
         &self,
         candidates: Vec<ConversionCandidate>,
         reading: &str,
@@ -137,7 +142,7 @@ impl LearningState {
         let context_tail = context_signature(context_before);
         let domain_terms = build_domain_terms(&self.profile.domain_terms);
 
-        let mut personalized = candidates
+        candidates
             .into_iter()
             .enumerate()
             .map(|(index, candidate)| {
@@ -182,7 +187,7 @@ impl LearningState {
                     CandidateOrigin::Unknown(_) => 0.0,
                 };
                 let provider_rank = candidate.provider_rank.max(index);
-                let mozc = MOZC_SCORE_SCALE / (provider_rank + 1) as f64;
+                let mozc = MOZC_SCORE_SCALE / (provider_rank.saturating_add(1) as f64);
                 let adjustments = CandidateAdjustments {
                     mozc,
                     learning,
@@ -203,8 +208,19 @@ impl LearningState {
                     explanation,
                 }
             })
-            .collect::<Vec<_>>();
+            .collect()
+    }
 
+    /// Adds explainable local adjustments and orders the complete candidate set.
+    #[must_use]
+    pub fn personalize(
+        &self,
+        candidates: Vec<ConversionCandidate>,
+        reading: &str,
+        context_before: &str,
+        now: u64,
+    ) -> Vec<PersonalizedCandidate> {
+        let mut personalized = self.personalize_ordered(candidates, reading, context_before, now);
         personalized.sort_by(|left, right| {
             right.score.total_cmp(&left.score).then_with(|| {
                 left.candidate

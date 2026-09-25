@@ -64,6 +64,23 @@ struct BrokerCandidate {
   std::uint16_t rank = 0;
 };
 
+struct PrepareRerankSessionRequest {
+  std::uint64_t request_id = 0;
+  std::uint64_t session_id = 0;
+  std::uint64_t generation = 0;
+};
+
+struct GenerationResponse {
+  std::uint64_t session_id = 0;
+  std::uint64_t generation = 0;
+};
+
+struct ReleaseRerankSessionRequest {
+  std::uint64_t request_id = 0;
+  std::uint64_t session_id = 0;
+  std::uint64_t generation = 0;
+};
+
 struct RerankRequest {
   std::uint64_t request_id = 0;
   std::uint64_t session_id = 0;
@@ -102,6 +119,15 @@ std::optional<std::string> EncodeAuthRequestJson(
     const AuthRequest& request);
 std::optional<AuthResponse> DecodeAuthResponseJson(
     std::string_view json, std::string_view expected_client_id);
+
+std::optional<std::string> EncodePrepareRerankSessionJson(
+    const PrepareRerankSessionRequest& request);
+std::optional<GenerationResponse> DecodeGenerationResponseJson(
+    std::string_view json, const PrepareRerankSessionRequest& expected_request);
+std::optional<std::string> EncodeReleaseRerankSessionJson(
+    const ReleaseRerankSessionRequest& request);
+std::optional<GenerationResponse> DecodeFocusLostResponseJson(
+    std::string_view json, const ReleaseRerankSessionRequest& expected_request);
 
 std::optional<std::string> EncodeRerankRequestJson(
     const RerankRequest& request);

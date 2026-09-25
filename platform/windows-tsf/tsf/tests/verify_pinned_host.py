@@ -64,6 +64,7 @@ def main() -> int:
     patch_paths = [
         tsf_root / "patches" / "0001-install-kanai-supplemental-model.patch",
         tsf_root / "patches" / "0002-kanai-tsf-identity.patch",
+        tsf_root / "patches" / "0003-session-generation-binding.patch",
     ]
 
     if not mozc_src.is_dir():
@@ -164,6 +165,26 @@ def main() -> int:
         broker_root / "broker.rs",
         ["EnhancementRequiresAsync", "enhancement_token"],
     )
+    require_markers(
+        broker_root / "session.rs",
+        ["SessionBroker", "GenerationToken", "begin_state_change"],
+    )
+    require_markers(
+        broker_root / "queue.rs",
+        ["EnhancementQueue", "latest", "state.jobs.len()"],
+    )
+    require_markers(
+        broker_root / "mozc_session.rs",
+        ["MozcSessionBackend", "MozcBridgePool", "close_at", ".commit("],
+    )
+    require_markers(
+        broker_root / "pipe_windows.rs",
+        [
+            "PIPE_REJECT_REMOTE_CLIENTS",
+            "GetNamedPipeClientProcessId",
+            "ConvertStringSecurityDescriptorToSecurityDescriptorW",
+        ],
+    )
 
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     if metadata["host"]["commit"] != args.expected_commit:
@@ -173,34 +194,65 @@ def main() -> int:
     if metadata["integration"]["patchedUpstreamFiles"] != [
         "third_party/mozc/src/engine/BUILD.bazel",
         "third_party/mozc/src/engine/modules.cc",
+        "third_party/mozc/src/session/BUILD.bazel",
+        "third_party/mozc/src/session/session_handler.cc",
         "third_party/mozc/src/win32/base/tsf_profile.cc",
+        "third_party/mozc/src/win32/tip/tip_keyevent_handler.cc",
     ]:
         raise AssertionError("metadata patch boundary drifted")
     if metadata["broker"]["frameMagic"] != "KBF1":
         raise AssertionError("native adapter drifted from kanai-broker KBF1")
+    if metadata["broker"].get("rustExecutable") != "kanai-broker":
+        raise AssertionError("metadata does not identify the Rust broker executable")
+    if not metadata["broker"].get("windowsServerSource"):
+        raise AssertionError("metadata does not identify the Windows broker server source")
     if metadata["integration"]["synchronousBrokerCallsFromModel"] is not False:
         raise AssertionError("model must remain off the synchronous broker path")
 
     require_markers(
         adapter_root / "broker_contract.h",
-        ['kBrokerFrameMagic[] = "KBF1"', "EncodeRerankRequestJson"],
+        [
+            'kBrokerFrameMagic[] = "KBF1"',
+            "EncodeRerankRequestJson",
+            "EncodePrepareRerankSessionJson",
+            "EncodeReleaseRerankSessionJson",
+        ],
     )
     require_markers(
         adapter_root / "pipe_broker_client.cc",
-        ["EncodeAuthRequestJson", "BCryptGenRandom", "Authenticate"],
+        [
+            "EncodeAuthRequestJson",
+            "BCryptGenRandom",
+            "Authenticate",
+            "MakePipeRerankTransport",
+            "MakePipeReleaseTransport",
+            "VerifyServerImage",
+            "QueryFullProcessImageNameW",
+            "GetNamedPipeServerProcessId",
+            "KANAI_AI_TSF_SERVER_IMAGE",
+            "PrepareRerankSessionRequest",
+            "ReleaseRerankSessionRequest",
+            "overlapped.hEvent = event",
+        ],
     )
     require_markers(
         adapter_root / "kanai_supplemental_model.cc",
         [
-            "sessionId/generation",
-            "Deliberately no-op",
+            "BeginMozcCommand",
+            "EndMozcSession",
+            "kanai.protected",
+            "BindSession",
+            "AsyncWorker",
+            "EnqueueAsync",
+            "EnqueueReleaseAsync",
+            "ApplyRerankForSession",
             "ApplyRerankToResults",
         ],
     )
     model_text = (adapter_root / "kanai_supplemental_model.cc").read_text(
         encoding="utf-8"
     )
-    if "PipeBrokerClient" in model_text or "Rerank(" in model_text:
+    if "PipeBrokerClient" in model_text or "MakePipe" in model_text:
         raise AssertionError("supplemental model performs synchronous broker I/O")
     if metadata["host"]["type"] != "pinned-upstream-mozc":
         raise AssertionError("adapter is not bound to the pinned upstream host")
@@ -214,6 +266,10 @@ def main() -> int:
             stderr=subprocess.PIPE,
             text=True,
         )
+    require_markers(
+        tsf_root / "patches" / "0003-session-generation-binding.patch",
+        ["BeginMozcCommand", "EndMozcSession", "kanai.protected"],
+    )
 
     print(
         json.dumps(

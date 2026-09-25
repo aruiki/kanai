@@ -2,6 +2,7 @@
 #define KANAI_WINDOWS_TSF_KANAI_AI_PIPE_BROKER_CLIENT_H_
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,19 @@ namespace kanai::tsf {
 // Synchronous named-pipe transport for an optional executor. It is never
 // called from a key/preedit callback. Each connection performs the canonical
 // kanai-broker AuthRequest/AuthResponse handshake and one rerank exchange.
+using PipeRerankTransport =
+    std::function<bool(const RerankRequest&, RerankResponse*)>;
+using PipeReleaseTransport =
+    std::function<bool(std::uint64_t, std::uint64_t)>;
+
+// Build the real Windows named-pipe transport used by the supplemental
+// model's bounded worker. The returned callable owns one reusable client,
+// verifies the broker process image before authentication, and performs no
+// I/O until the worker invokes it.
+PipeRerankTransport MakePipeRerankTransport(std::uint32_t timeout_milliseconds);
+PipeReleaseTransport MakePipeReleaseTransport(
+    std::uint32_t timeout_milliseconds);
+
 class PipeBrokerClient {
  public:
   explicit PipeBrokerClient(std::uint32_t timeout_milliseconds);
@@ -23,6 +37,7 @@ class PipeBrokerClient {
   ~PipeBrokerClient() = default;
 
   bool Rerank(const RerankRequest& request, RerankResponse* response) const;
+  bool Release(std::uint64_t session_id, std::uint64_t generation) const;
 
   const std::wstring& pipe_name() const { return pipe_name_; }
   std::uint32_t timeout_milliseconds() const { return timeout_milliseconds_; }

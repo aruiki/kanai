@@ -17,8 +17,8 @@ use crate::protocol::{
     EditRequest, EditResponse, EnhancementAdmission, ErrorCode, ErrorResponse, FallbackMode,
     FieldClass, FocusLostRequest, FocusLostResponse, GenerationRequest, GenerationResponse,
     HealthResponse, HealthStatus, KeyEvent, KeyRequest, KeyResponse, PROTOCOL_VERSION,
-    RequestCommand, RequestEnvelope, ResponseEnvelope, ResponsePayload, SecureFieldPolicy,
-    SessionCreated, ValidationError,
+    PrepareRerankSessionRequest, RequestCommand, RequestEnvelope, ResponseEnvelope,
+    ResponsePayload, SecureFieldPolicy, SessionCreated, ValidationError,
 };
 
 /// A cooperative cancellation token.  Backends should check it before and
@@ -112,20 +112,55 @@ impl fmt::Debug for CancellationRegistry {
 }
 
 /// A generation snapshot that can be held by an optional enhancement job.
-/// The broker updates the shared clock before it starts each state-changing
-/// operation, so a model result is discarded even if the job finishes after a
-/// newer key/edit or after focus teardown.
+/// The broker updates the shared clock and admission epoch before it starts
+/// each state-changing operation, so a model result is discarded even if the
+/// job finishes after a newer key/edit or after focus teardown.
 #[derive(Clone)]
 pub struct GenerationToken {
     session_id: u64,
     generation: u64,
     clock: Arc<AtomicU64>,
+    epoch: Arc<AtomicU64>,
+    token_epoch: u64,
     active: Arc<AtomicBool>,
     field_class: FieldClass,
     secure_field_policy: SecureFieldPolicy,
 }
 
 impl GenerationToken {
+    /// Construct a token for a session owner that already owns the shared
+    /// generation clock and lifecycle flag.
+    ///
+    /// The async/session-aware broker uses this constructor after it has
+    /// atomically checked the caller's expected generation.  Keeping the
+    /// clock and active flag shared with the owner is what makes a result
+    /// become stale when a later key, edit, cancel, commit, or focus event
+    /// arrives while an optional job is running.
+    pub(crate) fn from_shared(
+        session_id: u64,
+        generation: u64,
+        clock: Arc<AtomicU64>,
+        epoch: Arc<AtomicU64>,
+        active: Arc<AtomicBool>,
+        field_class: FieldClass,
+    ) -> Self {
+        let secure_field_policy = if field_class.is_secure() {
+            SecureFieldPolicy::Prohibit
+        } else {
+            SecureFieldPolicy::AllowLocalOnly
+        };
+        Self {
+            session_id,
+            generation,
+            clock,
+            token_epoch: epoch.load(Ordering::Acquire),
+            epoch,
+            active,
+            field_class,
+            secure_field_policy,
+        }
+    }
+
     #[must_use]
     pub fn session_id(&self) -> u64 {
         self.session_id
@@ -143,7 +178,9 @@ impl GenerationToken {
 
     #[must_use]
     pub fn is_current(&self) -> bool {
-        self.active.load(Ordering::Acquire) && self.current_generation() == self.generation
+        self.active.load(Ordering::Acquire)
+            && self.current_generation() == self.generation
+            && self.epoch.load(Ordering::Acquire) == self.token_epoch
     }
 
     #[must_use]
@@ -174,6 +211,8 @@ impl fmt::Debug for GenerationToken {
             .field("session_id", &self.session_id)
             .field("generation", &self.generation)
             .field("current_generation", &self.current_generation())
+            .field("token_epoch", &self.token_epoch)
+            .field("current_epoch", &self.epoch.load(Ordering::Acquire))
             .field("active", &self.active.load(Ordering::Acquire))
             .field("field_class", &self.field_class)
             .field("secure_field_policy", &self.secure_field_policy)
@@ -198,6 +237,10 @@ pub enum BackendError {
     Cancelled,
     #[error("conversion backend returned an invalid response: {0}")]
     Protocol(String),
+    #[error("conversion backend rejected the request before mutation: {0}")]
+    Rejected(String),
+    #[error("the Mozc session was invalidated after a backend failure")]
+    SessionInvalidated,
 }
 
 impl BackendError {
@@ -207,6 +250,8 @@ impl BackendError {
             Self::Timeout => ErrorCode::BackendTimeout,
             Self::Cancelled => ErrorCode::Cancelled,
             Self::Protocol(_) => ErrorCode::BackendProtocol,
+            Self::Rejected(_) => ErrorCode::InvalidRequest,
+            Self::SessionInvalidated => ErrorCode::BackendUnavailable,
         }
     }
 }
@@ -307,9 +352,11 @@ impl BrokerError {
 struct SessionRecord {
     generation: u64,
     clock: Arc<AtomicU64>,
+    epoch: Arc<AtomicU64>,
     active: Arc<AtomicBool>,
     field_class: FieldClass,
     last_valid: Option<CompositionState>,
+    rerank_only: bool,
 }
 
 /// A small, deterministic broker state machine suitable for unit tests and for
@@ -386,6 +433,8 @@ impl<B: BrokerBackend> Broker<B> {
                 session_id,
                 generation: session.generation,
                 clock: Arc::clone(&session.clock),
+                epoch: Arc::clone(&session.epoch),
+                token_epoch: session.epoch.load(Ordering::Acquire),
                 active: Arc::clone(&session.active),
                 field_class: session.field_class.clone(),
                 secure_field_policy: if session.field_class.is_secure() {
@@ -421,6 +470,9 @@ impl<B: BrokerBackend> Broker<B> {
         let request_id = request.request_id;
         match request.command {
             RequestCommand::CreateSession(command) => self.create_session(request_id, command),
+            RequestCommand::PrepareRerankSession(command) => {
+                self.prepare_rerank_session(request_id, command)
+            }
             RequestCommand::Key(command) => self.key(request_id, command),
             RequestCommand::Edit(command) => self.edit(request_id, command),
             RequestCommand::Convert(command) => self.convert(request_id, command),
@@ -444,6 +496,71 @@ impl<B: BrokerBackend> Broker<B> {
     /// outside this synchronous dispatcher.
     pub fn cancel_request(&self, request_id: u64) -> bool {
         self.cancellations.cancel(request_id)
+    }
+
+    fn prepare_rerank_session(
+        &mut self,
+        request_id: u64,
+        command: PrepareRerankSessionRequest,
+    ) -> Result<ResponseEnvelope, BrokerError> {
+        if let Some(session) = self.sessions.get(&command.session_id) {
+            if !session.rerank_only {
+                return Err(BrokerError::AlreadyExists {
+                    session_id: command.session_id,
+                });
+            }
+            if session.field_class != command.field_class {
+                return Err(BrokerError::AlreadyExists {
+                    session_id: command.session_id,
+                });
+            }
+        } else {
+            if self.sessions.len() >= self.config.max_sessions {
+                return Err(BrokerError::SessionLimitReached(self.config.max_sessions));
+            }
+            self.sessions.insert(
+                command.session_id,
+                SessionRecord {
+                    generation: command.generation,
+                    clock: Arc::new(AtomicU64::new(command.generation)),
+                    epoch: Arc::new(AtomicU64::new(0)),
+                    active: Arc::new(AtomicBool::new(true)),
+                    field_class: command.field_class,
+                    last_valid: None,
+                    rerank_only: true,
+                },
+            );
+            return Ok(ResponseEnvelope::success(
+                request_id,
+                ResponsePayload::Generation(GenerationResponse {
+                    session_id: command.session_id,
+                    generation: command.generation,
+                }),
+            ));
+        }
+        let session = self.sessions.get_mut(&command.session_id).expect("checked");
+        let current = session.generation;
+        if command.generation < current {
+            return Err(BrokerError::StaleGeneration {
+                session_id: command.session_id,
+                expected: command.generation,
+                current,
+            });
+        }
+        if command.generation > current {
+            session.active.store(false, Ordering::Release);
+            session.generation = command.generation;
+            session.clock.store(command.generation, Ordering::Release);
+            session.epoch.fetch_add(1, Ordering::AcqRel);
+            session.active.store(true, Ordering::Release);
+        }
+        Ok(ResponseEnvelope::success(
+            request_id,
+            ResponsePayload::Generation(GenerationResponse {
+                session_id: command.session_id,
+                generation: command.generation,
+            }),
+        ))
     }
 
     fn create_session(
@@ -499,9 +616,11 @@ impl<B: BrokerBackend> Broker<B> {
             SessionRecord {
                 generation: 0,
                 clock: Arc::new(AtomicU64::new(0)),
+                epoch: Arc::new(AtomicU64::new(0)),
                 active: Arc::new(AtomicBool::new(true)),
                 field_class: command.field_class,
                 last_valid: None,
+                rerank_only: false,
             },
         );
         Ok(ResponseEnvelope::success(request_id, payload))
@@ -841,6 +960,7 @@ impl<B: BrokerBackend> Broker<B> {
         if let Some(session) = self.sessions.get_mut(&session_id) {
             session.generation = generation;
             session.clock.store(generation, Ordering::Release);
+            session.epoch.fetch_add(1, Ordering::AcqRel);
         }
     }
 
@@ -1055,6 +1175,9 @@ impl BrokerBackend for DeterministicBackend {
                     fallback: FallbackMode::None,
                 }))
             }
+            RequestCommand::PrepareRerankSession(_) => Err(BackendError::Protocol(
+                "rerank-only sessions are owned by the async broker".to_owned(),
+            )),
             RequestCommand::Key(command) => {
                 let session = self.sessions.get_mut(&command.session_id).ok_or_else(|| {
                     BackendError::Protocol("unknown deterministic session".to_owned())

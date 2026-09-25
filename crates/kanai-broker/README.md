@@ -1,8 +1,9 @@
 # kanai-broker
 
 `kanai-broker` is a platform-neutral Rust foundation for the broker process that
-will sit behind a future Windows TSF TIP. It is deliberately **not** a TSF DLL,
-a COM server, or a completed Windows named-pipe server.
+sits behind the Windows TSF integration. It is not a TSF DLL or a COM server,
+but it now includes a bounded authenticated connection adapter, a Windows
+named-pipe server target, and a real session-aware Mozc lab adapter.
 
 ## Integration contract
 
@@ -21,6 +22,7 @@ dispatch when its version is different or when a bounded field is invalid.
 The operation-tagged command and response DTOs are:
 
 - `createSession`
+- `prepareRerankSession`
 - `key`
 - `edit`
 - `convert`
@@ -48,21 +50,20 @@ KBF1 | u32 big-endian payload length | UTF-8 JSON payload
 The default payload limit is 1 MiB. A length is checked before allocating a
 payload, and the streaming decoder never buffers more than one bounded header
 plus payload. `FramedIo<T>` is a synchronous `Read + Write` adapter useful for
-Linux tests or a future blocking named-pipe wrapper. A Windows implementation
-must provide the actual pipe handles, I/O, overlapped/asynchronous policy, and
-ACLs; this crate does not pretend to do that.
+Linux tests and local sockets. The Windows target uses Tokio overlapped named
+pipes, rejects remote clients, creates the pipe with a protected owner/system
+DACL, and validates the connected process/session/user token before accepting
+application frames.
 
 ### Authentication and peer validation
 
 `AuthenticatedTransport<T>` fails closed for both send and receive until one
 handshake is accepted through a `PeerAuthenticator`. The reference
-`SharedSecretAuthenticator` is a deterministic Linux-test adapter only. A
-production Windows adapter should:
-
-1. create a per-user private named pipe with an explicit user-only ACL;
-2. validate the pipe client token/peer identity in a platform authenticator;
-3. reject unsupported auth and protocol versions; and
-4. keep the shared-secret fallback out of the production security boundary.
+`SharedSecretAuthenticator` is a deterministic Linux-test/local-socket adapter
+only. The Windows `WindowsPeerAuthenticator` additionally checks the pipe
+client process, Windows session, and user token; its public capability marker
+is not a secret. Production packaging must still keep the shared-secret
+fallback out of the Windows boundary.
 
 The auth proof is opaque to this crate. `AuthRequest::proof` and `SharedSecret`
 are redacted from `Debug` output, but callers must still avoid logging wire
@@ -70,11 +71,14 @@ captures or handshake data.
 
 ### Generations, cancellation, and fallback
 
-A session starts at generation `0`. `key`, `edit`, `commit`, `cancel`, and
-`focusLost` reserve the next checked `u64` generation before backend work;
-`convert` and `generation` are read-only with respect to the generation counter.
-A request carrying an older expected generation is rejected without calling the
-backend. `checked_add` prevents wraparound.
+A session starts at generation `0`. In the synchronous compatibility
+`Broker`, `key`, `edit`, `commit`, `cancel`, and `focusLost` reserve the next
+checked `u64` generation before backend work; `convert` remains read-only for
+existing embedders. The async `SessionBroker` additionally advances the
+checked generation for every conversion/page snapshot, so a later conversion
+invalidates an older optional candidate result. A request carrying an older
+expected generation is rejected without calling the backend. `checked_add`
+prevents wraparound.
 
 `CancellationToken` and `CancellationRegistry` provide cooperative cancellation
 of in-process work. A `CancelRequest` can target a request ID and may omit its
@@ -82,6 +86,42 @@ generation so a newer shell generation can still cancel older optional work;
 if a generation is supplied, it is checked. The transport adapter should route
 an optional-job cancellation to `EnhancementCoordinator::cancel_request` and
 use the broker registry for synchronous broker work.
+
+### Async session owner and optional queue
+
+`SessionBroker` is the process-facing owner used by the executable. It stores
+per-session generation/lifecycle/privacy state behind a per-session operation
+lock, binds each transport-created session to the authenticated client ID,
+and invalidates captured tokens on focus loss. `prepareRerankSession` is a
+lightweight, authenticated candidate-rerank admission path: it creates or
+advances a generation-only session without opening a second Mozc composition
+backend, and `focusLost` releases it. Cross-peer session access and
+cancellation are rejected; the OS authenticator still must be paired with a
+private pipe ACL.
+`MozcSessionBackend` now shares one bounded bridge process across broker
+sessions. The C++ side retains a compatibility facade while adding explicit
+`open`, `key`, `edit`, `convert`, `commit`, `cancel`, and `close` commands. The
+bridge caps total upstream sessions at 64 (including the legacy compatibility
+session), keeps them incognito, and serializes the
+pinned synchronous `SessionHandler`; internal negative/zero Mozc IDs are
+remapped to positive request-scoped IDs before commit.
+
+`EnhancementQueue` is a bounded multi-worker queue. Admission is non-blocking;
+a full queue returns the unmodified baseline without calling a provider. The
+implementation caps queued jobs at 64 and workers at 8; configuration outside
+those bounds is rejected before allocation. Only the latest queued job for a
+session is retained: admitting a newer job cancels the previous token, while
+the generation token still provides the final stale-result check. The queue and all model work are separate from the
+synchronous key/preedit dispatcher.
+
+The executable is `src/bin/kanai-broker.rs`. On Unix it exposes a private
+`KANAI_BROKER_SOCKET`; on Windows it binds
+`\\.\pipe\KanaAI.TsfBroker.v1.<windows-session-id>`. The Unix listener requires
+`KANAI_BROKER_SECRET` for its test-only shared-secret handshake. The Windows
+listener uses the OS-token authenticator and does not use that secret. No model
+weights or inference runtime are bundled; the default policy is disabled and
+returns the Mozc baseline unless an explicitly configured loopback provider is
+selected.
 
 ### Optional local quality enhancements
 
@@ -100,12 +140,23 @@ provided coordinator uses Tokio's timer and must run on a Tokio runtime.
 model/provider call cannot accidentally run on the blocking per-key path. The
 caller must schedule the coordinator on a bounded optional executor.
 
+The optional `LocalOpenAiBackend` is a deliberately narrow integration seam for
+a separately operated local OpenAI-compatible server. It is enabled only with
+`KANAI_BROKER_ENHANCEMENT=local`, `KANAI_AI_BASE_URL`, and `KANAI_AI_MODEL`.
+The URL must be an HTTP loopback address (remote and TLS endpoints are rejected),
+the request is bounded to nine candidates and short context, and the response
+must be a strict JSON decision containing an exact candidate permutation. HTTP
+failure, timeout, cancellation, oversized output, or malformed output falls back
+to the unchanged Mozc order. This adapter does not bundle model weights and is
+not a remote-service integration.
+
 `Broker::enhancement_token` captures the session generation and field class.
 Password/protected sessions use `SecureFieldPolicy::Prohibit`; the coordinator
 returns a measurable skipped response before calling a provider. The default
 `EnhancementPolicy` is disabled, and the coordinator rejects remote providers.
-No model runtime or external provider dependency (including any project not
-part of this repository) is linked here.
+No model weights or external service dependency (including any project not
+part of this repository) is bundled here; the optional adapter only talks to
+an explicitly configured loopback provider.
 
 `FallbackPolicy` is local and deterministic:
 
@@ -120,8 +171,17 @@ Rust broker remains the only owner of session state and generation checks.
 
 ## Current boundary
 
-`BrokerBackend` is the integration seam for a future Mozc/local backend. The
-included `DeterministicBackend` is only a small test double, not a Japanese IME
-engine. No Windows API, TSF registration, candidate UI, OS secure-field
-detection, or named-pipe lifecycle is implemented here; the broker only
-enforces the typed privacy decision supplied by the shell.
+`SessionBackend` is the async integration seam for a real Mozc/local backend.
+`MozcSessionBackend` now uses one bounded, incognito bridge process for all
+broker sessions. The C++ protocol retains the legacy one-shot commands while
+adding explicit session lifecycle/state commands; the pinned synchronous
+`SessionHandler` is serialized inside that process, and Rust remains the
+authority for session ownership, generation checks, and commit correlation.
+The Windows named-pipe server is source-built and cross-target checked, but a
+real Windows TIP registration/application run, secure-field matrix, model
+runtime, and native application evidence remain release gates. The Windows
+client/server boundary also checks the connected process image (configurable
+with `KANAI_AI_TSF_CLIENT_IMAGE`/`KANAI_AI_TSF_SERVER_IMAGE`); Authenticode
+and same-user impostor evidence remain required. The staged TSF server hook
+supplies a trusted session/generation token; a client-fabricated token is still
+never accepted.

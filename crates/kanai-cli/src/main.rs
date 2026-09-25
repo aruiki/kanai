@@ -32,9 +32,14 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    let context = arguments.next().unwrap_or_default();
-    let explain = arguments.any(|value| value == "--explain");
-    let json = arguments.any(|value| value == "--json");
+    let options = arguments.collect::<Vec<_>>();
+    let explain = options.iter().any(|value| value == "--explain");
+    let json = options.iter().any(|value| value == "--json");
+    let context = options
+        .into_iter()
+        .find(|value| value != "--explain" && value != "--json")
+        .map(|value| bounded_context_tail(&value))
+        .unwrap_or_default();
     let mut request = ConversionRequest::new(command);
     request.context_before = context;
     let result = bridge.convert(&request).await?;
@@ -87,6 +92,18 @@ async fn main() -> Result<()> {
     }
     println!("elapsed: {} µs", result.elapsed.as_micros());
     Ok(())
+}
+
+fn bounded_context_tail(value: &str) -> String {
+    const MAX_CONTEXT_CHARS: usize = 32;
+    value
+        .chars()
+        .rev()
+        .take(MAX_CONTEXT_CHARS)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect()
 }
 
 fn print_help() {

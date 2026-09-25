@@ -13,8 +13,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use kanai_core::{
-    CommitResult, ConversionProvider, ConversionRequest, HardwareCapabilities, LearningState,
-    ModelProfile, ProviderHealth, UserProfile, UserWord, recommend_tier_for_memory,
+    CandidatePipeline, CommitResult, ConversionProvider, ConversionRequest, FastRankOutcome,
+    HardwareCapabilities, LearningState, ModelProfile, PipelineSession, ProviderHealth,
+    UserProfile, UserWord, recommend_tier_for_memory,
 };
 use serde::{Deserialize, Serialize};
 use sysinfo::System;
@@ -29,6 +30,9 @@ const MAX_CONVERSION_CANDIDATES: usize = 20;
 pub struct AppState {
     pub provider: Arc<dyn ConversionProvider>,
     pub assistant: AssistantConfig,
+    /// Shared fast-path policy/cache.  The lock is held only for bounded local
+    /// ranking, never while the provider or an optional model is running.
+    pub pipeline: Arc<tokio::sync::Mutex<CandidatePipeline>>,
 }
 
 #[derive(Clone)]
@@ -132,11 +136,13 @@ const fn default_limit() -> usize {
 #[serde(rename_all = "camelCase")]
 pub struct PersonalizedConversionResult {
     pub provider: String,
+    pub revision: u64,
     pub reading: String,
     pub preedit: String,
     pub preedit_segments: Vec<kanai_core::PreeditSegment>,
     pub candidates: Vec<kanai_core::PersonalizedCandidate>,
     pub focused_index: Option<usize>,
+    pub fast_rank: FastRankOutcome,
     pub consumed: bool,
     pub elapsed: Duration,
 }
@@ -154,6 +160,8 @@ pub struct ConvertResponse {
 #[serde(rename_all = "camelCase")]
 pub struct CommitRequest {
     candidate_id: i32,
+    #[serde(default)]
+    revision: Option<u64>,
     reading: String,
     expected_text: String,
     context: String,
@@ -493,46 +501,59 @@ async fn convert(
         .and_then(|index| result.candidates.get(index).map(|candidate| candidate.id));
     let mut candidates = request_state_personalize(
         &request_state,
-        result.candidates,
+        result.candidates.clone(),
         &reading,
         &context_before,
         now,
     );
     candidates.truncate(limit);
-    let mut focused_index = focused_candidate_id.and_then(|id| {
-        candidates
-            .iter()
-            .position(|candidate| candidate.candidate.id == id)
-    });
+    let session = PipelineSession::new(now, now, request_state.profile.model_tier)
+        .with_revisions(0, u64::from(request_state.version));
+    let mut ranked = {
+        let mut pipeline = state.pipeline.lock().await;
+        pipeline.rank_result(result, &provider_request, session, candidates)
+    };
 
     let ai = if ai_mode == AiMode::Off {
         None
     } else {
+        // Keep the shared fast-path lock out of the model call.  A slow local
+        // request gets an isolated policy/cache instance so a model timeout
+        // cannot block unrelated conversions.
+        let quality_config = state.pipeline.lock().await.config();
+        let mut slow_pipeline = CandidatePipeline::new(quality_config);
         Some(
-            reranker::maybe_rerank(
+            reranker::maybe_rerank_pipeline(
                 &state.assistant,
-                reranker::RerankContext {
-                    mode: ai_mode,
-                    tier: request_state.profile.model_tier,
-                    reading: &reading,
-                    context_before: &context_before,
-                    generation: now,
-                },
-                &mut candidates,
-                &mut focused_index,
+                ai_mode,
+                &mut slow_pipeline,
+                &mut ranked,
+                session,
             )
             .await,
         )
     };
+    let result = ranked.result;
+    let fast_rank = ranked.fast_rank;
+    let candidates = ranked.candidates;
+    let focused_index = ranked.focused_index.or_else(|| {
+        focused_candidate_id.and_then(|id| {
+            candidates
+                .iter()
+                .position(|candidate| candidate.candidate.id == id)
+        })
+    });
 
     Ok(Json(ConvertResponse {
         result: PersonalizedConversionResult {
             provider: result.provider,
+            revision: provider_request.revision,
             reading: result.reading,
             preedit: result.preedit,
             preedit_segments: result.preedit_segments,
             candidates,
             focused_index,
+            fast_rank,
             consumed: result.consumed,
             elapsed: result.elapsed,
         },
@@ -569,11 +590,15 @@ async fn commit(
     {
         return Err(ApiError::bad_request("commit metadata is too long"));
     }
-    let result = state
-        .provider
-        .commit(request.candidate_id)
-        .await
-        .map_err(ApiError::provider)?;
+    let result = if let Some(revision) = request.revision {
+        state
+            .provider
+            .commit_at(request.candidate_id, revision)
+            .await
+    } else {
+        state.provider.commit(request.candidate_id).await
+    }
+    .map_err(ApiError::provider)?;
     if result.text != request.expected_text {
         return Err(ApiError::bad_request(
             "Mozc commit result no longer matches the selected candidate",

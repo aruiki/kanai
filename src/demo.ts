@@ -91,6 +91,7 @@ const candidate = (
 
 export const DEMO_RESULT: ConversionResult = {
   provider: "Mozc · demo fixture",
+  revision: 0,
   reading: "にほんご",
   preedit: "にほんご",
   preeditSegments: [
@@ -99,6 +100,13 @@ export const DEMO_RESULT: ConversionResult = {
     { value: "ご", reading: "ご", highlighted: true },
   ],
   focusedIndex: 0,
+  fastRank: {
+    status: "unchanged",
+    changedPositions: 0,
+    evaluatedCandidates: 9,
+    cacheEntries: 0,
+    elapsedMicros: 0,
+  },
   consumed: true,
   elapsed: { secs: 0, nanos: 8_400_000 },
   candidates: [

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  "model": "opencode/space-bunny-free",
+
+  "permissions": [
+    {
+      "action": "*",
+      "resource": "*",
+      "effect": "allow"
+    },
+
+    {
+      "action": "shell",
+      "resource": "git push *",
+      "effect": "deny"
+    },
+    {
+      "action": "shell",
+      "resource": "sudo *",
+      "effect": "deny"
+    }
+  ],
+
+  "agents": {
+    "build": {
+      "permissions": [
+        {
+          "action": "edit",
+          "resource": "*/.goal-complete",
+          "effect": "deny"
+        },
+        {
+          "action": "edit",
+          "resource": "*/VERIFICATION.md",
+          "effect": "deny"
+        }
+      ]
+    }
+  }
+}

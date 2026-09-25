@@ -86,13 +86,23 @@ export interface PreeditSegment {
   highlighted: boolean;
 }
 
+export interface FastRankOutcome {
+  status: string;
+  changedPositions: number;
+  evaluatedCandidates: number;
+  cacheEntries: number;
+  elapsedMicros: number;
+}
+
 export interface ConversionResult {
   provider: string;
+  revision: number;
   reading: string;
   preedit: string;
   preeditSegments: PreeditSegment[];
   candidates: ConversionCandidate[];
   focusedIndex: number | null;
+  fastRank: FastRankOutcome;
   consumed: boolean;
   elapsed: { secs: number; nanos: number };
 }

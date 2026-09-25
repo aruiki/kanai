@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "status": "development-seam-not-public-beta",
   "host": {
     "type": "pinned-upstream-mozc",
@@ -24,31 +24,53 @@
   "integration": {
     "serverSeam": "mozc::engine::SupplementalModelInterface",
     "activeMethods": [],
+    "conditionalMethods": [
+      "PostCorrect"
+    ],
     "compileOnlyMethods": [
-      "PostCorrect",
       "RescoreResults"
     ],
+    "implementedNonblockingSeams": [
+      "boundedAsyncRerankWorker",
+      "pipeBrokerTransportFactory",
+      "pipeReleaseTransportFactory",
+      "sessionBindingOwner",
+      "sessionBindingHandoff",
+      "ApplyRerankToResults"
+    ],
     "futureNonblockingSeams": [
-      "ApplyRerankToResults",
+      "realWindowsSessionLifecycleEvidence",
       "semanticAssist"
     ],
+    "rerankSessionPreparationImplemented": true,
+    "sessionReleaseImplemented": true,
     "patchedUpstreamFiles": [
       "third_party/mozc/src/engine/BUILD.bazel",
       "third_party/mozc/src/engine/modules.cc",
-      "third_party/mozc/src/win32/base/tsf_profile.cc"
+      "third_party/mozc/src/session/BUILD.bazel",
+      "third_party/mozc/src/session/session_handler.cc",
+      "third_party/mozc/src/win32/base/tsf_profile.cc",
+      "third_party/mozc/src/win32/tip/tip_keyevent_handler.cc"
     ],
     "replacedTipFiles": [],
     "modelReportsAvailable": false,
+    "modelAvailability": "inert-by-default; true only after the trusted SessionHandler starts the worker and binds a regular session",
     "synchronousBrokerCallsFromModel": false,
-    "reasonModelInert": "SupplementalModelInterface does not carry the per-context kanai-broker sessionId/generation required for safe admission."
+    "reasonModelInert": "The source path now has a trusted server-side session/generation hook, bounded worker, exact live-result handoff, and release cleanup. Real Windows registration, field matrix, model runtime, and application evidence are still unverified."
   },
   "broker": {
     "canonicalContractSources": [
       "crates/kanai-broker/src/frame.rs",
       "crates/kanai-broker/src/protocol.rs",
       "crates/kanai-broker/src/transport.rs",
-      "crates/kanai-broker/src/enhancement.rs"
+      "crates/kanai-broker/src/enhancement.rs",
+      "crates/kanai-broker/src/session.rs",
+      "crates/kanai-broker/src/queue.rs",
+      "crates/kanai-broker/src/mozc_session.rs"
     ],
+    "rustExecutable": "kanai-broker",
+    "windowsServerSource": "crates/kanai-broker/src/pipe_windows.rs",
+    "unixLabSocket": "KANAI_BROKER_SOCKET",
     "transport": "private-windows-named-pipe",
     "protocolVersion": 1,
     "frameMagic": "KBF1",
@@ -60,15 +82,24 @@
     "defaultDeadlineMilliseconds": 250,
     "maximumDeadlineMilliseconds": 2000,
     "remoteClients": "rejected",
-    "serverAcl": "interactive-user-only",
-    "authHandshake": "AuthRequest/AuthResponse with OS token peer validation",
+    "serverAcl": "owner-system-administrators-with-client-token-and-process-image-check",
+    "authHandshake": "AuthRequest/AuthResponse with OS token, same-session, and mutual process-image validation",
     "surroundingTextSent": false,
+    "boundedContextOnly": true,
     "incognitoRequestsSent": false,
-    "failOpenToMozc": true
+    "failOpenToMozc": true,
+    "multiplexedMozcBridgeImplemented": true,
+    "bridgeSessionLimit": 64,
+    "bridgeCompatibilityFacade": true
   },
   "publicBetaGates": {
-    "sessionGenerationBridgeImplemented": false,
-    "asyncEnhancementExecutorImplemented": false,
+    "sessionGenerationBridgeImplemented": true,
+    "asyncEnhancementExecutorImplemented": true,
+    "nativeTsfAsyncExecutorSourceWired": true,
+    "nativeTsfAsyncExecutorVerified": false,
+    "rustBrokerQueueImplemented": true,
+    "rustMozcSessionAdapterImplemented": true,
+    "windowsNamedPipeSourceImplemented": true,
     "measuredBaselineAndAiTopK": false,
     "latencyP95Measured": false,
     "timeoutAndCrashFallbackTested": false,

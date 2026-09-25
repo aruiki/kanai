@@ -15,6 +15,12 @@ categories.workspace = true
 async-trait.workspace = true
 serde.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["time"] }
 
 [dev-dependencies]
 serde_json.workspace = true
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[[bench]]
+name = "fast_rank"
+harness = false

@@ -1,5 +1,5 @@
 diff --git a/src/engine/BUILD.bazel b/src/engine/BUILD.bazel
-index 40a10582d..1686cb0e9 100644
+index 40a1058..1686cb0 100644
 --- a/src/engine/BUILD.bazel
 +++ b/src/engine/BUILD.bazel
 @@ -272,6 +272,7 @@ mozc_cc_library(
@@ -12,10 +12,10 @@ index 40a10582d..1686cb0e9 100644
      ],
 diff --git a/src/kanai/BUILD.bazel b/src/kanai/BUILD.bazel
 new file mode 100644
-index 000000000..8aa80c4a6
+index 0000000..dae2f96
 --- /dev/null
 +++ b/src/kanai/BUILD.bazel
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,52 @@
 +# Copyright 2026 KanaAI contributors
 +# All rights reserved.
 +#
@@ -56,6 +56,7 @@ index 000000000..8aa80c4a6
 +        "//base:init_mozc",
 +        "//base:system_util",
 +        "//base/strings:unicode",
++        "//config:config_handler",
 +        "//engine:engine_factory",
 +        "//protocol:candidate_window_cc_proto",
 +        "//protocol:commands_cc_proto",
@@ -69,10 +70,10 @@ index 000000000..8aa80c4a6
 +)
 diff --git a/src/kanai/kanai_mozc_bridge.cc b/src/kanai/kanai_mozc_bridge.cc
 new file mode 100644
-index 000000000..bf8beb920
+index 0000000..c5124a8
 --- /dev/null
 +++ b/src/kanai/kanai_mozc_bridge.cc
-@@ -0,0 +1,853 @@
+@@ -0,0 +1,1650 @@
 +// Copyright 2026 KanaAI contributors
 +// All rights reserved.
 +//
@@ -101,12 +102,14 @@ index 000000000..bf8beb920
 +// OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 +// ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 +
++#include <algorithm>
 +#include <charconv>
 +#include <chrono>
 +#include <cstdint>
 +#include <filesystem>
 +#include <iostream>
 +#include <limits>
++#include <map>
 +#include <memory>
 +#include <optional>
 +#include <string>
@@ -123,6 +126,7 @@ index 000000000..bf8beb920
 +#include "base/init_mozc.h"
 +#include "base/strings/unicode.h"
 +#include "base/system_util.h"
++#include "config/config_handler.h"
 +#include "engine/engine_factory.h"
 +#include "protocol/candidate_window.pb.h"
 +#include "protocol/commands.pb.h"
@@ -130,10 +134,27 @@ index 000000000..bf8beb920
 +
 +ABSL_FLAG(std::string, profile, "", "User profile directory");
 +ABSL_DECLARE_FLAG(bool, use_history_rewriter);
++ABSL_DECLARE_FLAG(int32_t, max_session_size);
 +
 +namespace {
 +
 +constexpr char kProvider[] = "Mozc";
++constexpr size_t kMaxCommandBytes = 1U << 20;
++constexpr size_t kMaxCommandFields = 16;
++constexpr size_t kMaxContextBytes = 16U * 1024U;
++constexpr size_t kMaxCandidateSnapshot = 256;
++constexpr size_t kMaxUpstreamSessions = 64;
++
++void ConfigurePrivateInput(mozc::commands::Input* input) {
++  // KanaAI owns learning and privacy decisions.  Keep this bridge's isolated
++  // Mozc session incognito even if an upstream default config enables history
++  // or user-dictionary suggestions.
++  input->mutable_request()->set_is_incognito_mode(true);
++  auto* config = input->mutable_config();
++  config->set_incognito_mode(true);
++  config->set_history_learning_level(mozc::config::Config::NO_HISTORY);
++  config->set_use_history_suggest(false);
++}
 +
 +void AppendJsonString(std::string* output, std::string_view value) {
 +  constexpr char kHex[] = "0123456789ABCDEF";
@@ -324,6 +345,29 @@ index 000000000..bf8beb920
 +  return true;
 +}
 +
++bool HasControlCharacter(std::string_view value) {
++  for (const unsigned char character : value) {
++    if (character < 0x20 || character == 0x7f) {
++      return true;
++    }
++  }
++  return false;
++}
++
++bool ValidateTextField(std::string_view value, size_t max_bytes,
++                       bool allow_empty, const char* name,
++                       std::string* error) {
++  if ((!allow_empty && value.empty()) || value.size() > max_bytes) {
++    *error = std::string(name) + " is empty or too large";
++    return false;
++  }
++  if (HasControlCharacter(value)) {
++    *error = std::string(name) + " contains a control character";
++    return false;
++  }
++  return true;
++}
++
 +bool ParseInt32(std::string_view text, int32_t* value) {
 +  if (text.empty()) {
 +    return false;
@@ -338,6 +382,21 @@ index 000000000..bf8beb920
 +    return false;
 +  }
 +  *value = static_cast<int32_t>(parsed);
++  return true;
++}
++
++bool ParseUint64(std::string_view text, uint64_t* value) {
++  if (text.empty()) {
++    return false;
++  }
++  uint64_t parsed = 0;
++  const char* begin = text.data();
++  const char* end = begin + text.size();
++  const auto result = std::from_chars(begin, end, parsed, 10);
++  if (result.ec != std::errc() || result.ptr != end) {
++    return false;
++  }
++  *value = parsed;
 +  return true;
 +}
 +
@@ -390,6 +449,18 @@ index 000000000..bf8beb920
 +  response.AddBool("ok", true);
 +  response.AddString("provider", kProvider);
 +  response.AddString("detail", detail);
++  return response.Finish();
++}
++
++std::string MakeSessionLifecycleResponse(std::string_view detail,
++                                          uint64_t session_id,
++                                          uint64_t generation) {
++  JsonObject response;
++  response.AddBool("ok", true);
++  response.AddString("provider", kProvider);
++  response.AddString("detail", detail);
++  response.AddUint("sessionId", session_id);
++  response.AddUint("generation", generation);
 +  return response.Finish();
 +}
 +
@@ -526,6 +597,45 @@ index 000000000..bf8beb920
 +  response->AddArray("candidates", candidates.Finish());
 +}
 +
++bool ExtractCandidateIds(const mozc::commands::Output& output,
++                         std::vector<int32_t>* ids, std::string* error) {
++  ids->clear();
++  const mozc::commands::CandidateList* all_candidates = nullptr;
++  if (output.has_all_candidate_words() &&
++      output.all_candidate_words().candidates_size() > 0) {
++    all_candidates = &output.all_candidate_words();
++  }
++
++  auto add_id = [&](int32_t id) {
++    if (ids->size() >= kMaxCandidateSnapshot) {
++      *error = "Mozc candidate snapshot exceeds the bridge limit";
++      return false;
++    }
++    if (std::find(ids->begin(), ids->end(), id) != ids->end()) {
++      *error = "Mozc returned duplicate candidate ids";
++      return false;
++    }
++    ids->push_back(id);
++    return true;
++  };
++
++  if (all_candidates != nullptr) {
++    for (const auto& candidate : all_candidates->candidates()) {
++      if (!add_id(candidate.id())) {
++        return false;
++      }
++    }
++  } else if (output.has_candidate_window() &&
++             output.candidate_window().candidate_size() > 0) {
++    for (const auto& candidate : output.candidate_window().candidate()) {
++      if (!add_id(candidate.id())) {
++        return false;
++      }
++    }
++  }
++  return true;
++}
++
 +void AddStateFields(JsonObject* response,
 +                    const mozc::commands::Output& output,
 +                    uint64_t elapsed_micros, bool default_consumed) {
@@ -572,11 +682,13 @@ index 000000000..bf8beb920
 +
 +std::string MakeConvertResponse(const mozc::commands::Output& output,
 +                                std::string_view reading,
++                                uint64_t generation,
 +                                uint64_t elapsed_micros) {
 +  JsonObject response;
 +  response.AddBool("ok", true);
 +  response.AddString("provider", kProvider);
 +  response.AddString("detail", "converted");
++  response.AddUint("generation", generation);
 +  if (reading.empty()) {
 +    response.AddString("reading", PreeditText(output));
 +  } else {
@@ -587,21 +699,24 @@ index 000000000..bf8beb920
 +}
 +
 +std::string MakeResetResponse(const mozc::commands::Output& output,
-+                              uint64_t elapsed_micros) {
++                              uint64_t generation, uint64_t elapsed_micros) {
 +  JsonObject response;
 +  response.AddBool("ok", true);
 +  response.AddString("provider", kProvider);
 +  response.AddString("detail", "reset");
++  response.AddUint("generation", generation);
 +  AddStateFields(&response, output, elapsed_micros, false);
 +  return response.Finish();
 +}
 +
 +std::string MakeCommitResponse(const mozc::commands::Output& output,
++                               uint64_t generation,
 +                               uint64_t elapsed_micros) {
 +  JsonObject response;
 +  response.AddBool("ok", true);
 +  response.AddString("provider", kProvider);
 +  response.AddString("detail", "committed");
++  response.AddUint("generation", generation);
 +  const std::string& text = output.result().value();
 +  response.AddString("text", text);
 +  // Keep both names available for small clients that use either spelling.
@@ -629,6 +744,16 @@ index 000000000..bf8beb920
 +    // KanaAI owns the canonical learning store. Do not create a second
 +    // persistent history in the isolated Mozc profile.
 +    absl::SetFlag(&FLAGS_use_history_rewriter, false);
++    // Keep the local ownership map strictly below the upstream LRU limit so
++    // SessionHandler can never silently evict a session that the bridge still
++    // believes it owns.
++    absl::SetFlag(&FLAGS_max_session_size,
++                  static_cast<int32_t>(kMaxUpstreamSessions));
++    auto config = mozc::config::ConfigHandler::GetCopiedConfig();
++    config.set_incognito_mode(true);
++    config.set_history_learning_level(mozc::config::Config::NO_HISTORY);
++    config.set_use_history_suggest(false);
++    mozc::config::ConfigHandler::SetConfig(std::move(config));
 +    auto engine = mozc::EngineFactory::Create();
 +    if (!engine.ok()) {
 +      *error = "failed to create Mozc engine: " + engine.status().ToString();
@@ -643,26 +768,21 @@ index 000000000..bf8beb920
 +      *error = "Mozc session handler is unavailable";
 +      return false;
 +    }
-+
-+    mozc::commands::Command create_session;
-+    auto* input = create_session.mutable_input();
-+    input->set_type(mozc::commands::Input::CREATE_SESSION);
-+    input->mutable_capability()->set_text_deletion(
-+        mozc::commands::Capability::DELETE_PRECEDING_TEXT);
-+    if (!handler_->EvalCommand(&create_session) ||
-+        !create_session.has_output() ||
-+        create_session.output().error_code() !=
-+            mozc::commands::Output::SESSION_SUCCESS ||
-+        create_session.output().id() == 0) {
-+      *error = "failed to create Mozc session";
++    if (!InitializePrivateRequest(error)) {
 +      return false;
 +    }
-+    session_id_ = create_session.output().id();
-+    return true;
++
++    // Keep the old one-session protocol working. New callers use explicit
++    // open/close commands and receive an independently managed upstream
++    // session from the same bounded handler.
++    return CreateBridgeSession(kLegacyBridgeSession, error);
 +  }
 +
 +  std::string ProcessLine(std::string_view line, bool* should_stop) {
 +    *should_stop = false;
++    if (line.size() > kMaxCommandBytes) {
++      return MakeErrorResponse("command exceeds 1 MiB");
++    }
 +    if (!line.empty() && line.back() == '\r') {
 +      line.remove_suffix(1);
 +    }
@@ -675,8 +795,8 @@ index 000000000..bf8beb920
 +    if (!DecodeFields(line, &fields, &error)) {
 +      return MakeErrorResponse(error);
 +    }
-+    if (fields.empty()) {
-+      return MakeErrorResponse("empty command");
++    if (fields.empty() || fields.size() > kMaxCommandFields) {
++      return MakeErrorResponse("command has an invalid number of fields");
 +    }
 +
 +    const std::string& command = fields[0];
@@ -684,24 +804,212 @@ index 000000000..bf8beb920
 +      return Ping(&error) ? MakeSimpleResponse("ready")
 +                          : MakeErrorResponse(error);
 +    }
++    if (command == "open" && fields.size() == 2) {
++      uint64_t session_id = 0;
++      if (!ParseUint64(fields[1], &session_id) || session_id == 0) {
++        return MakeErrorResponse("session id must be a non-zero unsigned integer");
++      }
++      return CreateBridgeSession(session_id, &error)
++                 ? MakeSessionLifecycleResponse("opened", session_id, 0)
++                 : MakeErrorResponse(error);
++    }
++    if (command == "close" && (fields.size() == 2 || fields.size() == 3)) {
++      uint64_t session_id = 0;
++      if (!ParseUint64(fields[1], &session_id) || session_id == 0) {
++        return MakeErrorResponse("session id must be a non-zero unsigned integer");
++      }
++      std::optional<uint64_t> requested_generation;
++      if (fields.size() == 3) {
++        uint64_t generation = 0;
++        if (!ParseUint64(fields[2], &generation)) {
++          return MakeErrorResponse("close generation must be an unsigned integer");
++        }
++        requested_generation = generation;
++      }
++      auto* session = FindSession(session_id);
++      if (session == nullptr) {
++        return MakeErrorResponse("unknown Mozc session");
++      }
++      if (requested_generation.has_value() &&
++          *requested_generation != session->generation) {
++        return MakeErrorResponse("stale Mozc session generation");
++      }
++      const uint64_t generation = session->generation;
++      return CloseBridgeSession(session_id, requested_generation, &error)
++                 ? MakeSessionLifecycleResponse("closed", session_id,
++                                                generation)
++                 : MakeErrorResponse(error);
++    }
 +    if (command == "reset" && fields.size() == 1) {
 +      const auto begin = std::chrono::steady_clock::now();
++      auto* session = FindLegacySession();
++      if (session == nullptr) {
++        return MakeErrorResponse("legacy Mozc session is unavailable");
++      }
 +      mozc::commands::Output output;
-+      if (!ResetContext(&output, &error)) {
++      if (!ResetContext(*session, &output, &error)) {
 +        return MakeErrorResponse(error);
 +      }
-+      return MakeResetResponse(output, ElapsedMicros(begin));
++      return MakeResetResponse(output, session->generation,
++                               ElapsedMicros(begin));
 +    }
-+    if (command == "convert" && fields.size() == 4) {
-+      return Convert(fields[1], fields[2], fields[3], &error);
++    if (command == "reset" && fields.size() == 3) {
++      uint64_t session_id = 0;
++      uint64_t generation = 0;
++      if (!ParseUint64(fields[1], &session_id) ||
++          !ParseUint64(fields[2], &generation)) {
++        return MakeErrorResponse("reset arguments must be unsigned integers");
++      }
++      auto* session = FindSession(session_id);
++      if (session == nullptr) {
++        return MakeErrorResponse("unknown Mozc session");
++      }
++      if (generation != session->generation) {
++        return MakeErrorResponse("stale Mozc session generation");
++      }
++      if (generation == std::numeric_limits<uint64_t>::max()) {
++        return MakeErrorResponse("Mozc session generation is exhausted");
++      }
++      const auto begin = std::chrono::steady_clock::now();
++      mozc::commands::Output output;
++      if (!ResetContext(*session, &output, &error, true) ||
++          !AdvanceGeneration(*session, generation, &error)) {
++        return MakeErrorResponse(error);
++      }
++      return MakeResetResponse(output, session->generation,
++                               ElapsedMicros(begin));
 +    }
-+    if (command == "commit" && fields.size() == 2) {
++    if (command == "key" && fields.size() == 5) {
++      uint64_t session_id = 0;
++      uint64_t generation = 0;
++      if (!ParseUint64(fields[1], &session_id) ||
++          !ParseUint64(fields[2], &generation)) {
++        return MakeErrorResponse("key arguments must be unsigned integers");
++      }
++      auto* session = FindSession(session_id);
++      if (session == nullptr) {
++        return MakeErrorResponse("unknown Mozc session");
++      }
++      const auto begin = std::chrono::steady_clock::now();
++      mozc::commands::Output output;
++      if (!ApplyKey(*session, fields[3], fields[4], generation, &output,
++                    &error)) {
++        return MakeErrorResponse(error);
++      }
++      return MakeConvertResponse(output, ReadingFromOutput(output),
++                                 session->generation, ElapsedMicros(begin));
++    }
++    if (command == "edit" && fields.size() >= 4) {
++      uint64_t session_id = 0;
++      uint64_t generation = 0;
++      if (!ParseUint64(fields[1], &session_id) ||
++          !ParseUint64(fields[2], &generation)) {
++        return MakeErrorResponse("edit arguments must be unsigned integers");
++      }
++      auto* session = FindSession(session_id);
++      if (session == nullptr) {
++        return MakeErrorResponse("unknown Mozc session");
++      }
++      const auto begin = std::chrono::steady_clock::now();
++      mozc::commands::Output output;
++      if (!ApplyEdit(*session, fields, generation, &output, &error)) {
++        return MakeErrorResponse(error);
++      }
++      return MakeConvertResponse(output, ReadingFromOutput(output),
++                                 session->generation, ElapsedMicros(begin));
++    }
++    if (command == "convert" && fields.size() == 6) {
++      uint64_t session_id = 0;
++      uint64_t generation = 0;
++      if (!ParseUint64(fields[1], &session_id) ||
++          !ParseUint64(fields[5], &generation)) {
++        return MakeErrorResponse("conversion arguments must be unsigned integers");
++      }
++      auto* session = FindSession(session_id);
++      if (session == nullptr) {
++        return MakeErrorResponse("unknown Mozc session");
++      }
++      return Convert(*session, fields[2], fields[3], fields[4], generation,
++                     &error);
++    }
++    if (command == "convert" && (fields.size() == 4 || fields.size() == 5)) {
++      uint64_t generation = 0;
++      if (fields.size() == 5 && !ParseUint64(fields[4], &generation)) {
++        return MakeErrorResponse("conversion generation must be an unsigned integer");
++      }
++      auto* session = FindLegacySession();
++      if (session == nullptr) {
++        return MakeErrorResponse("legacy Mozc session is unavailable");
++      }
++      return Convert(*session, fields[1], fields[2], fields[3], generation,
++                     &error);
++    }
++    if (command == "commit" && fields.size() == 4) {
++      uint64_t session_id = 0;
++      int32_t candidate_id = 0;
++      uint64_t generation = 0;
++      if (!ParseUint64(fields[1], &session_id) ||
++          !ParseInt32(fields[2], &candidate_id) ||
++          !ParseUint64(fields[3], &generation)) {
++        return MakeErrorResponse("commit arguments are invalid");
++      }
++      auto* session = FindSession(session_id);
++      if (session == nullptr) {
++        return MakeErrorResponse("unknown Mozc session");
++      }
++      return Commit(*session, candidate_id, generation, &error);
++    }
++    if (command == "commit" && (fields.size() == 2 || fields.size() == 3)) {
 +      int32_t candidate_id = 0;
 +      if (!ParseInt32(fields[1], &candidate_id)) {
 +        return MakeErrorResponse(
 +            "candidate id must be a signed 32-bit integer");
 +      }
-+      return Commit(candidate_id, &error);
++      std::optional<uint64_t> expected_generation;
++      if (fields.size() == 3) {
++        uint64_t generation = 0;
++        if (!ParseUint64(fields[2], &generation)) {
++          return MakeErrorResponse("commit generation must be an unsigned integer");
++        }
++        expected_generation = generation;
++      }
++      auto* session = FindLegacySession();
++      if (session == nullptr) {
++        return MakeErrorResponse("legacy Mozc session is unavailable");
++      }
++      return Commit(*session, candidate_id, expected_generation, &error);
++    }
++    if (command == "cancel" && (fields.size() == 2 || fields.size() == 3)) {
++      uint64_t session_id = 0;
++      if (!ParseUint64(fields[1], &session_id)) {
++        return MakeErrorResponse("cancel session id must be an unsigned integer");
++      }
++      auto* session = FindSession(session_id);
++      if (session == nullptr) {
++        return MakeErrorResponse("unknown Mozc session");
++      }
++      std::optional<uint64_t> generation;
++      if (fields.size() == 3) {
++        uint64_t parsed_generation = 0;
++        if (!ParseUint64(fields[2], &parsed_generation)) {
++          return MakeErrorResponse("cancel generation must be an unsigned integer");
++        }
++        generation = parsed_generation;
++      }
++      const uint64_t expected_generation = session->generation;
++      if (generation.has_value() && *generation != expected_generation) {
++        return MakeErrorResponse("stale Mozc session generation");
++      }
++      if (expected_generation == std::numeric_limits<uint64_t>::max()) {
++        return MakeErrorResponse("Mozc session generation is exhausted");
++      }
++      mozc::commands::Output output;
++      if (!ResetContext(*session, &output, &error, true) ||
++          !AdvanceGeneration(*session, expected_generation, &error)) {
++        return MakeErrorResponse(error);
++      }
++      return MakeSessionLifecycleResponse("cancelled", session_id,
++                                         session->generation);
 +    }
 +    if (command == "shutdown" && fields.size() == 1) {
 +      if (!Shutdown(&error)) {
@@ -712,8 +1020,10 @@ index 000000000..bf8beb920
 +      return MakeSimpleResponse("shutdown");
 +    }
 +
-+    if (command == "ping" || command == "reset" || command == "convert" ||
-+        command == "commit" || command == "shutdown") {
++    if (command == "ping" || command == "open" || command == "close" ||
++        command == "reset" || command == "key" || command == "edit" ||
++        command == "convert" || command == "commit" || command == "cancel" ||
++        command == "shutdown") {
 +      return MakeErrorResponse("wrong number of arguments for " + command);
 +    }
 +    return MakeErrorResponse("unknown command: " + command);
@@ -721,19 +1031,145 @@ index 000000000..bf8beb920
 +
 +  void Close() {
 +    if (!handler_ || !handler_->IsAvailable()) {
++      sessions_.clear();
 +      return;
 +    }
-+    mozc::commands::Input input;
-+    input.set_id(session_id_);
-+    input.set_type(mozc::commands::Input::SHUTDOWN);
-+    mozc::commands::Command command;
-+    *command.mutable_input() = std::move(input);
-+    (void)handler_->EvalCommand(&command);
++    std::string ignored;
++    Shutdown(&ignored);
 +  }
 +
 + private:
-+  bool Eval(mozc::commands::Input input, mozc::commands::Output* output,
-+            std::string* error, bool allow_unavailable = false) {
++  static constexpr uint64_t kLegacyBridgeSession = 0;
++  static constexpr size_t kMaxBridgeSessions = 64;
++
++  struct BridgeSession {
++    uint64_t bridge_id = 0;
++    uint64_t mozc_id = 0;
++    uint64_t generation = 0;
++    uint64_t active_generation = 0;
++    bool has_active_generation = false;
++    std::vector<int32_t> candidate_ids;
++    std::string composition;
++    mozc::commands::Context last_context;
++    bool has_context = false;
++  };
++
++  using SessionMap = std::map<uint64_t, BridgeSession>;
++
++  BridgeSession* FindSession(uint64_t bridge_id) {
++    const auto found = sessions_.find(bridge_id);
++    return found == sessions_.end() ? nullptr : &found->second;
++  }
++
++  BridgeSession* FindLegacySession() { return FindSession(kLegacyBridgeSession); }
++
++  bool InitializePrivateRequest(std::string* error) {
++    mozc::commands::Input input;
++    input.set_type(mozc::commands::Input::SET_REQUEST);
++    auto* request = input.mutable_request();
++    request->set_zero_query_suggestion(false);
++    request->set_mixed_conversion(false);
++    request->set_special_romanji_table(
++        mozc::commands::Request::DEFAULT_TABLE);
++    request->set_candidate_page_size(30);
++    request->set_candidates_size_limit(256);
++    request->set_update_input_mode_from_surrounding_text(true);
++    ConfigurePrivateInput(&input);
++
++    mozc::commands::Command command;
++    *command.mutable_input() = std::move(input);
++    const bool available = handler_->EvalCommand(&command);
++    if (!available || !command.has_output() ||
++        command.output().error_code() !=
++            mozc::commands::Output::SESSION_SUCCESS) {
++      *error = "failed to initialize private Mozc request";
++      return false;
++    }
++    return true;
++  }
++
++  bool CreateBridgeSession(uint64_t bridge_id, std::string* error) {
++    if (bridge_id == 0 && sessions_.contains(kLegacyBridgeSession)) {
++      *error = "legacy Mozc session already exists";
++      return false;
++    }
++    if (sessions_.contains(bridge_id)) {
++      *error = "Mozc session already exists";
++      return false;
++    }
++    if (sessions_.size() >= kMaxBridgeSessions ||
++        sessions_.size() >= kMaxUpstreamSessions) {
++      *error = "Mozc session limit reached";
++      return false;
++    }
++
++    mozc::commands::Command create_session;
++    auto* input = create_session.mutable_input();
++    input->set_type(mozc::commands::Input::CREATE_SESSION);
++    input->mutable_capability()->set_text_deletion(
++        mozc::commands::Capability::DELETE_PRECEDING_TEXT);
++    ConfigurePrivateInput(input);
++    if (!handler_->EvalCommand(&create_session) ||
++        !create_session.has_output() ||
++        create_session.output().error_code() !=
++            mozc::commands::Output::SESSION_SUCCESS ||
++        create_session.output().id() == 0) {
++      *error = "failed to create Mozc session";
++      return false;
++    }
++    BridgeSession session;
++    session.bridge_id = bridge_id;
++    session.mozc_id = create_session.output().id();
++    if (!EnsureHiragana(session, error)) {
++      mozc::commands::Input delete_input;
++      delete_input.set_id(session.mozc_id);
++      delete_input.set_type(mozc::commands::Input::DELETE_SESSION);
++      mozc::commands::Command delete_command;
++      *delete_command.mutable_input() = std::move(delete_input);
++      (void)handler_->EvalCommand(&delete_command);
++      *error = "failed to initialize Mozc session as Hiragana";
++      return false;
++    }
++    sessions_.emplace(bridge_id, std::move(session));
++    return true;
++  }
++
++  bool CloseBridgeSession(
++      uint64_t bridge_id, std::optional<uint64_t> expected_generation,
++      std::string* error) {
++    auto* session = FindSession(bridge_id);
++    if (session == nullptr) {
++      *error = "unknown Mozc session";
++      return false;
++    }
++    if (expected_generation.has_value() &&
++        *expected_generation != session->generation) {
++      *error = "stale Mozc session generation";
++      return false;
++    }
++    mozc::commands::Input input;
++    input.set_id(session->mozc_id);
++    input.set_type(mozc::commands::Input::DELETE_SESSION);
++    mozc::commands::Output output;
++    if (!Eval(*session, std::move(input), &output, error)) {
++      return false;
++    }
++    sessions_.erase(bridge_id);
++    return true;
++  }
++
++  bool Eval(BridgeSession& session, mozc::commands::Input input,
++            mozc::commands::Output* output, std::string* error,
++            bool allow_unavailable = false) {
++    if (!handler_ || !handler_->IsAvailable()) {
++      *error = "Mozc session is unavailable";
++      return false;
++    }
++    input.set_id(session.mozc_id);
++    ConfigurePrivateInput(&input);
++    if (session.has_context) {
++      *input.mutable_context() = session.last_context;
++    }
 +    mozc::commands::Command command;
 +    *command.mutable_input() = std::move(input);
 +    const bool available = handler_->EvalCommand(&command);
@@ -754,146 +1190,508 @@ index 000000000..bf8beb920
 +  }
 +
 +  bool Ping(std::string* error) {
++    auto* session = FindLegacySession();
++    if (session == nullptr) {
++      *error = "legacy Mozc session is unavailable";
++      return false;
++    }
 +    mozc::commands::Input input;
-+    input.set_id(session_id_);
 +    input.set_type(mozc::commands::Input::NO_OPERATION);
-+    return Eval(std::move(input), nullptr, error);
++    return Eval(*session, std::move(input), nullptr, error);
 +  }
 +
-+  bool ResetContext(mozc::commands::Output* output, std::string* error) {
-+    has_context_ = false;
-+    last_context_.Clear();
++  bool ResetContext(BridgeSession& session, mozc::commands::Output* output,
++                    std::string* error, bool clear_context = true) {
++    // Invalidate the client-visible snapshot before asking Mozc to reset. If
++    // the upstream command fails, an old candidate can no longer be committed.
++    session.has_active_generation = false;
++    session.active_generation = 0;
++    session.candidate_ids.clear();
 +
 +    mozc::commands::Input input;
-+    input.set_id(session_id_);
 +    input.set_type(mozc::commands::Input::SEND_COMMAND);
 +    input.mutable_command()->set_type(
 +        mozc::commands::SessionCommand::RESET_CONTEXT);
-+    return Eval(std::move(input), output, error);
++    if (!Eval(session, std::move(input), output, error)) {
++      return false;
++    }
++    session.composition.clear();
++    if (clear_context) {
++      session.last_context.Clear();
++      session.has_context = false;
++    }
++    return true;
 +  }
 +
-+  bool EnsureHiragana(std::string* error) {
++  bool AdvanceGeneration(BridgeSession& session, uint64_t expected,
++                         std::string* error) {
++    if (expected != session.generation) {
++      *error = expected < session.generation
++                   ? "stale Mozc session generation"
++                   : "future Mozc session generation";
++      return false;
++    }
++    if (expected == std::numeric_limits<uint64_t>::max()) {
++      *error = "Mozc session generation is exhausted";
++      return false;
++    }
++    session.generation = expected + 1;
++    return true;
++  }
++
++  bool EnsureHiragana(BridgeSession& session, std::string* error) {
 +    mozc::commands::Input input;
-+    input.set_id(session_id_);
 +    input.set_type(mozc::commands::Input::SEND_COMMAND);
 +    input.mutable_command()->set_type(
 +        mozc::commands::SessionCommand::TURN_ON_IME);
 +    input.mutable_command()->set_composition_mode(
 +        mozc::commands::HIRAGANA);
-+    return Eval(std::move(input), nullptr, error);
++    return Eval(session, std::move(input), nullptr, error);
 +  }
 +
-+  bool SendRomajiKey(char character, std::string_view preceding,
-+                     std::string_view following, mozc::commands::Output* output,
-+                     std::string* error) {
++  bool SendRomajiKey(BridgeSession& session, char character,
++                     std::string_view preceding, std::string_view following,
++                     mozc::commands::Output* output, std::string* error) {
++    (void)preceding;
++    (void)following;
 +    mozc::commands::Input input;
-+    input.set_id(session_id_);
 +    input.set_type(mozc::commands::Input::SEND_KEY);
 +    input.mutable_key()->set_key_code(
 +        static_cast<uint32_t>(static_cast<unsigned char>(character)));
-+    auto* context = input.mutable_context();
-+    context->set_preceding_text(preceding);
-+    context->set_following_text(following);
-+    return Eval(std::move(input), output, error);
++    return Eval(session, std::move(input), output, error);
 +  }
 +
-+  std::string Convert(std::string_view romaji, std::string_view preceding,
-+                      std::string_view following, std::string* error) {
-+    const auto begin = std::chrono::steady_clock::now();
-+    if (romaji.empty()) {
-+      *error = "romaji must not be empty";
-+      return MakeErrorResponse(*error);
++  bool SendKeyEvent(BridgeSession& session,
++                    const mozc::commands::KeyEvent& key,
++                    std::string_view preceding, std::string_view following,
++                    mozc::commands::Output* output, std::string* error) {
++    (void)preceding;
++    (void)following;
++    mozc::commands::Input input;
++    input.set_type(mozc::commands::Input::SEND_KEY);
++    *input.mutable_key() = key;
++    return Eval(session, std::move(input), output, error);
++  }
++
++  void SetSessionContext(BridgeSession& session, std::string_view preceding,
++                        std::string_view following) {
++    session.last_context.Clear();
++    if (!preceding.empty()) {
++      session.last_context.set_preceding_text(preceding);
 +    }
-+    for (const unsigned char character : romaji) {
-+      if (character < 0x20 || character > 0x7e) {
-+        *error = "romaji must contain ASCII characters only";
-+        return MakeErrorResponse(*error);
++    if (!following.empty()) {
++      session.last_context.set_following_text(following);
++    }
++    session.has_context = !preceding.empty() || !following.empty();
++  }
++
++  bool ApplyKey(BridgeSession& session, std::string_view kind,
++                std::string_view value, uint64_t generation,
++                mozc::commands::Output* output, std::string* error) {
++    if (generation != session.generation) {
++      *error = generation < session.generation
++                   ? "stale Mozc session generation"
++                   : "future Mozc session generation";
++      return false;
++    }
++    if (generation == std::numeric_limits<uint64_t>::max()) {
++      *error = "Mozc session generation is exhausted";
++      return false;
++    }
++    if (kind == "character") {
++      if (!ValidateTextField(value, 1024, false, "key value", error) ||
++          !mozc::strings::IsValidUtf8(value)) {
++        if (error->empty()) {
++          *error = "character key is not valid UTF-8";
++        }
++        return false;
++      }
++    } else {
++      if (kind != "function" && kind != "named" && !value.empty()) {
++        *error = "non-character key value must be empty";
++        return false;
++      }
++      if (kind == "named" &&
++          !ValidateTextField(value, 64, false, "named key", error)) {
++        return false;
++      }
++      if (kind == "function") {
++        uint32_t number = 0;
++        if (!ParseUint32(value, &number) || number > 255) {
++          *error = "function key must be between 0 and 255";
++          return false;
++        }
 +      }
 +    }
 +
-+    mozc::commands::Output reset_output;
-+    if (!ResetContext(&reset_output, error)) {
++    // Every key transition invalidates the previous candidate snapshot, even
++    // when Mozc echoes the key or commits part of the composition.
++    session.has_active_generation = false;
++    session.active_generation = 0;
++    session.candidate_ids.clear();
++    output->Clear();
++
++    if (kind == "character") {
++      size_t offset = 0;
++      while (offset < value.size()) {
++        const size_t length = mozc::strings::OneCharLen(value.data() + offset);
++        if (length == 0 || offset + length > value.size()) {
++          *error = "character key is not valid UTF-8";
++          return false;
++        }
++        const std::string_view character = value.substr(offset, length);
++        mozc::commands::KeyEvent key;
++        if (length == 1 && character[0] >= 0x20 && character[0] <= 0x7e) {
++          key.set_key_code(static_cast<uint32_t>(character[0]));
++        } else {
++          key.set_key_string(std::string(character));
++          key.set_input_style(mozc::commands::KeyEvent::AS_IS);
++        }
++        if (!SendKeyEvent(session, key, "", "", output, error)) {
++          return false;
++        }
++        offset += length;
++      }
++    } else if (kind == "function" || kind == "named") {
++      // The native shell currently treats these as non-text events. Keep the
++      // existing composition and return a correlated, unconsumed state.
++      auto* segment = output->mutable_preedit()->add_segment();
++      segment->set_annotation(mozc::commands::Preedit::Segment::NONE);
++      segment->set_value(session.composition);
++      segment->set_value_length(
++          static_cast<uint32_t>(mozc::strings::CharsLen(session.composition)));
++      output->set_consumed(false);
++    } else {
++      mozc::commands::KeyEvent key;
++      if (kind == "space") {
++        key.set_special_key(mozc::commands::KeyEvent::SPACE);
++      } else if (kind == "backspace") {
++        key.set_special_key(mozc::commands::KeyEvent::BACKSPACE);
++      } else if (kind == "delete") {
++        key.set_special_key(mozc::commands::KeyEvent::DEL);
++      } else if (kind == "escape") {
++        key.set_special_key(mozc::commands::KeyEvent::ESCAPE);
++      } else if (kind == "tab") {
++        key.set_special_key(mozc::commands::KeyEvent::TAB);
++      } else if (kind == "enter") {
++        key.set_special_key(mozc::commands::KeyEvent::ENTER);
++      } else if (kind == "left") {
++        key.set_special_key(mozc::commands::KeyEvent::LEFT);
++      } else if (kind == "right") {
++        key.set_special_key(mozc::commands::KeyEvent::RIGHT);
++      } else if (kind == "up") {
++        key.set_special_key(mozc::commands::KeyEvent::UP);
++      } else if (kind == "down") {
++        key.set_special_key(mozc::commands::KeyEvent::DOWN);
++      } else {
++        *error = "unsupported key kind: " + std::string(kind);
++        return false;
++      }
++      if (!SendKeyEvent(session, key, "", "", output, error)) {
++        return false;
++      }
++    }
++
++    if (output->has_result()) {
++      session.composition.clear();
++    } else if (output->has_preedit()) {
++      session.composition = PreeditText(*output);
++    } else if (output->consumed()) {
++      session.composition.clear();
++    }
++    return AdvanceGeneration(session, generation, error);
++  }
++
++  bool ApplyEdit(BridgeSession& session,
++                 const std::vector<std::string>& fields, uint64_t generation,
++                 mozc::commands::Output* output, std::string* error) {
++    if (generation != session.generation) {
++      *error = generation < session.generation
++                   ? "stale Mozc session generation"
++                   : "future Mozc session generation";
++      return false;
++    }
++    if (generation == std::numeric_limits<uint64_t>::max()) {
++      *error = "Mozc session generation is exhausted";
++      return false;
++    }
++    const std::string& action = fields[3];
++    std::string composition = session.composition;
++    if (action == "reset" && fields.size() == 4) {
++      composition.clear();
++    } else if (action == "insert" && fields.size() == 5) {
++      if (!ValidateTextField(fields[4], 16 * 1024, true, "edit text",
++                             error) ||
++          !mozc::strings::IsValidUtf8(fields[4])) {
++        if (error->empty()) {
++          *error = "edit text is invalid or too large";
++        }
++        return false;
++      }
++      composition.append(fields[4]);
++    } else if (action == "delete" && fields.size() == 6) {
++      uint32_t start = 0;
++      uint32_t end = 0;
++      if (!ParseUint32(fields[4], &start) || !ParseUint32(fields[5], &end) ||
++          start > end || end > mozc::strings::CharsLen(composition)) {
++        *error = "edit range is outside the composition";
++        return false;
++      }
++      composition = ReplaceComposition(composition, start, end, "");
++    } else if (action == "replace" && fields.size() == 7) {
++      uint32_t start = 0;
++      uint32_t end = 0;
++      if (!ParseUint32(fields[4], &start) || !ParseUint32(fields[5], &end) ||
++          start > end || end > mozc::strings::CharsLen(composition) ||
++          !ValidateTextField(fields[6], 16 * 1024, true, "edit text",
++                             error) ||
++          !mozc::strings::IsValidUtf8(fields[6])) {
++        if (error->empty()) {
++          *error = "edit range or text is invalid";
++        }
++        return false;
++      }
++      composition = ReplaceComposition(composition, start, end, fields[6]);
++    } else {
++      *error = "invalid edit action";
++      return false;
++    }
++
++    if (composition.size() > 16 * 1024 ||
++        !mozc::strings::IsValidUtf8(composition)) {
++      *error = "edited composition is invalid or too large";
++      return false;
++    }
++    if (!ResetContext(session, output, error, false)) {
++      return false;
++    }
++    if (!composition.empty()) {
++      mozc::commands::Input input;
++      input.set_type(mozc::commands::Input::SEND_COMMAND);
++      input.mutable_command()->set_type(
++          mozc::commands::SessionCommand::UPDATE_COMPOSITION);
++      auto* event = input.mutable_command()->add_composition_events();
++      event->set_composition_string(composition);
++      event->set_probability(1.0);
++      if (!Eval(session, std::move(input), output, error)) {
++        return false;
++      }
++    }
++    session.composition = composition;
++    return AdvanceGeneration(session, generation, error);
++  }
++
++  std::string Convert(BridgeSession& session, std::string_view romaji,
++                      std::string_view preceding, std::string_view following,
++                      uint64_t generation, std::string* error) {
++    const auto begin = std::chrono::steady_clock::now();
++    const bool legacy_session = session.bridge_id == kLegacyBridgeSession;
++    if (generation < session.generation ||
++        (!legacy_session &&
++         (session.generation == std::numeric_limits<uint64_t>::max() ||
++          generation != session.generation + 1))) {
++      *error = "stale Mozc session generation";
 +      return MakeErrorResponse(*error);
 +    }
-+    if (!EnsureHiragana(error)) {
++    if (!legacy_session && session.generation == std::numeric_limits<uint64_t>::max()) {
++      *error = "Mozc session generation is exhausted";
++      return MakeErrorResponse(*error);
++    }
++    if (preceding.size() > kMaxContextBytes ||
++        following.size() > kMaxContextBytes) {
++      *error = "conversion context is too large";
++      return MakeErrorResponse(*error);
++    }
++    if (!ValidateTextField(romaji, 1024, false, "romaji", error)) {
++      return MakeErrorResponse(*error);
++    }
++
++    mozc::commands::Output reset_output;
++    if (!ResetContext(session, &reset_output, error, false)) {
++      return MakeErrorResponse(*error);
++    }
++    SetSessionContext(session, preceding, following);
++    if (!EnsureHiragana(session, error)) {
 +      return MakeErrorResponse(*error);
 +    }
 +
 +    std::string reading;
-+    for (const char character : romaji) {
-+      mozc::commands::Output key_output;
-+      if (!SendRomajiKey(character, preceding, following, &key_output, error)) {
-+        return MakeErrorResponse(*error);
++    bool ascii_romaji = true;
++    for (const unsigned char character : romaji) {
++      if (character < 0x20 || character > 0x7e) {
++        ascii_romaji = false;
++        break;
 +      }
-+      const std::string current_reading = ReadingFromOutput(key_output);
-+      if (!current_reading.empty()) {
-+        reading = current_reading;
++    }
++    if (ascii_romaji) {
++      for (const char character : romaji) {
++        mozc::commands::Output key_output;
++        if (!SendRomajiKey(session, character, preceding, following,
++                           &key_output, error)) {
++          return MakeErrorResponse(*error);
++        }
++        const std::string current_reading = ReadingFromOutput(key_output);
++        if (!current_reading.empty()) {
++          reading = current_reading;
++        }
++      }
++    } else {
++      // Feed an already-rendered non-ASCII composition through Mozc's normal
++      // key-event path. UPDATE_COMPOSITION followed by conversion can trigger
++      // a full re-segmentation on every request; AS_IS key events preserve the
++      // same preedit while keeping the bridge's bounded conversion path fast.
++      size_t offset = 0;
++      while (offset < romaji.size()) {
++        const size_t length = mozc::strings::OneCharLen(romaji.data() + offset);
++        if (length == 0 || offset + length > romaji.size()) {
++          *error = "conversion input is not valid UTF-8";
++          return MakeErrorResponse(*error);
++        }
++        const std::string_view character = romaji.substr(offset, length);
++        mozc::commands::KeyEvent key;
++        if (length == 1 && character[0] >= 0x20 && character[0] <= 0x7e) {
++          key.set_key_code(static_cast<std::uint32_t>(character[0]));
++        } else {
++          key.set_key_string(std::string(character));
++          key.set_input_style(mozc::commands::KeyEvent::AS_IS);
++        }
++        mozc::commands::Output key_output;
++        if (!SendKeyEvent(session, key, preceding, following, &key_output,
++                          error)) {
++          return MakeErrorResponse(*error);
++        }
++        const std::string current_reading = ReadingFromOutput(key_output);
++        if (!current_reading.empty()) {
++          reading = current_reading;
++        }
++        offset += length;
 +      }
 +    }
 +
 +    mozc::commands::Input space_input;
-+    space_input.set_id(session_id_);
 +    space_input.set_type(mozc::commands::Input::SEND_KEY);
 +    space_input.mutable_key()->set_special_key(
 +        mozc::commands::KeyEvent::SPACE);
-+    auto* context = space_input.mutable_context();
-+    context->set_preceding_text(preceding);
-+    context->set_following_text(following);
 +
 +    mozc::commands::Output output;
-+    if (!Eval(std::move(space_input), &output, error)) {
++    if (!Eval(session, std::move(space_input), &output, error)) {
 +      return MakeErrorResponse(*error);
 +    }
-+    // The command context, rather than the output, is the source of the
-+    // surrounding text used for learning on commit.
-+    last_context_.Clear();
-+    last_context_.set_preceding_text(preceding);
-+    last_context_.set_following_text(following);
-+    has_context_ = true;
++
++    std::vector<int32_t> candidate_ids;
++    if (!ExtractCandidateIds(output, &candidate_ids, error)) {
++      session.has_active_generation = false;
++      session.active_generation = 0;
++      session.candidate_ids.clear();
++      return MakeErrorResponse(*error);
++    }
++    session.active_generation = generation;
++    session.has_active_generation = true;
++    session.candidate_ids = std::move(candidate_ids);
++    session.generation = generation;
++    session.composition = PreeditText(output);
 +
 +    const std::string final_reading = ReadingFromOutput(output);
 +    if (!final_reading.empty()) {
 +      reading = final_reading;
 +    }
-+    return MakeConvertResponse(output, reading, ElapsedMicros(begin));
++    return MakeConvertResponse(output, reading, generation,
++                               ElapsedMicros(begin));
 +  }
 +
-+  std::string Commit(int32_t candidate_id, std::string* error) {
++  std::string Commit(BridgeSession& session, int32_t candidate_id,
++                     std::optional<uint64_t> requested_generation,
++                     std::string* error) {
 +    const auto begin = std::chrono::steady_clock::now();
++    if (!session.has_active_generation) {
++      *error = "no active Mozc conversion";
++      return MakeErrorResponse(*error);
++    }
++    if (requested_generation.has_value() &&
++        *requested_generation != session.active_generation) {
++      *error = "stale Mozc conversion generation";
++      return MakeErrorResponse(*error);
++    }
++    if (std::find(session.candidate_ids.begin(), session.candidate_ids.end(),
++                  candidate_id) == session.candidate_ids.end()) {
++      *error = "candidate is not in the active Mozc snapshot";
++      return MakeErrorResponse(*error);
++    }
++    const uint64_t generation = session.active_generation;
++    // Consume the snapshot before handing the id to Mozc. Any failure after
++    // this point is fail-closed: the same id cannot be replayed.
++    session.has_active_generation = false;
++    session.active_generation = 0;
++    session.candidate_ids.clear();
 +    mozc::commands::Input input;
-+    input.set_id(session_id_);
 +    input.set_type(mozc::commands::Input::SEND_COMMAND);
 +    input.mutable_command()->set_type(
 +        mozc::commands::SessionCommand::SUBMIT_CANDIDATE);
 +    input.mutable_command()->set_id(candidate_id);
-+    if (has_context_) {
-+      *input.mutable_context() = last_context_;
-+    }
 +
 +    mozc::commands::Output output;
-+    if (!Eval(std::move(input), &output, error)) {
++    if (!Eval(session, std::move(input), &output, error)) {
 +      return MakeErrorResponse(*error);
 +    }
 +    if (!output.has_result()) {
 +      *error = "candidate did not produce committed text";
 +      return MakeErrorResponse(*error);
 +    }
-+    return MakeCommitResponse(output, ElapsedMicros(begin));
++    session.composition.clear();
++    if (generation != std::numeric_limits<uint64_t>::max()) {
++      session.generation = std::max(session.generation, generation + 1);
++    }
++    return MakeCommitResponse(output, generation, ElapsedMicros(begin));
++  }
++
++  bool ParseUint32(std::string_view text, uint32_t* value) {
++    if (text.empty()) {
++      return false;
++    }
++    uint64_t parsed = 0;
++    if (!ParseUint64(text, &parsed) ||
++        parsed > std::numeric_limits<uint32_t>::max()) {
++      return false;
++    }
++    *value = static_cast<uint32_t>(parsed);
++    return true;
++  }
++
++  std::string ReplaceComposition(const std::string& composition, uint32_t start,
++                                 uint32_t end, std::string_view replacement) {
++    const std::string before(mozc::strings::Utf8Substring(composition, 0, start));
++    const std::string after(mozc::strings::Utf8Substring(composition, end));
++    return before + std::string(replacement) + after;
 +  }
 +
 +  bool Shutdown(std::string* error) {
++    if (!handler_ || !handler_->IsAvailable()) {
++      return true;
++    }
++    for (auto& entry : sessions_) {
++      mozc::commands::Input input;
++      input.set_id(entry.second.mozc_id);
++      input.set_type(mozc::commands::Input::DELETE_SESSION);
++      mozc::commands::Command command;
++      *command.mutable_input() = std::move(input);
++      (void)handler_->EvalCommand(&command);
++    }
++    sessions_.clear();
 +    mozc::commands::Input input;
-+    input.set_id(session_id_);
 +    input.set_type(mozc::commands::Input::SHUTDOWN);
-+    return Eval(std::move(input), nullptr, error, true);
++    mozc::commands::Command command;
++    *command.mutable_input() = std::move(input);
++    if (!handler_->EvalCommand(&command) &&
++        handler_->IsAvailable()) {
++      *error = "failed to shut down Mozc session handler";
++      return false;
++    }
++    return true;
 +  }
 +
 +  std::unique_ptr<mozc::SessionHandler> handler_;
-+  uint64_t session_id_ = 0;
-+  mozc::commands::Context last_context_;
-+  bool has_context_ = false;
++  SessionMap sessions_;
 +};
-+
 +}  // namespace
 +
 +int main(int argc, char** argv) {
@@ -927,7 +1725,7 @@ index 000000000..bf8beb920
 +  return 0;
 +}
 diff --git a/src/rewriter/BUILD.bazel b/src/rewriter/BUILD.bazel
-index 08eed9058..19c2cadda 100644
+index 08eed90..19c2cad 100644
 --- a/src/rewriter/BUILD.bazel
 +++ b/src/rewriter/BUILD.bazel
 @@ -1517,6 +1517,7 @@ mozc_cc_library(
@@ -939,7 +1737,7 @@ index 08eed9058..19c2cadda 100644
      deps = [
          ":a11y_description_rewriter",
 diff --git a/src/session/BUILD.bazel b/src/session/BUILD.bazel
-index 2da5b8d46..51e24970d 100644
+index 2da5b8d..51e2497 100644
 --- a/src/session/BUILD.bazel
 +++ b/src/session/BUILD.bazel
 @@ -155,6 +155,7 @@ mozc_cc_library(

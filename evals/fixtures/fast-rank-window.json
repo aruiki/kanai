@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "name": "bounded-fast-rank-window-v1",
+  "reading": "とうきょう",
+  "contextBefore": "昨日の東京で",
+  "contextAfter": "作業した",
+  "modelTier": "compact",
+  "candidates": [
+    { "id": 101, "text": "東京タワー", "reading": "とうきょうたわー", "score": 1000.0 },
+    { "id": 102, "text": "都", "reading": "と", "score": 990.0 },
+    { "id": 103, "text": "東京", "reading": "とうきょう", "score": 980.0 },
+    { "id": 104, "text": "とうきょう", "reading": "とうきょう", "score": 970.0 },
+    { "id": 105, "text": "同行", "reading": "どうこう", "score": 960.0 },
+    { "id": 106, "text": "東", "reading": "ひがし", "score": 950.0 },
+    { "id": 107, "text": "橙", "reading": "だいだい", "score": 940.0 },
+    { "id": 108, "text": "灯", "reading": "あかり", "score": 930.0 },
+    { "id": 109, "text": "導", "reading": "みちびく", "score": 920.0 }
+  ]
+}

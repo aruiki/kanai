@@ -6,6 +6,7 @@
 
 mod ai;
 mod learning;
+mod pipeline;
 mod types;
 
 pub use ai::{
@@ -20,6 +21,12 @@ pub use ai::{
     SemanticRerankSnapshot, recommend_tier, recommend_tier_for_memory,
 };
 pub use learning::{LearningState, UserProfile, UserWord};
+pub use pipeline::{
+    CandidatePipeline, DEFAULT_PIPELINE_SEMANTIC_DEADLINE, ExtractedContext, FastConversionOutput,
+    MAX_PIPELINE_CANDIDATES, MAX_PIPELINE_SEMANTIC_DEADLINE, PipelineError, PipelineSession,
+    SemanticCandidate, SemanticRerankInput, SemanticRerankProvider, SemanticRerankReport,
+    SemanticRerankTicket,
+};
 pub use types::{
     CandidateAdjustments, CandidateAttribute, CandidateOrigin, CommitResult, ConversionCandidate,
     ConversionProvider, ConversionRequest, ConversionResult, InputMode, PersonalizedCandidate,

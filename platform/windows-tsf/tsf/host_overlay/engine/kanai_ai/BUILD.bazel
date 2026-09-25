@@ -28,25 +28,34 @@ mozc_cc_library(
     deps = [":broker_contract"],
 )
 
-# Optional-executor transport only. kanai_supplemental_model does not depend on
-# this target, so no key/preedit callback can call it synchronously.
+# Windows named-pipe transport used by the explicitly-started worker. The
+# supplemental-model target remains platform-neutral and receives only a
+# callable transport from the TSF owner; no key/preedit callback can call I/O.
 mozc_cc_library(
     name = "pipe_broker_client",
     srcs = ["pipe_broker_client.cc"],
     hdrs = ["pipe_broker_client.h"],
+    visibility = [
+        "//engine:__pkg__",
+        "//session:__pkg__",
+    ],
     linkopts = ["bcrypt.lib"],
     tags = MOZC_TAGS.WIN_ONLY,
     target_compatible_with = ["@platforms//os:windows"],
     deps = [":broker_contract"],
 )
 
-# Compile-only host seam. The implementation reports unavailable until an
-# upstream session/generation token bridge and async executor exist.
+# Host-testable supplemental model. The Windows server-side owner supplies the
+# trusted session binding and starts the bounded worker; the model itself never
+# performs transport I/O.
 mozc_cc_library(
     name = "kanai_supplemental_model",
     srcs = ["kanai_supplemental_model.cc"],
     hdrs = ["kanai_supplemental_model.h"],
-    visibility = ["//engine:__pkg__"],
+    visibility = [
+        "//engine:__pkg__",
+        "//session:__pkg__",
+    ],
     deps = [
         ":broker_contract",
         ":rank_policy",

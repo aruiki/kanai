@@ -482,6 +482,20 @@ impl<T> AuthenticatedTransport<T> {
     }
 }
 
+impl<T: Transport + ?Sized> Transport for &mut T {
+    fn max_frame_bytes(&self) -> usize {
+        (**self).max_frame_bytes()
+    }
+
+    fn send(&mut self, frame: Frame) -> Result<(), TransportError> {
+        (**self).send(frame)
+    }
+
+    fn receive(&mut self) -> Result<Option<Frame>, TransportError> {
+        (**self).receive()
+    }
+}
+
 impl<T: Transport> Transport for AuthenticatedTransport<T> {
     fn max_frame_bytes(&self) -> usize {
         self.inner.max_frame_bytes()

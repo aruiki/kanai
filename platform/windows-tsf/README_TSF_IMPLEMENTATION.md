@@ -40,35 +40,35 @@ Pinned upstream provides
 server-side extension point. The staged patch installs
 `kanai::tsf::KanaAiSupplementalModel` there rather than adding TSF/COM code.
 
-The current model is deliberately **inert**:
+The current model is deliberately **inert by default**:
 
-- `IsAvailable()` returns false;
-- `PostCorrect()` and `RescoreResults()` perform no I/O;
-- no document, candidate, or broker data leaves Mozc; and
-- no key/preedit/realtime path calls a provider.
+- a freshly installed `KanaAiSupplementalModel` reports unavailable;
+- `PostCorrect()` only queues work after a trusted owner explicitly starts the
+  bounded worker and binds a regular session;
+- `RescoreResults()` remains a no-op;
+- the worker calls the Windows named-pipe transport off the Mozc callback;
+- password/protected bindings invalidate the capability and retain Mozc's
+  baseline; and
+- no key/preedit/realtime callback performs provider I/O.
 
-This is required because upstream's `SupplementalModelInterface` does not carry
-KanaAI broker's per-context `sessionId`, monotonic `generation`, or secure
-`FieldClass`. Canonical `rerankCandidates` requests require session/generation,
-and the broker's enhancement coordinator enforces generation, secure-field,
-local-provider, timeout, and cancellation policy. Guessing identifiers from a
-Mozc request would be unsafe.
-
-`ApplyRerankToResults` is the compile-time, non-I/O handoff for a future
-session-token-aware asynchronous executor. It accepts only an exact canonical
-response and an exact permutation of unchanged Mozc candidates. It is not
-called by the installed model yet.
+The overlay now contains a real bounded asynchronous worker, a
+`MakePipeRerankTransport` factory, a process-global model factory, an exact
+live-result handoff, and a trusted server-side `SessionHandler` hook. A later
+matching `PostCorrect` applies only an exact permutation of unchanged Mozc
+candidates. The Windows TIP, installer, model runtime, and real application
+lifecycle still require host validation; the source worker is not a registered
+or installable beta.
 
 ## Exact upstream patch boundary
 
 `platform/windows-tsf/tsf/patches/0001-install-kanai-supplemental-model.patch`
-changes only:
-
-1. `third_party/mozc/src/engine/BUILD.bazel`
-   - adds the KanaAI overlay target on Windows; and
-2. `third_party/mozc/src/engine/modules.cc`
-   - selects the inert KanaAI supplemental model instead of the upstream stub
-     on Windows.
+changes the disposable upstream `engine` target to install the opt-in model
+and worker. It also removes the absent OSS `//supplemental_model` dependency
+from the Windows select path; a Windows `enable_spellchecker` query must not
+fail on a package absent from pinned OSS. `0003-session-generation-binding.patch`
+adds the trusted `SessionHandler` generation/field hook and the content-free
+protected-context marker in the TSF key path. Neither patch replaces the
+upstream TSF shell.
 
 `prepare-pinned-mozc.ps1` verifies the exact commit and clean tracked
 submodule, exports a disposable tree with `git archive`, copies the
@@ -102,8 +102,9 @@ Key properties:
 - 1 MiB canonical frame limit and 1..2000 ms native client deadline; and
 - only `applied + adopted` exact-permutation responses may be applied.
 
-The C++ pipe client is not called by the supplemental model. It is a bounded
-transport seam for a future optional executor, not a per-key LLM path.
+The C++ pipe client is called only by the explicitly-started worker, never by
+`PostCorrect` or another key/preedit callback. It is a bounded optional
+transport, not a per-key LLM path.
 
 ## Files added under the owned TSF boundary
 
@@ -121,6 +122,7 @@ transport seam for a future optional executor, not a per-key LLM path.
 - `platform/windows-tsf/tsf/host_overlay/engine/kanai_ai/kanai_supplemental_model.cc`
 - `platform/windows-tsf/tsf/host_overlay/engine/kanai_ai/kanai_supplemental_model_test.cc`
 - `platform/windows-tsf/tsf/patches/0001-install-kanai-supplemental-model.patch`
+- `platform/windows-tsf/tsf/patches/0003-session-generation-binding.patch`
 - `platform/windows-tsf/tsf/scripts/prepare-pinned-mozc.ps1`
 - `platform/windows-tsf/tsf/scripts/build-pinned-mozc.ps1`
 - `platform/windows-tsf/tsf/metadata/broker-contract-v1.md`
@@ -163,6 +165,18 @@ Use 64-bit Windows 10/11, Visual Studio 2022 with MSVC v143 x64, Windows 11
 SDK, ATL where required by pinned Bazel rules, Python 3.12+, Git, Bazelisk, and
 `build_tools/update_deps.py` dependencies. Qt/WiX, installer packaging, x86,
 signing, and full UIA work are explicitly deferred from this vertical slice.
+
+Build the Rust broker executable separately on the Windows host:
+
+```powershell
+cargo build --release --locked --target x86_64-pc-windows-msvc -p kanai-broker
+```
+
+The resulting `kanai-broker.exe` owns the private pipe endpoint. The staged
+server model now starts its bounded worker and obtains a generation binding
+from `SessionHandler`, but do not copy the executable beside a registered TIP
+and call that an end-user beta until the real Windows input, model, installer,
+and recovery gates pass.
 
 ```powershell
 # Visual Studio 2022 Developer PowerShell
@@ -239,12 +253,16 @@ The Windows x64 Bazel targets themselves were not run in this WSL session.
 
 ## Blockers before a public beta
 
-1. **Session/generation bridge:** upstream `SupplementalModelInterface` does
-   not provide the broker tokens required for safe async admission.
-2. **Async executor:** no production executor, cancellation, or cache handoff
-   is wired; the installed model intentionally remains unavailable.
-3. **Windows pipe server:** no named-pipe listener, current-user ACL, or
-   platform `PeerAuthenticator` using the client process token exists.
+1. **Session/generation bridge:** the Rust broker now owns session/generation
+   and secure-field admission in a bounded queue, but upstream
+   `SupplementalModelInterface` still does not provide the trusted token or a
+   live-result application point.
+2. **Async executor:** a bounded latest-per-session queue and cancellation
+   path exist in the Rust broker; a TSF handoff and cache lifecycle are not
+   wired, so the installed model intentionally remains unavailable.
+3. **Windows pipe server:** a source-built Tokio named-pipe listener with a
+   protected DACL and OS process/session/user-token authenticator now exists;
+   Windows runtime, ACL, reconnect, and application tests remain open.
 4. **No Bazel host build evidence:** the x64 TIP/server build and full runtime
    still need a Windows runner with pinned dependencies.
 5. **Model/backend:** no local bounded reranker or measured provider backend is

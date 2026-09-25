@@ -179,6 +179,30 @@ impl CreateSessionRequest {
     }
 }
 
+/// Establish a broker-side generation token for a trusted native candidate
+/// rerank stream. This is intentionally separate from CreateSession: the
+/// supplemental model supplies an already-generated Mozc candidate snapshot
+/// and must not create a second Mozc composition owner merely to ask for
+/// optional ranking.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrepareRerankSessionRequest {
+    pub session_id: SessionId,
+    pub generation: Generation,
+    pub field_class: FieldClass,
+}
+
+impl PrepareRerankSessionRequest {
+    #[must_use]
+    pub fn new(session_id: SessionId, generation: Generation) -> Self {
+        Self {
+            session_id,
+            generation,
+            field_class: FieldClass::Regular,
+        }
+    }
+}
+
 /// A state-changing key event.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -565,6 +589,7 @@ impl SemanticAssistRequest {
 #[serde(tag = "operation", content = "payload", rename_all = "camelCase")]
 pub enum RequestCommand {
     CreateSession(CreateSessionRequest),
+    PrepareRerankSession(PrepareRerankSessionRequest),
     Key(KeyRequest),
     Edit(EditRequest),
     Convert(ConvertRequest),
@@ -582,6 +607,7 @@ impl RequestCommand {
     pub fn operation(&self) -> &'static str {
         match self {
             Self::CreateSession(_) => "createSession",
+            Self::PrepareRerankSession(_) => "prepareRerankSession",
             Self::Key(_) => "key",
             Self::Edit(_) => "edit",
             Self::Convert(_) => "convert",
@@ -599,6 +625,7 @@ impl RequestCommand {
     pub fn session_id(&self) -> Option<SessionId> {
         match self {
             Self::CreateSession(request) => Some(request.session_id),
+            Self::PrepareRerankSession(request) => Some(request.session_id),
             Self::Key(request) => Some(request.session_id),
             Self::Edit(request) => Some(request.session_id),
             Self::Convert(request) => Some(request.session_id),
@@ -615,6 +642,7 @@ impl RequestCommand {
     #[must_use]
     pub fn expected_generation(&self) -> Option<Generation> {
         match self {
+            Self::PrepareRerankSession(request) => Some(request.generation),
             Self::Key(request) => Some(request.generation),
             Self::Edit(request) => Some(request.generation),
             Self::Convert(request) => Some(request.generation),
@@ -633,6 +661,10 @@ impl RequestCommand {
             Self::CreateSession(request) => {
                 validate_id("sessionId", request.session_id)?;
                 validate_text("locale", &request.locale, MAX_LOCALE_BYTES)?;
+                request.field_class.validate()
+            }
+            Self::PrepareRerankSession(request) => {
+                validate_id("sessionId", request.session_id)?;
                 request.field_class.validate()
             }
             Self::Key(request) => {

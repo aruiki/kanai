@@ -39,6 +39,14 @@ std::optional<std::vector<std::uint8_t>> MapAiOrderToRanks(
       response.ai.size() != request.candidates.size()) {
     return std::nullopt;
   }
+  for (std::size_t index = 0; index < request.candidates.size(); ++index) {
+    const BrokerCandidate& expected = request.candidates[index];
+    const BrokerCandidate& actual = response.baseline[index];
+    if (actual.id != expected.id || actual.text != expected.text ||
+        actual.reading != expected.reading || actual.rank != expected.rank) {
+      return std::nullopt;
+    }
+  }
 
   std::vector<std::uint8_t> rank_by_index(request.candidates.size(), 0);
   std::vector<bool> seen(request.candidates.size(), false);

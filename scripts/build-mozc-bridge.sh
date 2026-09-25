@@ -5,6 +5,18 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MOZC_DIR="$ROOT_DIR/third_party/mozc"
 PATCH_FILE="$ROOT_DIR/patches/mozc-kanai-bridge.patch"
+PATCH_APPLIED_HERE=0
+
+cleanup() {
+  if [[ "$PATCH_APPLIED_HERE" == 1 ]]; then
+    if ! git -C "$MOZC_DIR" apply --reverse --check "$PATCH_FILE" >/dev/null 2>&1; then
+      printf '%s\n' 'Failed to verify temporary Mozc bridge patch cleanup.' >&2
+      return 1
+    fi
+    git -C "$MOZC_DIR" apply --reverse "$PATCH_FILE" >/dev/null
+  fi
+}
+trap cleanup EXIT
 
 if [[ ! -d "$MOZC_DIR/.git" && ! -f "$MOZC_DIR/WORKSPACE" ]]; then
   git -C "$ROOT_DIR" submodule update --init --recursive third_party/mozc
@@ -15,8 +27,11 @@ if [[ -f "$PATCH_FILE" ]]; then
     printf '%s\n' 'Mozc bridge patch is already applied.'
   elif git -C "$MOZC_DIR" apply --check "$PATCH_FILE" 2>/dev/null; then
     git -C "$MOZC_DIR" apply "$PATCH_FILE"
+    PATCH_APPLIED_HERE=1
   else
-    printf '%s\n' 'Mozc bridge patch is already applied or the checkout has local changes.'
+    printf '%s\n' 'Mozc checkout does not match the reproducible bridge patch; refusing to build local changes.' >&2
+    printf '%s\n' 'Reset third_party/mozc or reconcile patches/mozc-kanai-bridge.patch first.' >&2
+    exit 1
   fi
 fi
 
@@ -37,4 +52,6 @@ fi
 # SessionHandler/EngineFactory targets without changing upstream internals.
 (cd "$MOZC_DIR/src" && "$BAZEL" build //kanai:kanai_mozc_bridge)
 
+cleanup
+trap - EXIT
 printf 'Mozc bridge built at %s\n' "$MOZC_DIR/src/bazel-bin/kanai/kanai_mozc_bridge"

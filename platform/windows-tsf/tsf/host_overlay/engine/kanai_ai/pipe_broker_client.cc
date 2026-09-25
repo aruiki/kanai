@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
@@ -36,9 +37,10 @@ constexpr std::uint32_t kMaximumTimeoutMilliseconds = 2000;
 constexpr std::size_t kMaximumTransportFrameSize =
     kBrokerFrameHeaderSize + kBrokerMaxPayloadSize;
 
-// This is a public capability marker, not a shared secret. The server-side
-// PeerAuthenticator must separately validate GetNamedPipeClientProcessId's
-// user/elevation token and the user-only pipe ACL.
+// This is a public capability marker, not a shared secret. The client also
+// verifies the connected broker process image (or the exact
+// KANAI_AI_TSF_SERVER_IMAGE path); the server separately validates the client
+// process image, user/elevation token, and user-only pipe ACL.
 constexpr std::string_view kPeerProof = "KanaAI.Tsf.TokenPeer.v1";
 
 class UniqueHandle {
@@ -171,6 +173,7 @@ bool ReadExactly(HANDLE pipe, HANDLE event, void* buffer, DWORD requested,
       return false;
     }
     OVERLAPPED overlapped = {};
+    overlapped.hEvent = event;
     DWORD transferred = 0;
     const BOOL started = ::ReadFile(pipe, bytes + offset, requested - offset,
                                    &transferred, &overlapped);
@@ -196,7 +199,11 @@ bool WriteExactly(HANDLE pipe, HANDLE event, const std::uint8_t* buffer,
                   DWORD requested, Clock::time_point deadline) {
   DWORD offset = 0;
   while (offset < requested) {
+    if (!::ResetEvent(event)) {
+      return false;
+    }
     OVERLAPPED overlapped = {};
+    overlapped.hEvent = event;
     DWORD transferred = 0;
     const BOOL started = ::WriteFile(pipe, buffer + offset, requested - offset,
                                     &transferred, &overlapped);
@@ -259,8 +266,60 @@ bool ReceivePayload(HANDLE pipe, HANDLE event, Clock::time_point deadline,
   return true;
 }
 
+bool VerifyServerImage(HANDLE pipe) {
+  DWORD process_id = 0;
+  if (::GetNamedPipeServerProcessId(pipe, &process_id) == 0) {
+    return false;
+  }
+  UniqueHandle process(::OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE,
+                                      process_id));
+  if (!process.valid()) {
+    return false;
+  }
+  std::vector<wchar_t> image_buffer(32'768);
+  DWORD image_length = static_cast<DWORD>(image_buffer.size());
+  if (::QueryFullProcessImageNameW(process.get(), 0, image_buffer.data(),
+                                   &image_length) == 0) {
+    return false;
+  }
+  std::wstring image(image_buffer.data(), image_length);
+
+  std::vector<wchar_t> expected_buffer(32'768);
+  const DWORD expected_length = ::GetEnvironmentVariableW(
+      L"KANAI_AI_TSF_SERVER_IMAGE", expected_buffer.data(),
+      static_cast<DWORD>(expected_buffer.size()));
+  if (expected_length >= expected_buffer.size()) {
+    return false;
+  }
+  if (expected_length > 0) {
+    std::wstring expected(expected_buffer.data(), expected_length);
+    while (!expected.empty() &&
+           (expected.back() == L'\\' || expected.back() == L'/')) {
+      expected.pop_back();
+    }
+    while (!image.empty() &&
+           (image.back() == L'\\' || image.back() == L'/')) {
+      image.pop_back();
+    }
+    return ::CompareStringOrdinal(image.c_str(), -1, expected.c_str(), -1,
+                                  TRUE) == CSTR_EQUAL;
+  }
+
+  const std::size_t separator = image.find_last_of(L"\\/");
+  const std::wstring basename = separator == std::wstring::npos
+                                    ? image
+                                    : image.substr(separator + 1);
+  return ::CompareStringOrdinal(basename.c_str(), -1, L"kanai-broker.exe", -1,
+                                TRUE) == CSTR_EQUAL ||
+         ::CompareStringOrdinal(basename.c_str(), -1, L"kanai_broker.exe", -1,
+                                TRUE) == CSTR_EQUAL;
+}
+
 bool Authenticate(HANDLE pipe, HANDLE event, const std::string& client_id,
                   Clock::time_point deadline) {
+  if (!VerifyServerImage(pipe)) {
+    return false;
+  }
   AuthRequest request;
   request.client_id = client_id;
   request.nonce.resize(kBrokerMaxAuthNonceBytes);
@@ -283,6 +342,22 @@ bool Authenticate(HANDLE pipe, HANDLE event, const std::string& client_id,
 
 }  // namespace
 
+PipeRerankTransport MakePipeRerankTransport(
+    std::uint32_t timeout_milliseconds) {
+  auto client = std::make_shared<PipeBrokerClient>(timeout_milliseconds);
+  return [client](const RerankRequest& request, RerankResponse* response) {
+    return client->Rerank(request, response);
+  };
+}
+
+PipeReleaseTransport MakePipeReleaseTransport(
+    std::uint32_t timeout_milliseconds) {
+  auto client = std::make_shared<PipeBrokerClient>(timeout_milliseconds);
+  return [client](std::uint64_t session_id, std::uint64_t generation) {
+    return client->Release(session_id, generation);
+  };
+}
+
 PipeBrokerClient::PipeBrokerClient(std::uint32_t timeout_milliseconds)
     : pipe_name_(ReadConfiguredPipeName()),
       timeout_milliseconds_(std::clamp(
@@ -296,10 +371,60 @@ bool PipeBrokerClient::Rerank(const RerankRequest& request,
   }
   const std::optional<std::string> request_json =
       EncodeRerankRequestJson(request);
-  if (!request_json.has_value()) {
+  const PrepareRerankSessionRequest prepare{
+      request.request_id, request.session_id, request.generation};
+  const std::optional<std::string> prepare_json =
+      EncodePrepareRerankSessionJson(prepare);
+  if (!request_json.has_value() || !prepare_json.has_value()) {
     return false;
   }
 
+  const auto deadline =
+      Clock::now() + std::chrono::milliseconds(timeout_milliseconds_);
+  const auto exchange = [&](const std::string& payload,
+                            std::string* response_json) {
+    UniqueHandle pipe;
+    if (!ConnectPipe(pipe_name_, deadline, &pipe)) {
+      return false;
+    }
+    UniqueHandle event(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    if (!event.valid() ||
+        !Authenticate(pipe.get(), event.get(), client_id_, deadline) ||
+        !SendPayload(pipe.get(), event.get(), payload, deadline)) {
+      return false;
+    }
+    return ReceivePayload(pipe.get(), event.get(), deadline, response_json);
+  };
+
+  std::string prepare_response;
+  if (!exchange(*prepare_json, &prepare_response) ||
+      !DecodeGenerationResponseJson(prepare_response, prepare).has_value()) {
+    return false;
+  }
+  std::string rerank_response;
+  if (!exchange(*request_json, &rerank_response)) {
+    return false;
+  }
+  const std::optional<RerankResponse> decoded =
+      DecodeRerankResponseJson(rerank_response, request);
+  if (!decoded.has_value()) {
+    return false;
+  }
+  *response = *decoded;
+  return true;
+}
+
+bool PipeBrokerClient::Release(std::uint64_t session_id,
+                                std::uint64_t generation) const {
+  if (pipe_name_.empty() || session_id == 0) {
+    return false;
+  }
+  const ReleaseRerankSessionRequest request{session_id, session_id, generation};
+  const std::optional<std::string> request_json =
+      EncodeReleaseRerankSessionJson(request);
+  if (!request_json.has_value()) {
+    return false;
+  }
   const auto deadline =
       Clock::now() + std::chrono::milliseconds(timeout_milliseconds_);
   UniqueHandle pipe;
@@ -307,21 +432,16 @@ bool PipeBrokerClient::Rerank(const RerankRequest& request,
     return false;
   }
   UniqueHandle event(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
-  if (!event.valid() || !Authenticate(pipe.get(), event.get(), client_id_, deadline) ||
+  if (!event.valid() ||
+      !Authenticate(pipe.get(), event.get(), client_id_, deadline) ||
       !SendPayload(pipe.get(), event.get(), *request_json, deadline)) {
     return false;
   }
-
   std::string response_json;
-  if (!ReceivePayload(pipe.get(), event.get(), deadline, &response_json)) {
+  if (!ReceivePayload(pipe.get(), event.get(), deadline, &response_json) ||
+      !DecodeFocusLostResponseJson(response_json, request).has_value()) {
     return false;
   }
-  const std::optional<RerankResponse> decoded =
-      DecodeRerankResponseJson(response_json, request);
-  if (!decoded.has_value()) {
-    return false;
-  }
-  *response = *decoded;
   return true;
 }
 

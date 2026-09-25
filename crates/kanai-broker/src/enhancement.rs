@@ -567,6 +567,21 @@ impl<B: EnhancementBackend> EnhancementCoordinator<B> {
         Ok(())
     }
 
+    /// Build a bounded baseline response without calling a provider.
+    ///
+    /// Transport adapters use this when an optional queue is saturated or
+    /// closed.  It is deliberately public so a queue-full decision cannot be
+    /// accidentally turned into a model call by a fallback implementation.
+    pub fn fallback_without_provider(
+        &self,
+        request_id: u64,
+        token: &GenerationToken,
+        command: &RequestCommand,
+        reason: EnhancementReason,
+    ) -> ResponseEnvelope {
+        self.skip_response(request_id, token, command, reason)
+    }
+
     fn skip_response(
         &self,
         request_id: u64,

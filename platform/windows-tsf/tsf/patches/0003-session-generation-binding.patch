@@ -1,0 +1,105 @@
+diff --git a/session/BUILD.bazel b/session/BUILD.bazel
+index 2da5b8d..32025f1 100644
+--- a/session/BUILD.bazel
++++ b/session/BUILD.bazel
+@@ -186,7 +186,9 @@ mozc_cc_library(
+     ] + mozc_select_enable_session_watchdog([
+         "//base:process",
+         ":session_watch_dog",
+-    ]),
++    ]) + mozc_select(
++        windows = ["//engine/kanai_ai:kanai_supplemental_model"],
++    ),
+ )
+ 
+ mozc_cc_library(
+diff --git a/session/session_handler.cc b/session/session_handler.cc
+index 0d8dd6f..a02b900 100644
+--- a/session/session_handler.cc
++++ b/session/session_handler.cc
+@@ -37,6 +37,7 @@
+ #include <cstdint>
+ #include <limits>
+ #include <memory>
++#include <string>
+ #include <utility>
+ #include <vector>
+ 
+@@ -52,6 +53,9 @@
+ #include "config/character_form_manager.h"
+ #include "config/config_handler.h"
+ #include "engine/engine_interface.h"
++#ifdef _WIN32
++#include "engine/kanai_ai/kanai_supplemental_model.h"
++#endif  // _WIN32
+ #include "protocol/commands.pb.h"
+ #include "protocol/config.pb.h"
+ #include "protocol/engine_builder.pb.h"
+@@ -122,6 +126,38 @@ bool IsApplicationAlive(const session::Session* session) {
+ #endif  // MOZC_DISABLE_SESSION_WATCHDOG
+   return true;
+ }
++
++#ifdef _WIN32
++void UpdateKanaAiSessionBinding(const commands::Input& input) {
++  if (!input.has_id() || input.id() == 0) {
++    return;
++  }
++  if (input.type() == commands::Input::CREATE_SESSION ||
++      input.type() == commands::Input::DELETE_SESSION) {
++    kanai::tsf::KanaAiSupplementalModel::EndMozcSession(input.id());
++    return;
++  }
++  if (input.type() != commands::Input::SEND_KEY &&
++      input.type() != commands::Input::SEND_COMMAND) {
++    return;
++  }
++  auto field_class = kanai::tsf::KanaAiSessionFieldClass::kRegular;
++  if (input.has_context() &&
++      input.context().input_field_type() == commands::Context::PASSWORD) {
++    field_class = kanai::tsf::KanaAiSessionFieldClass::kPassword;
++  }
++  if (input.has_context()) {
++    for (const std::string& feature : input.context().experimental_features()) {
++      if (feature == "kanai.protected") {
++        field_class = kanai::tsf::KanaAiSessionFieldClass::kProtected;
++        break;
++      }
++    }
++  }
++  (void)kanai::tsf::KanaAiSupplementalModel::BeginMozcCommand(input.id(),
++                                                               field_class);
++}
++#endif  // _WIN32
+ }  // namespace
+ 
+ SessionHandler::SessionHandler(std::unique_ptr<EngineInterface> engine)
+@@ -312,6 +348,12 @@ bool SessionHandler::EvalCommand(commands::Command* command) {
+     return false;
+   }
+ 
++#ifdef _WIN32
++  // The server-side handler is the trusted owner of the opaque session and
++  // generation. This hook runs before Mozc can invoke PostCorrect.
++  UpdateKanaAiSessionBinding(command->input());
++#endif  // _WIN32
++
+   bool eval_succeeded = false;
+   Stopwatch stopwatch;
+   stopwatch.Start();
+diff --git a/win32/tip/tip_keyevent_handler.cc b/win32/tip/tip_keyevent_handler.cc
+index 618c232..19df135 100644
+--- a/win32/tip/tip_keyevent_handler.cc
++++ b/win32/tip/tip_keyevent_handler.cc
+@@ -140,6 +140,11 @@ void FillMozcContextCommon(TipTextService* text_service, ITfContext* context,
+   }
+   mozc_context->set_revision(
+       text_service->GetThreadContext()->GetFocusRevision());
++  if (TipStatus::IsDisabledContext(context)) {
++    // The upstream disabled compartment is the conservative protected-field
++    // signal available to the server. Keep it explicit and content-free.
++    mozc_context->add_experimental_features("kanai.protected");
++  }
+   wil::com_ptr_nothrow<ITfContextView> context_view;
+   if (FAILED(context->GetActiveView(&context_view))) {
+     return;

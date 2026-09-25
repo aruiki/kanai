@@ -1,6 +1,12 @@
 #include "engine/kanai_ai/kanai_supplemental_model.h"
 
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
+#include <optional>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -50,6 +56,185 @@ RerankResponse MakeResponse(const RerankRequest& request) {
 TEST(KanaAiSupplementalModelTest, RemainsInertWithoutSessionBridge) {
   KanaAiSupplementalModel model;
   EXPECT_FALSE(model.IsAvailable());
+}
+
+TEST(KanaAiSupplementalModelTest, SessionHandlerBridgeIssuesAndInvalidatesBindings) {
+  auto model = KanaAiSupplementalModel::Create();
+  ASSERT_TRUE(model != nullptr);
+  SessionBindingOwner owner(*model);
+  std::atomic<bool> released = false;
+  ASSERT_TRUE(owner.StartAsyncExecutor(
+      [](const RerankRequest&, RerankResponse*) { return false; },
+      [&released](std::uint64_t, std::uint64_t) {
+        released.store(true, std::memory_order_release);
+        return true;
+      }));
+  EXPECT_FALSE(model->IsAvailable());
+  EXPECT_TRUE(KanaAiSupplementalModel::BeginMozcCommand(
+      7, SessionFieldClass::kRegular));
+  EXPECT_TRUE(model->IsAvailable());
+  EXPECT_TRUE(KanaAiSupplementalModel::BeginMozcCommand(
+      7, SessionFieldClass::kPassword));
+  EXPECT_FALSE(model->IsAvailable());
+  // A missing marker on a later command cannot downgrade a sticky secure
+  // session back to regular before the trusted owner ends it.
+  EXPECT_TRUE(KanaAiSupplementalModel::BeginMozcCommand(
+      7, SessionFieldClass::kRegular));
+  EXPECT_FALSE(model->IsAvailable());
+  // Repeated secure notifications must not erase the already queued release.
+  EXPECT_TRUE(KanaAiSupplementalModel::BeginMozcCommand(
+      7, SessionFieldClass::kProtected));
+  EXPECT_FALSE(model->IsAvailable());
+  KanaAiSupplementalModel::EndMozcSession(7);
+  for (int attempt = 0; attempt < 100 &&
+                         !released.load(std::memory_order_acquire);
+       ++attempt) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  EXPECT_TRUE(released.load(std::memory_order_acquire));
+  EXPECT_FALSE(model->IsAvailable());
+}
+
+TEST(KanaAiSupplementalModelTest, AsyncWorkerPublishesAndAppliesWithoutBlockingCallback) {
+  KanaAiSupplementalModel model;
+  SessionBindingOwner owner(model);
+  std::mutex mutex;
+  std::condition_variable condition;
+  bool entered = false;
+  bool release = false;
+  auto transport = [&](const RerankRequest& request,
+                       RerankResponse* response) {
+    std::unique_lock<std::mutex> lock(mutex);
+    entered = true;
+    condition.notify_all();
+    condition.wait(lock, [&] { return release; });
+    *response = MakeResponse(request);
+    return true;
+  };
+
+  ASSERT_TRUE(owner.StartAsyncExecutor(transport));
+  const std::optional<SessionBinding> binding = owner.Bind(7, 2);
+  ASSERT_TRUE(binding.has_value());
+  EXPECT_TRUE(model.IsAvailable());
+
+  const RerankRequest baseline = MakeRequest();
+  std::vector<mozc::prediction::Result> results = MakeResults(baseline);
+  const mozc::ConversionRequest request;
+  model.PostCorrect(request, results);
+
+  bool worker_entered = false;
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    worker_entered = condition.wait_for(
+        lock, std::chrono::seconds(1), [&] { return entered; });
+    release = true;
+  }
+  condition.notify_all();
+  ASSERT_TRUE(worker_entered);
+
+  bool applied = false;
+  for (int attempt = 0; attempt < 100; ++attempt) {
+    model.PostCorrect(request, results);
+    if (results[0].value == "彼方") {
+      applied = true;
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  owner.StopAsyncExecutor();
+  EXPECT_TRUE(applied);
+  EXPECT_FALSE(model.IsAvailable());
+}
+
+TEST(KanaAiSupplementalModelTest, AsyncResponseFromPreviousGenerationIsDropped) {
+  KanaAiSupplementalModel model;
+  SessionBindingOwner owner(model);
+  std::mutex mutex;
+  std::condition_variable condition;
+  bool entered = false;
+  bool release = false;
+  std::atomic<int> calls = 0;
+  auto transport = [&](const RerankRequest& request,
+                       RerankResponse* response) {
+    const int call = calls.fetch_add(1, std::memory_order_relaxed);
+    if (call > 0) {
+      return false;
+    }
+    std::unique_lock<std::mutex> lock(mutex);
+    entered = true;
+    condition.notify_all();
+    condition.wait(lock, [&] { return release; });
+    *response = MakeResponse(request);
+    return true;
+  };
+  ASSERT_TRUE(owner.StartAsyncExecutor(transport));
+  const auto first = owner.Bind(7, 2);
+  ASSERT_TRUE(first.has_value());
+  const RerankRequest baseline = MakeRequest();
+  std::vector<mozc::prediction::Result> results = MakeResults(baseline);
+  const mozc::ConversionRequest request;
+  model.PostCorrect(request, results);
+
+  bool worker_entered = false;
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    worker_entered = condition.wait_for(
+        lock, std::chrono::seconds(1), [&] { return entered; });
+    release = true;
+  }
+  condition.notify_all();
+  ASSERT_TRUE(worker_entered);
+  const auto second = owner.Bind(7, 3);
+  ASSERT_TRUE(second.has_value());
+  for (int attempt = 0; attempt < 20; ++attempt) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  const std::vector<mozc::prediction::Result> original = results;
+  model.PostCorrect(request, results);
+  EXPECT_EQ(results.size(), original.size());
+  EXPECT_EQ(results[0].value, original[0].value);
+  EXPECT_EQ(results[1].value, original[1].value);
+  owner.StopAsyncExecutor();
+}
+
+TEST(KanaAiSupplementalModelTest, RejectsStaleSessionBindingBeforeApply) {
+  KanaAiSupplementalModel model;
+  SessionBindingOwner owner(model);
+  const RerankRequest request = MakeRequest();
+  std::vector<mozc::prediction::Result> results = MakeResults(request);
+  const std::vector<mozc::prediction::Result> original = results;
+  const RerankResponse response = MakeResponse(request);
+
+  const std::optional<SessionBinding> first = owner.Bind(7, 2);
+  ASSERT_TRUE(first.has_value());
+  EXPECT_TRUE(owner.ApplyRerank(*first, request, response, &results));
+
+  // A secure-field transition invalidates the old regular-field capability
+  // before returning no binding to the optional executor.
+  EXPECT_FALSE(owner.Bind(7, 2, SessionFieldClass::kPassword).has_value());
+  EXPECT_FALSE(owner.ApplyRerank(*first, request, response, &results));
+  const std::optional<SessionBinding> rebound = owner.Bind(7, 2);
+  ASSERT_TRUE(rebound.has_value());
+
+  results = original;
+  EXPECT_FALSE(owner.Bind(7, 1).has_value());
+  const std::optional<SessionBinding> newer = owner.Bind(7, 3);
+  ASSERT_TRUE(newer.has_value());
+  EXPECT_FALSE(owner.ApplyRerank(*first, request, response, &results));
+  EXPECT_EQ(results[0].value, original[0].value);
+  EXPECT_EQ(results[1].value, original[1].value);
+
+  RerankRequest current_request = request;
+  current_request.generation = 3;
+  RerankResponse current_response = MakeResponse(current_request);
+  EXPECT_TRUE(owner.ApplyRerank(*newer, current_request, current_response,
+                                &results));
+  owner.Invalidate(*newer);
+  results = original;
+  EXPECT_FALSE(owner.ApplyRerank(*newer, current_request, current_response,
+                                 &results));
+  EXPECT_EQ(results[0].value, original[0].value);
+  EXPECT_EQ(results[1].value, original[1].value);
 }
 
 TEST(KanaAiSupplementalModelTest, AppliesOnlyExactAsyncPermutation) {

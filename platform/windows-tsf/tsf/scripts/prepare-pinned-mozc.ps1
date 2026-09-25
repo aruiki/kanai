@@ -102,7 +102,8 @@ try {
 
     $patchPaths = @(
         [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0001-install-kanai-supplemental-model.patch')),
-        [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0002-kanai-tsf-identity.patch'))
+        [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0002-kanai-tsf-identity.patch')),
+        [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0003-session-generation-binding.patch'))
     )
     foreach ($patchPath in $patchPaths) {
         Invoke-Native -FilePath 'git' -WorkingDirectory $sourceDirectory -ArgumentList @(
@@ -127,7 +128,10 @@ finally {
     PatchedFiles = @(
         'src/engine/BUILD.bazel',
         'src/engine/modules.cc',
-        'src/win32/base/tsf_profile.cc'
+        'src/session/BUILD.bazel',
+        'src/session/session_handler.cc',
+        'src/win32/base/tsf_profile.cc',
+        'src/win32/tip/tip_keyevent_handler.cc'
     )
     AddedOverlay = 'src/engine/kanai_ai'
     PublicBeta = $false

@@ -3,6 +3,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -130,6 +131,10 @@ impl Default for MozcBridgeConfig {
 pub struct MozcBridge {
     config: MozcBridgeConfig,
     process: Arc<Mutex<Option<BridgeProcess>>>,
+    /// Serializes conversion/commit operations so a late response cannot
+    /// overwrite the generation recorded by a newer conversion.
+    operation: Arc<Mutex<()>>,
+    last_revision: Arc<Mutex<Option<u64>>>,
 }
 
 impl MozcBridge {
@@ -138,6 +143,8 @@ impl MozcBridge {
         Self {
             config,
             process: Arc::new(Mutex::new(None)),
+            operation: Arc::new(Mutex::new(())),
+            last_revision: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -185,6 +192,45 @@ impl MozcBridge {
             }
         }
     }
+
+    async fn commit_inner(
+        &self,
+        candidate_id: i32,
+        expected_revision: Option<u64>,
+    ) -> Result<CommitResult, ProviderError> {
+        let _operation = self.operation.lock().await;
+        let revision = match expected_revision {
+            Some(revision) => revision,
+            None => self.last_revision.lock().await.ok_or_else(|| {
+                ProviderError::Unavailable("no Mozc conversion is active".to_owned())
+            })?,
+        };
+        let response = match self
+            .call(format!("commit\t{candidate_id}\t{revision}"))
+            .await
+        {
+            Ok(response) => response,
+            Err(error) => {
+                *self.last_revision.lock().await = None;
+                return Err(error);
+            }
+        };
+        if response.generation != Some(revision) {
+            *self.last_revision.lock().await = None;
+            return Err(ProviderError::Protocol(
+                "Mozc bridge returned a different commit generation".to_owned(),
+            ));
+        }
+        *self.last_revision.lock().await = None;
+        let text = response
+            .text
+            .or(response.result)
+            .ok_or_else(|| ProviderError::Protocol("commit response has no text".to_owned()))?;
+        Ok(CommitResult {
+            text,
+            elapsed_millis: response.elapsed_micros.unwrap_or_default() / 1_000,
+        })
+    }
 }
 
 #[async_trait]
@@ -227,65 +273,488 @@ impl ConversionProvider for MozcBridge {
         request: &ConversionRequest,
     ) -> Result<ConversionResult, ProviderError> {
         validate_request(request)?;
+        let _operation = self.operation.lock().await;
+        *self.last_revision.lock().await = None;
         let command = format!(
-            "convert\t{}\t{}\t{}",
+            "convert\t{}\t{}\t{}\t{}",
             encode(&request.romaji),
             encode(&request.context_before),
-            encode(&request.context_after)
+            encode(&request.context_after),
+            request.revision
         );
         let response = self.call(command).await?;
-        let candidates = response
-            .candidates
-            .unwrap_or_default()
-            .into_iter()
-            .enumerate()
-            .map(|(index, candidate)| {
-                let attributes = candidate.attributes.clone();
-                ConversionCandidate {
-                    id: candidate.id,
-                    text: candidate.value,
-                    reading: candidate.key,
-                    provider_rank: candidate
-                        .index
-                        .map_or(index, |value| value.saturating_sub(1) as usize),
-                    description: candidate.description,
-                    origin: candidate.source.map_or_else(
-                        || CandidateOrigin::from_attributes(&attributes),
-                        |source| parse_origin(&source, &attributes),
-                    ),
-                    attributes,
-                    log: if diagnostics_enabled() {
-                        candidate.log.map(|value| value.chars().take(512).collect())
-                    } else {
-                        None
-                    },
-                }
-            })
-            .collect();
-
-        Ok(ConversionResult {
-            provider: response.provider.unwrap_or_else(|| "Mozc".to_owned()),
-            reading: response.reading.unwrap_or_else(|| response.preedit.clone()),
-            preedit: response.preedit,
-            preedit_segments: response
-                .preedit_segments
-                .unwrap_or_default()
-                .into_iter()
-                .map(|segment| PreeditSegment {
-                    value: segment.value,
-                    reading: segment.key,
-                    highlighted: segment.highlighted,
-                })
-                .collect(),
-            candidates,
-            focused_index: response.focused_index,
-            consumed: response.consumed.unwrap_or(true),
-            elapsed: Duration::from_micros(response.elapsed_micros.unwrap_or_default()),
-        })
+        if response.generation != Some(request.revision) {
+            return Err(ProviderError::Protocol(
+                "Mozc bridge returned a different conversion generation".to_owned(),
+            ));
+        }
+        *self.last_revision.lock().await = Some(request.revision);
+        Ok(conversion_result_from_response(response, true))
     }
 
     async fn commit(&self, candidate_id: i32) -> Result<CommitResult, ProviderError> {
-        let response = self.call(format!("commit\t{candidate_id}")).await?;
+        self.commit_inner(candidate_id, None).await
+    }
+
+    async fn commit_at(
+        &self,
+        candidate_id: i32,
+        revision: u64,
+    ) -> Result<CommitResult, ProviderError> {
+        self.commit_inner(candidate_id, Some(revision)).await
+    }
+
+    async fn reset(&self) -> Result<(), ProviderError> {
+        let _operation = self.operation.lock().await;
+        let result = self.call("reset".to_owned()).await;
+        if result.is_ok() {
+            *self.last_revision.lock().await = None;
+        }
+        result.map(|_| ())
+    }
+}
+
+/// A normalized key event accepted by the multiplexed Mozc bridge.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MozcKey {
+    Character(String),
+    Space,
+    Backspace,
+    Delete,
+    Escape,
+    Tab,
+    Enter,
+    Left,
+    Right,
+    Up,
+    Down,
+    Function(u8),
+    Named(String),
+}
+
+impl MozcKey {
+    fn fields(&self) -> Result<Vec<String>, ProviderError> {
+        let (kind, value) = match self {
+            Self::Character(value) => {
+                if value.is_empty() || value.len() > 1024 || value.chars().any(char::is_control) {
+                    return Err(ProviderError::InvalidRequest(
+                        "character key must be non-empty, valid, and at most 1024 bytes".to_owned(),
+                    ));
+                }
+                ("character", encode(value))
+            }
+            Self::Space => ("space", String::new()),
+            Self::Backspace => ("backspace", String::new()),
+            Self::Delete => ("delete", String::new()),
+            Self::Escape => ("escape", String::new()),
+            Self::Tab => ("tab", String::new()),
+            Self::Enter => ("enter", String::new()),
+            Self::Left => ("left", String::new()),
+            Self::Right => ("right", String::new()),
+            Self::Up => ("up", String::new()),
+            Self::Down => ("down", String::new()),
+            Self::Function(number) => ("function", number.to_string()),
+            Self::Named(name) => {
+                if name.is_empty() || name.len() > 64 || name.chars().any(char::is_control) {
+                    return Err(ProviderError::InvalidRequest(
+                        "named key must be non-empty and at most 64 bytes".to_owned(),
+                    ));
+                }
+                ("named", encode(name))
+            }
+        };
+        Ok(vec![kind.to_owned(), value])
+    }
+}
+
+/// A bounded composition edit accepted by the multiplexed Mozc bridge.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MozcEdit {
+    Insert(String),
+    Replace { start: u32, end: u32, text: String },
+    Delete { start: u32, end: u32 },
+    Reset,
+}
+
+impl MozcEdit {
+    fn fields(&self) -> Result<Vec<String>, ProviderError> {
+        match self {
+            Self::Reset => Ok(vec!["reset".to_owned()]),
+            Self::Insert(text) => {
+                validate_edit_text(text)?;
+                Ok(vec!["insert".to_owned(), encode(text)])
+            }
+            Self::Delete { start, end } => Ok(vec![
+                "delete".to_owned(),
+                start.to_string(),
+                end.to_string(),
+            ]),
+            Self::Replace { start, end, text } => {
+                validate_edit_text(text)?;
+                Ok(vec![
+                    "replace".to_owned(),
+                    start.to_string(),
+                    end.to_string(),
+                    encode(text),
+                ])
+            }
+        }
+    }
+}
+
+fn validate_edit_text(text: &str) -> Result<(), ProviderError> {
+    if text.len() > 16 * 1024 || text.chars().any(char::is_control) {
+        return Err(ProviderError::InvalidRequest(
+            "edit text is invalid or too large".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+/// State returned by a stateful key/edit operation on a multiplexed bridge.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MozcSessionState {
+    pub preedit: String,
+    pub reading: String,
+    pub preedit_segments: Vec<PreeditSegment>,
+    pub candidates: Vec<ConversionCandidate>,
+    pub focused_index: Option<usize>,
+    pub consumed: bool,
+    pub elapsed: Duration,
+}
+
+/// One supervised, bounded Mozc process shared by independent bridge sessions.
+///
+/// The child process owns at most 64 upstream sessions. All line-protocol
+/// calls are serialized because the pinned `SessionHandler` is a synchronous
+/// owner; the broker's optional model queue remains completely separate.
+#[derive(Clone)]
+pub struct MozcBridgePool {
+    config: MozcBridgeConfig,
+    process: Arc<Mutex<Option<BridgeProcess>>>,
+    operation: Arc<Mutex<()>>,
+    /// Monotonic identity of the child process. A session must never be
+    /// reused across an epoch boundary without an explicit host recovery.
+    epoch: Arc<AtomicU64>,
+    /// A failed child is not silently replaced by the next health probe or
+    /// stale command. The session owner must explicitly restart before opening
+    /// a new session.
+    failed: Arc<AtomicBool>,
+}
+
+impl std::fmt::Debug for MozcBridgePool {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("MozcBridgePool")
+            .field("binary_path", &self.config.binary_path)
+            .field("profile_dir", &self.config.profile_dir)
+            .field("epoch", &self.epoch.load(Ordering::Acquire))
+            .field("failed", &self.failed.load(Ordering::Acquire))
+            .finish()
+    }
+}
+
+impl MozcBridgePool {
+    #[must_use]
+    pub fn new(config: MozcBridgeConfig) -> Self {
+        Self {
+            config,
+            process: Arc::new(Mutex::new(None)),
+            operation: Arc::new(Mutex::new(())),
+            epoch: Arc::new(AtomicU64::new(0)),
+            failed: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    #[must_use]
+    pub fn from_environment() -> Self {
+        Self::new(MozcBridgeConfig::from_environment())
+    }
+
+    async fn call(&self, command: String) -> Result<BridgeResponse, ProviderError> {
+        let _operation = self.operation.lock().await;
+        if self.failed.load(Ordering::Acquire) {
+            return Err(ProviderError::Unavailable(
+                "Mozc bridge is unavailable after a child failure; explicit restart required"
+                    .to_owned(),
+            ));
+        }
+        let mut process = self.process.lock().await;
+        if process.is_none() {
+            match BridgeProcess::start(&self.config).await {
+                Ok(started) => *process = Some(started),
+                Err(error) => {
+                    self.failed.store(true, Ordering::Release);
+                    return Err(error);
+                }
+            }
+        }
+        let duration = self.config.request_timeout;
+        let result = timeout(
+            duration,
+            process
+                .as_mut()
+                .expect("bridge process is initialized")
+                .call(&command),
+        )
+        .await;
+        match result {
+            Ok(Ok(response)) if response.ok => Ok(response),
+            Ok(Ok(response)) => Err(ProviderError::Protocol(response.error)),
+            Ok(Err(error)) => {
+                let failed = process.take();
+                self.failed.store(true, Ordering::Release);
+                self.epoch.fetch_add(1, Ordering::AcqRel);
+                drop(process);
+                if let Some(failed) = failed {
+                    failed.terminate().await;
+                }
+                Err(error)
+            }
+            Err(_) => {
+                let failed = process.take();
+                self.failed.store(true, Ordering::Release);
+                self.epoch.fetch_add(1, Ordering::AcqRel);
+                drop(process);
+                if let Some(failed) = failed {
+                    failed.terminate().await;
+                }
+                Err(ProviderError::Timeout(duration))
+            }
+        }
+    }
+
+    /// Monotonic child-process identity. Callers use this to reject a result
+    /// that was produced by a process which has since been replaced.
+    #[must_use]
+    pub fn epoch(&self) -> u64 {
+        self.epoch.load(Ordering::Acquire)
+    }
+
+    /// Whether the pool is in the fail-closed state after child I/O loss.
+    #[must_use]
+    pub fn failed(&self) -> bool {
+        self.failed.load(Ordering::Acquire)
+    }
+
+    /// Explicitly replace a failed child. Existing sessions are deliberately
+    /// not reopened: their composition and candidate generations belonged to
+    /// the old epoch and must be invalidated by the owner first.
+    pub async fn restart(&self) -> Result<(), ProviderError> {
+        let _operation = self.operation.lock().await;
+        let mut process = self.process.lock().await;
+        let old = process.take();
+        self.failed.store(false, Ordering::Release);
+        self.epoch.fetch_add(1, Ordering::AcqRel);
+        drop(process);
+        if let Some(old) = old {
+            old.terminate().await;
+        }
+        let started = BridgeProcess::start(&self.config).await;
+        match started {
+            Ok(started) => {
+                *self.process.lock().await = Some(started);
+                Ok(())
+            }
+            Err(error) => {
+                self.failed.store(true, Ordering::Release);
+                Err(error)
+            }
+        }
+    }
+
+    /// Return the child PID for diagnostics and integration tests. `None`
+    /// means the pool has not started its process yet.
+    pub async fn process_id(&self) -> Option<u32> {
+        self.process
+            .lock()
+            .await
+            .as_ref()
+            .and_then(|process| process.child.id())
+    }
+
+    pub async fn health(&self) -> ProviderHealth {
+        match self.call("ping".to_owned()).await {
+            Ok(response) => ProviderHealth {
+                available: true,
+                provider: response.provider.unwrap_or_else(|| "Mozc".to_owned()),
+                detail: response.detail.unwrap_or_else(|| "bridge ready".to_owned()),
+                capabilities: self.capabilities(),
+            },
+            Err(error) => ProviderHealth {
+                available: false,
+                provider: "Mozc".to_owned(),
+                detail: error.to_string(),
+                capabilities: self.capabilities(),
+            },
+        }
+    }
+
+    fn capabilities(&self) -> ProviderCapabilities {
+        ProviderCapabilities {
+            name: "Mozc".to_owned(),
+            romaji: true,
+            kana: true,
+            n_best: true,
+            context: true,
+            user_dictionary: false,
+            local: true,
+        }
+    }
+}
+
+/// A client handle for one explicit session in a [`MozcBridgePool`].
+#[derive(Clone)]
+pub struct MozcSessionClient {
+    pool: MozcBridgePool,
+    session_id: u64,
+}
+
+impl std::fmt::Debug for MozcSessionClient {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("MozcSessionClient")
+            .field("pool", &self.pool)
+            .field("session_id", &self.session_id)
+            .finish()
+    }
+}
+
+impl MozcSessionClient {
+    #[must_use]
+    pub fn new(pool: MozcBridgePool, session_id: u64) -> Self {
+        Self { pool, session_id }
+    }
+
+    #[must_use]
+    pub fn session_id(&self) -> u64 {
+        self.session_id
+    }
+
+    pub async fn open(&self) -> Result<(), ProviderError> {
+        if self.session_id == 0 {
+            return Err(ProviderError::InvalidRequest(
+                "bridge session id must be non-zero".to_owned(),
+            ));
+        }
+        let response = self.pool.call(format!("open\t{}", self.session_id)).await?;
+        if response.session_id != Some(self.session_id) || response.generation != Some(0) {
+            return Err(ProviderError::Protocol(
+                "Mozc bridge returned an uncorrelated open response".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub async fn close(&self) -> Result<(), ProviderError> {
+        self.close_at(None).await
+    }
+
+    pub async fn close_at(&self, generation: Option<u64>) -> Result<(), ProviderError> {
+        let command = generation.map_or_else(
+            || format!("close\t{}", self.session_id),
+            |generation| format!("close\t{}\t{}", self.session_id, generation),
+        );
+        let response = self.pool.call(command).await?;
+        if response.session_id != Some(self.session_id)
+            || generation.is_some_and(|expected| response.generation != Some(expected))
+        {
+            return Err(ProviderError::Protocol(
+                "Mozc bridge returned an uncorrelated close response".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub async fn key(
+        &self,
+        key: &MozcKey,
+        generation: u64,
+    ) -> Result<MozcSessionState, ProviderError> {
+        let fields = key.fields()?;
+        let response = self
+            .pool
+            .call(format!(
+                "key\t{}\t{}\t{}\t{}",
+                self.session_id, generation, fields[0], fields[1]
+            ))
+            .await?;
+        let expected_generation = generation.checked_add(1).ok_or_else(|| {
+            ProviderError::Protocol("Mozc key generation is exhausted".to_owned())
+        })?;
+        if response.generation != Some(expected_generation) {
+            return Err(ProviderError::Protocol(
+                "Mozc bridge returned a different key generation".to_owned(),
+            ));
+        }
+        Ok(session_state_from_response(response, true))
+    }
+
+    pub async fn edit(
+        &self,
+        edit: &MozcEdit,
+        generation: u64,
+    ) -> Result<MozcSessionState, ProviderError> {
+        let fields = edit.fields()?;
+        let command = format!(
+            "edit\t{}\t{}\t{}",
+            self.session_id,
+            generation,
+            fields.join("\t")
+        );
+        let response = self.pool.call(command).await?;
+        let expected_generation = generation.checked_add(1).ok_or_else(|| {
+            ProviderError::Protocol("Mozc edit generation is exhausted".to_owned())
+        })?;
+        if response.generation != Some(expected_generation) {
+            return Err(ProviderError::Protocol(
+                "Mozc bridge returned a different edit generation".to_owned(),
+            ));
+        }
+        Ok(session_state_from_response(response, true))
+    }
+
+    pub async fn convert(
+        &self,
+        request: &ConversionRequest,
+    ) -> Result<ConversionResult, ProviderError> {
+        validate_request(request)?;
+        let response = self
+            .pool
+            .call(format!(
+                "convert\t{}\t{}\t{}\t{}\t{}",
+                self.session_id,
+                encode(&request.romaji),
+                encode(&request.context_before),
+                encode(&request.context_after),
+                request.revision
+            ))
+            .await?;
+        if response.generation != Some(request.revision) {
+            return Err(ProviderError::Protocol(
+                "Mozc bridge returned a different conversion generation".to_owned(),
+            ));
+        }
+        Ok(conversion_result_from_response(response, true))
+    }
+
+    pub async fn commit(
+        &self,
+        candidate_id: i32,
+        generation: u64,
+    ) -> Result<CommitResult, ProviderError> {
+        let response = self
+            .pool
+            .call(format!(
+                "commit\t{}\t{}\t{}",
+                self.session_id, candidate_id, generation
+            ))
+            .await?;
+        if response.generation != Some(generation) {
+            return Err(ProviderError::Protocol(
+                "Mozc bridge returned a different commit generation".to_owned(),
+            ));
+        }
         let text = response
             .text
             .or(response.result)
@@ -296,8 +765,40 @@ impl ConversionProvider for MozcBridge {
         })
     }
 
-    async fn reset(&self) -> Result<(), ProviderError> {
-        self.call("reset".to_owned()).await.map(|_| ())
+    pub async fn cancel(&self, generation: Option<u64>) -> Result<(), ProviderError> {
+        let command = generation.map_or_else(
+            || format!("cancel\t{}", self.session_id),
+            |generation| format!("cancel\t{}\t{}", self.session_id, generation),
+        );
+        let response = self.pool.call(command).await?;
+        if response.session_id != Some(self.session_id)
+            || generation.is_some_and(|expected| {
+                expected
+                    .checked_add(1)
+                    .is_none_or(|next| response.generation != Some(next))
+            })
+        {
+            return Err(ProviderError::Protocol(
+                "Mozc bridge returned an uncorrelated cancel response".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn session_state_from_response(
+    response: BridgeResponse,
+    default_consumed: bool,
+) -> MozcSessionState {
+    let result = conversion_result_from_response(response, default_consumed);
+    MozcSessionState {
+        reading: result.reading,
+        preedit: result.preedit,
+        preedit_segments: result.preedit_segments,
+        candidates: result.candidates,
+        focused_index: result.focused_index,
+        consumed: result.consumed,
+        elapsed: result.elapsed,
     }
 }
 
@@ -441,6 +942,22 @@ impl BridgeProcess {
         serde_json::from_str(line.trim_end())
             .map_err(|error| ProviderError::Protocol(format!("invalid bridge JSON ({error})")))
     }
+
+    /// Stop and reap a detached child with a bounded grace period. The
+    /// `kill_on_drop` setting remains a final safety net if the platform does
+    /// not report termination before the deadline.
+    async fn terminate(mut self) {
+        match self.child.try_wait() {
+            Ok(Some(_)) => return,
+            Ok(None) => {
+                let _ = self.child.start_kill();
+            }
+            Err(_) => {
+                let _ = self.child.start_kill();
+            }
+        }
+        let _ = timeout(Duration::from_secs(1), self.child.wait()).await;
+    }
 }
 
 impl Drop for BridgeProcess {
@@ -474,6 +991,10 @@ struct BridgeResponse {
     consumed: Option<bool>,
     #[serde(default)]
     elapsed_micros: Option<u64>,
+    #[serde(default)]
+    generation: Option<u64>,
+    #[serde(default, rename = "sessionId")]
+    session_id: Option<u64>,
     #[serde(default)]
     text: Option<String>,
     #[serde(default)]
@@ -513,6 +1034,59 @@ const fn default_true() -> bool {
     true
 }
 
+fn conversion_result_from_response(
+    response: BridgeResponse,
+    default_consumed: bool,
+) -> ConversionResult {
+    let candidates = response
+        .candidates
+        .unwrap_or_default()
+        .into_iter()
+        .enumerate()
+        .map(|(index, candidate)| {
+            let attributes = candidate.attributes.clone();
+            ConversionCandidate {
+                id: candidate.id,
+                text: candidate.value,
+                reading: candidate.key,
+                provider_rank: candidate
+                    .index
+                    .map_or(index, |value| value.saturating_sub(1) as usize),
+                description: candidate.description,
+                origin: candidate.source.map_or_else(
+                    || CandidateOrigin::from_attributes(&attributes),
+                    |source| parse_origin(&source, &attributes),
+                ),
+                attributes,
+                log: if diagnostics_enabled() {
+                    candidate.log.map(|value| value.chars().take(512).collect())
+                } else {
+                    None
+                },
+            }
+        })
+        .collect();
+    ConversionResult {
+        provider: response.provider.unwrap_or_else(|| "Mozc".to_owned()),
+        reading: response.reading.unwrap_or_else(|| response.preedit.clone()),
+        preedit: response.preedit,
+        preedit_segments: response
+            .preedit_segments
+            .unwrap_or_default()
+            .into_iter()
+            .map(|segment| PreeditSegment {
+                value: segment.value,
+                reading: segment.key,
+                highlighted: segment.highlighted,
+            })
+            .collect(),
+        candidates,
+        focused_index: response.focused_index,
+        consumed: response.consumed.unwrap_or(default_consumed),
+        elapsed: Duration::from_micros(response.elapsed_micros.unwrap_or_default()),
+    }
+}
+
 fn parse_origin(source: &str, attributes: &[String]) -> CandidateOrigin {
     let normalized = source
         .chars()
@@ -542,13 +1116,9 @@ fn validate_request(request: &ConversionRequest) -> Result<(), ProviderError> {
             "romaji input exceeds 1024 bytes".to_owned(),
         ));
     }
-    if !request
-        .romaji
-        .bytes()
-        .all(|byte| byte.is_ascii_graphic() || byte == b' ')
-    {
+    if request.romaji.chars().any(char::is_control) {
         return Err(ProviderError::InvalidRequest(
-            "romaji input contains unsupported characters".to_owned(),
+            "conversion input contains control characters".to_owned(),
         ));
     }
     if !(1..=30).contains(&request.limit) {
@@ -712,8 +1282,8 @@ mod tests {
     use kanai_core::{ConversionProvider, ConversionRequest, ProviderError};
 
     use crate::{
-        MozcBridge, bridge_environment_with, configured_bridge_path, decode, encode,
-        find_bridge_binary_with_suffix, validate_request,
+        MozcBridge, MozcEdit, MozcKey, bridge_environment_with, configured_bridge_path, decode,
+        encode, find_bridge_binary_with_suffix, validate_request,
     };
 
     fn write_placeholder(path: &Path) {
@@ -746,6 +1316,36 @@ mod tests {
         assert!(matches!(decode("%FF"), Err(ProviderError::Protocol(_))));
         assert!(matches!(decode("%"), Err(ProviderError::Protocol(_))));
         assert!(matches!(decode("%GG"), Err(ProviderError::Protocol(_))));
+    }
+
+    #[test]
+    fn multiplexed_key_and_edit_fields_are_separator_safe() {
+        assert_eq!(
+            MozcKey::Character("あ b".to_owned())
+                .fields()
+                .expect("key fields"),
+            vec!["character".to_owned(), "%E3%81%82%20b".to_owned()]
+        );
+        assert_eq!(
+            MozcEdit::Replace {
+                start: 1,
+                end: 2,
+                text: "界".to_owned(),
+            }
+            .fields()
+            .expect("edit fields"),
+            vec![
+                "replace".to_owned(),
+                "1".to_owned(),
+                "2".to_owned(),
+                "%E7%95%8C".to_owned(),
+            ]
+        );
+        assert!(
+            MozcKey::Character("bad\nvalue".to_owned())
+                .fields()
+                .is_err()
+        );
     }
 
     #[test]
@@ -859,11 +1459,13 @@ mod tests {
         request.romaji = "a".repeat(1_025);
         assert_invalid_request(&request, "exceeds 1024 bytes");
 
+        // The bridge accepts valid UTF-8 composition text as well as ASCII
+        // romaji; only control characters are rejected here.
         request.romaji = "日本語".to_owned();
-        assert_invalid_request(&request, "unsupported characters");
+        assert!(validate_request(&request).is_ok());
 
         request.romaji = "kyou\n".to_owned();
-        assert_invalid_request(&request, "unsupported characters");
+        assert_invalid_request(&request, "control characters");
 
         request.romaji = "a".repeat(1_024);
         request.limit = 0;

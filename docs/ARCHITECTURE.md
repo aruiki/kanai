@@ -159,7 +159,15 @@ flowchart LR
     TSUI -->|loopback only| LAB --> ORCH
 ```
 
-The first production backend uses a per-user `mozc_server` and its one-shot IPC command protocol. Mozc's own IPC design explicitly calls out that IPC occurs for every key event, requires a private per-user endpoint, and can damage responsiveness when slow ([Mozc IPC design](https://github.com/google/mozc/blob/master/docs/design_doc/mozc_ipc.md), accessed 2026-09-24). An in-process C ABI bridge is an optimization to investigate only after conformance and performance tests; it is not assumed to be a stable upstream API.
+The first production backend uses a per-user `mozc_server` and a bounded,
+session-aware command protocol. Mozc's own IPC design explicitly calls out that
+IPC occurs for every key event, requires a private per-user endpoint, and can
+damage responsiveness when slow ([Mozc IPC design](https://github.com/google/mozc/blob/master/docs/design_doc/mozc_ipc.md), accessed 2026-09-24). The current source slice
+adds a Rust `SessionBroker` and a private named-pipe/broker executable;
+`MozcSessionBackend` now shares one bridge process with explicit open/key/edit/
+convert/commit/cancel/close operations while retaining the old compatibility
+facade. An in-process C ABI bridge is an optimization to investigate only after
+conformance and performance tests; it is not assumed to be a stable upstream API.
 
 ## Exact layer boundaries
 

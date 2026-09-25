@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "measurement": "deterministic local fast-rank; not AI inference or Windows TSF latency",
+  "platform": "WSL/Linux x86_64",
+  "iterations": 10000,
+  "latencyNs": {
+    "p50": 1210,
+    "p95": 1230,
+    "p99": 1270
+  },
+  "cacheEntriesAtEnd": 32,
+  "command": "cargo bench --locked -p kanai-core --bench fast_rank",
+  "notes": [
+    "Development-machine observation only.",
+    "This measures the bounded synchronous local policy and cache; it is not an AI quality, model, or Windows release benchmark."
+  ]
+}

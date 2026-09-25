@@ -45,6 +45,7 @@ open-source project and does not provide a stable release channel.
 | Local model tier catalog | Implemented as hardware/capacity guidance; no model is included |
 | OpenAI-compatible local assistant | Implemented as an optional `/api/assist` path; not required for conversion |
 | Constrained local semantic reranker | Experimental API path: opt-in, loopback-only, bounded, and fallback-safe; no model is included and it is not a native key-path feature |
+| Rust broker transport/session seam | Source-built authenticated named-pipe target plus a bounded multi-session Mozc bridge adapter; native TSF token handoff and Windows runtime registration remain open |
 | Native Linux/Windows/macOS IME shells | Windows TSF is the first release target; **no native beta is published** |
 | Encrypted profile store, sync, and secure-field enforcement | Target architecture; not a current end-user feature |
 | Windows TSF installer, ZIP, and Scoop manifest | Not published; native TIP and Windows validation are required first |
@@ -71,7 +72,7 @@ Core repository areas:
 | Path | Purpose |
 | --- | --- |
 | `crates/kanai-core` | Conversion contracts, transparent ranking, bounded local quality policy, learning state, and model-tier metadata |
-| `crates/kanai-mozc` | Process supervision and line-protocol adapter for the isolated Mozc bridge |
+| `crates/kanai-mozc` | Process supervision, bounded session pool, and line-protocol adapter for the isolated Mozc bridge |
 | `crates/kanai-broker` | Versioned, generation-checked native-shell/broker protocol contracts |
 | `crates/kanai-api` | Local HTTP API, hardware guidance, optional constrained reranking, and optional assistant client |
 | `crates/kanai-cli` | Small conversion and health CLI |
@@ -155,6 +156,18 @@ cargo run -p kanai-cli -- kyou --explain
 The bridge uses an isolated Mozc profile. By default, the source checkout
 uses `.local/share/kanai/mozc`; override it with `KANAI_MOZC_PROFILE` when a
 separate location is preferable.
+
+To measure the real bounded bridge process (not AI quality or Windows TSF
+latency), run:
+
+```sh
+python3 scripts/benchmark-mozc-bridge.py \
+  --sessions 8 --iterations 20 \
+  --output /tmp/mozc-bridge-benchmark.json
+```
+
+A sample development receipt and its limitations are in
+[`docs/benchmarks/`](docs/benchmarks/README.md).
 
 ### 4. Start the developer workbench
 

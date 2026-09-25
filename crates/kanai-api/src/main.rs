@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 
 use anyhow::Context;
 use kanai_api::{AppState, AssistantConfig, app};
+use kanai_core::{CandidatePipeline, LocalDataPolicy, LocalQualityConfig};
 use kanai_mozc::MozcBridge;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -27,6 +28,9 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState {
         provider: std::sync::Arc::new(MozcBridge::from_environment()),
         assistant: AssistantConfig::from_environment(),
+        pipeline: std::sync::Arc::new(tokio::sync::Mutex::new(CandidatePipeline::new(
+            LocalQualityConfig::new(LocalDataPolicy::BoundedContext),
+        ))),
     };
     let listener = tokio::net::TcpListener::bind(address)
         .await

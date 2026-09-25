@@ -282,6 +282,7 @@ export function Workbench({
     try {
       const response = await postCommit(
         candidate.id,
+        result.revision,
         result.reading,
         candidate.text,
         before,

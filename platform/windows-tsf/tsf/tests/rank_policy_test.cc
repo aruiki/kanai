@@ -78,6 +78,11 @@ void TestCanonicalAiOrder() {
         "candidate text mutation rejected");
 
   response = Response(request);
+  response.baseline[0].text = "mutated baseline";
+  Check(!MapAiOrderToRanks(request, response).has_value(),
+        "baseline text mutation rejected");
+
+  response = Response(request);
   response.ai[1] = response.ai[0];
   Check(!MapAiOrderToRanks(request, response).has_value(),
         "duplicate AI candidate rejected");

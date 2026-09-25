@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 2,
+  "measurement": "bounded Mozc bridge conversion; not AI ranking or Windows TIP latency",
+  "sourceCommit": "13c98988247aa711d99db9e348ec2a597d14b5cd",
+  "bazel": "9.0.2",
+  "platform": "WSL/Linux x86_64",
+  "bridgeProcessCount": 1,
+  "sessions": 8,
+  "iterationsPerSession": 20,
+  "totalConversions": 160,
+  "input": "きょう",
+  "latencyMs": {
+    "p50": 13.770,
+    "p95": 14.097,
+    "p99": 14.350,
+    "max": 16.045
+  },
+  "rssKibAtEnd": 39532,
+  "nonAsciiPathComparison": {
+    "before": {
+      "implementation": "UPDATE_COMPOSITION followed by conversion",
+      "p50Ms": 407.254,
+      "p95Ms": 446.780,
+      "p99Ms": 467.732,
+      "totalConversions": 1000
+    },
+    "after": {
+      "implementation": "AS_IS key events followed by conversion",
+      "p50Ms": 13.816,
+      "p95Ms": 14.361,
+      "p99Ms": 14.670,
+      "maxMs": 21.066,
+      "totalConversions": 1000
+    }
+  },
+  "notes": [
+    "Development-machine observation only; rerun on the release Windows host.",
+    "This receipt measures real bridge/child I/O and does not establish an AI quality or p95 release threshold.",
+    "The before/after comparison is for the same non-ASCII composition input and is not an AI ranking benchmark.",
+    "The repository benchmark command is scripts/benchmark-mozc-bridge.py."
+  ]
+}
