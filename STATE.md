@@ -12,12 +12,11 @@ bridge process で複数の独立 session を扱えるまで進んだ。broker �
 session/generation owner、C++ の bounded `SessionHandler` owner、optional
 enhancement queue の correlation が実プロセスで接続されている。
 
-一方、staged Windows source path には、trusted server-side session/generation
-binding、bounded async worker、exact live-candidate apply、passive broker
-session preparation/release が実装された。`IsAvailable()` は worker 開始と
-regular trusted binding がない初期状態では false で、source path としては
-binding 後に true になる。しかし Windows TIP は未登録・未実行であり、
-`IsAvailable()` の実機挙動・AI quality・installer/runtime は未証明である。
+一方、Windows x64 development iteration では patched `mozc_tip64` と
+`mozc_server_win` の native MSVC/Bazel build、PE/export/load validation、
+supplemental-model native testまで進んだ。ただし artifacts は未インストール・
+未登録であり、Notepad/Edge/Office実入力、named-pipe実接続、x86、installer、
+AI quality は未証明である。`IsAvailable()` のWindows runtime挙動も未確認。
 
 ## Verified completed work
 
@@ -86,16 +85,18 @@ binding 後に true になる。しかし Windows TIP は未登録・未実行�
 
 - `KanaAiSupplementalModel::IsAvailable()` は初期状態で false であり、staged
   trusted SessionHandler binding + worker 開始後には source path で true に
-  なる設計だが、Windows TIP 実機では未確認である。
-- C++ bridge は source-built Linux lab target であり、Windows named-pipe
-  process、server-side binding、TSF application からの session open/key/edit/
-  rerank/apply/release の実機動作、ACL/reconnect は未実行。
+  なる設計。Windows x64 native supplemental-model test は通ったが、実TIP
+  runtimeでの値とAI適用は未確認である。
+- C++ bridge は source-built Linux lab target であり、Windows x64 TIP/server
+  のbuild・PE/load検証までは進んだ。Windows named-pipe process、server-side
+  binding、TSF application からの session open/key/edit/rerank/apply/release、
+  ACL/reconnect は未実行。
 - bridge process kill後のLinux lab recovery（3 cycleのkill/restart/epoch
   invalidation）は実測済みだが、Windows named-pipeのACL/reconnect、orphan
   cleanup、長時間restart stress、loaded broker recovery はまだ release gate。
-- Windows x64 TIP build、registration、Notepad/Edge/Office相当の入力、
-  secure field/UIA、restricted token/AppContainer、repair/uninstall/upgrade
-  matrix がない。WSLにはMSVC/Windows hostがない。
+- Windows x64 TIP は build/load/export validation 済みだが、登録・Notepad/
+  Edge/Office相当入力・secure field/UIA・restricted token/AppContainer・
+  repair/uninstall/upgrade matrixはない。x86 TIP も未実装。
 - optional local model weights/runtime は repository にない。loopback HTTP
   adapterのprotocol/fallback testは通るが、networkless AI quality、実 model
   kill recovery、Windows trusted TSF live-result適用は未実証である。
@@ -331,19 +332,17 @@ human-onlyの署名/CLSID/Windows operator権限を取得できない項目は�
 ## Directory inspection — current iteration
 
 - `VERIFICATION.md` remains `FAIL — NOT COMPLETE`; `.goal-complete` is absent.
-- The worktree contains the current uncommitted broker/Mozc/TSF implementation
-  changes; they must not be discarded.
+- The worktree is clean; the current broker/Mozc/TSF implementation is
+  committed and published at `2e0630c23ce7242d020a3c571724c7c67b336216`.
 - Fresh Rust debug/release tests, workspace Clippy, Windows-target compile/lint,
   bridge replay/build, portable TSF CTest, and isolated staged Bazel tests pass.
-- Native TSF source path is now connected through the staged server hook and
-  async worker, but `KanaAiSupplementalModel::IsAvailable()` is still false in
-  an unstarted/unbound process and true-at-runtime behavior is unverified on
-  Windows.
+- Windows x64 TIP/server source build、PE/load/export validation、native
+  supplemental-model testsは通過したが、registration/application runtimeは未証明。
 - Windows registration probe returned `E_FAIL` in the non-admin session and
   left no registry keys.
-- Immediate implementation task remains: prove the Windows x86/x64 TIP/server
-  build/register/application path, then add a real local model runtime and
-  held-out Mozc quality corpus.
+- Immediate implementation task remains: prove installed Windows application
+  behavior, x86 coverage, real local model/runtime, learning persistence,
+  installer lifecycle, signing, and held-out quality gates.
 
 ## Windows x64 development iteration (2026-09-25)
 
