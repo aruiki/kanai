@@ -501,10 +501,20 @@ mod tests {
             "KanaAI.MozcServer",
             Some(r"C:\KanaAI\custom-host.exe"),
         ));
+        assert!(allowed_client_image(
+            r"c:\kanaai\CUSTOM-HOST.EXE",
+            "KanaAI.MozcServer",
+            Some(r"C:\KanaAI\custom-host.exe"),
+        ));
+        assert!(!allowed_client_image(
+            r"C:\KanaAI-Other\custom-host.exe",
+            "KanaAI.MozcServer",
+            Some(r"C:\KanaAI\custom-host.exe"),
+        ));
         assert_eq!(
             image_basename(r"C:\KanaAI\mozc_server_win.exe"),
             "mozc_server_win.exe"
         );
-        assert_eq!(normalized_image_path(r"C:\KanaAI\"), r"c:\kanai");
+        assert_eq!(normalized_image_path(r"C:\KanaAI\"), r"c:\kanaai");
     }
 }

@@ -294,7 +294,7 @@ finally {
 }
 if ($x86Plan.CanApply -ne $false -or $x86Plan.BlockingReasons.Count -eq 0 -or
     $x86Plan.RegistryView -ne 'Registry32' -or
-    $x86Plan.ProgramFilesRoot -notmatch 'ProgramFiles\(x86\)' -or
+    $x86Plan.ProgramFilesRoot -notmatch 'Program Files \(x86\)|ProgramFiles\(x86\)' -or
     $x86Plan.Template -ne 'templates/administrator-x86.reg.template') {
     throw 'The x86 plan must remain blocked and use the future Registry32 contract.'
 }

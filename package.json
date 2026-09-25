@@ -11,7 +11,7 @@
     "dev:api": "cargo run -p kanai-api",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "start": "NODE_ENV=production cargo run -p kanai-api --release",
+    "start": "cargo run -p kanai-api --release",
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && npm run test && npm run build"

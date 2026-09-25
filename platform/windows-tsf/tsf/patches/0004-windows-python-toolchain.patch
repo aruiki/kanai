@@ -1,0 +1,30 @@
+--- a/MODULE.bazel
++++ b/MODULE.bazel
+@@ -395,3 +395,27 @@
+     sha256 = "3adc97d8e19e1168a6cdcb2fce759d0e9e613a9a3b630cc180aecfd56ae81eaf",
+     url = "https://github.com/hiroyuki-komatsu/japanpost_zipcode/raw/621d059fbcbfae17bfca15b439692bae934268c3/ken_all.zip",
+ )
++
++# KanaAI Windows build tools use the inspected local interpreter by absolute
++# path. The ambient Bazel runtime embeds "python", which Windows launchers
++# cannot resolve reliably inside build actions. rules_python is pinned above.
++kanai_local_runtime = use_repo_rule(
++    "@rules_python//python/local_toolchains:repos.bzl",
++    "local_runtime_repo",
++)
++kanai_local_toolchains = use_repo_rule(
++    "@rules_python//python/local_toolchains:repos.bzl",
++    "local_runtime_toolchains_repo",
++)
++kanai_local_runtime(
++    name = "kanai_build_python",
++    interpreter_path = "python.exe",
++    on_failure = "fail",
++    dev_dependency = True,
++)
++kanai_local_toolchains(
++    name = "kanai_build_python_toolchains",
++    default_runtimes = ["kanai_build_python"],
++    dev_dependency = True,
++)
++register_toolchains("@kanai_build_python_toolchains//:all", dev_dependency = True)

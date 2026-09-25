@@ -52,12 +52,17 @@ param(
     [switch]$Force,
     [switch]$PlanOnly,
     [switch]$MozcValidationOnly,
+    [switch]$BuildMozcServer,
     [switch]$SkipMozcPrepare,
     [switch]$NoWslMirror
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if ($BuildMozcServer -and ($BuildSystem -ne 'Bazel' -or $SkipBuild)) {
+    throw '-BuildMozcServer requires -BuildSystem Bazel without -SkipBuild.'
+}
 
 function Write-TsfLog {
     param([Parameter(Mandatory = $true)][string]$Message)
@@ -74,25 +79,6 @@ function Get-TsfArrayProperty {
         return @()
     }
     return @($value)
-}
-
-function Get-TsfBuildCacheRoot {
-    param(
-        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
-        [string]$Value = ''
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($Value)) {
-        return [System.IO.Path]::GetFullPath($Value)
-    }
-    if ($RepositoryRoot -like '\\wsl*') {
-        $localAppData = [string][System.Environment]::GetEnvironmentVariable('LOCALAPPDATA')
-        if ([string]::IsNullOrWhiteSpace($localAppData)) {
-            $localAppData = Get-TsfWindowsLocalTempRoot
-        }
-        return [System.IO.Path]::GetFullPath((Join-Path $localAppData 'KanaAI\tsf-build-cache'))
-    }
-    return [System.IO.Path]::GetFullPath((Join-Path $RepositoryRoot 'windows-beta\tsf-build-cache'))
 }
 
 function Resolve-TsfCachePath {
@@ -563,12 +549,10 @@ function Prepare-TsfMozcStage {
     $source = Join-Path $stage 'src'
     $stageMarker = Join-Path $stage '.kanai-pinned-commit'
     $overlaySource = Join-Path $RepositoryRoot 'platform\windows-tsf\tsf\host_overlay'
-    $patchPath = Join-Path $RepositoryRoot 'platform\windows-tsf\tsf\patches\0001-install-kanai-supplemental-model.patch'
-    if (-not (Test-Path -LiteralPath $overlaySource -PathType Container) -or
-        -not (Test-Path -LiteralPath $patchPath -PathType Leaf)) {
-        throw 'The pinned KanaAI source overlay/patch is missing; refusing to reuse or create a stale Mozc stage.'
+    if (-not (Test-Path -LiteralPath $overlaySource -PathType Container)) {
+        throw 'The pinned KanaAI source overlay is missing; refusing to reuse or create a stale Mozc stage.'
     }
-    $overlayFingerprint = (Get-TsfTreeFingerprint -Root $overlaySource) + ':' + (Get-TsfSha256 -Path $patchPath)
+    $overlayFingerprint = Get-TsfMozcOverlayFingerprint -RepositoryRoot $RepositoryRoot -OverlayRoot $overlaySource
     $fingerprintMarker = Join-Path $stage '.kanai-overlay-fingerprint'
     $overlayCandidates = @(
         (Join-Path $source 'engine\kanai_ai\BUILD.bazel')
@@ -666,7 +650,8 @@ function Invoke-TsfBazelBuild {
         [string]$RepositoryCache = '',
         [string]$PythonPath = '',
         [string]$ActionPath = '',
-        [bool]$SymlinkSupport = $true
+        [bool]$SymlinkSupport = $true,
+        [switch]$BuildMozcServer
     )
 
     if ([string]::IsNullOrWhiteSpace($BazelTarget)) {
@@ -675,6 +660,9 @@ function Invoke-TsfBazelBuild {
     $targets = @($BazelTarget)
     if ($targets.Count -ne 1) {
         throw 'The accelerated first pass accepts exactly one x64 TIP target; do not batch x86, UIA, server, or installer targets.'
+    }
+    if ($BuildMozcServer) {
+        $targets += '//server:mozc_server_win'
     }
     $firstTargetPolicy = Get-TsfProperty -Object $Config -Name 'firstTarget'
     foreach ($pattern in @(Get-TsfArrayProperty -Object $firstTargetPolicy -Name 'forbiddenTargetPatterns')) {
@@ -735,8 +723,10 @@ function Invoke-TsfBazelBuild {
             $buildCacheArguments += "--repository_cache=$RepositoryCache"
         }
         $pathArguments = @(
-            "--action_env=PATH=$ActionPath"
-            "--repo_env=PATH=$ActionPath"
+            # PATH is set above. Inherit it without duplicating a long Windows
+            # environment in Bazel's CreateProcess command line.
+            '--action_env=PATH'
+            '--repo_env=PATH'
         )
         $bazelVc = [string][System.Environment]::GetEnvironmentVariable('BAZEL_VC')
         if (-not [string]::IsNullOrWhiteSpace($bazelVc)) {
@@ -745,8 +735,7 @@ function Invoke-TsfBazelBuild {
                 "--repo_env=BAZEL_VC=$bazelVc"
             )
         }
-        $bazelBuildArguments = @(
-            'build', $BazelTarget,
+        $bazelBuildArguments = @('build') + $targets + @(
             "--config=$releaseConfig",
             "--config=$msvcConfig",
             '--noenable_platform_specific_config',
@@ -1272,11 +1261,9 @@ if (-not $PlanOnly -and $BuildSystem -ieq 'Bazel') {
     $commitMarker = Join-Path (Split-Path -Parent $BazelWorkspace) '.kanai-pinned-commit'
     $fingerprintMarker = Join-Path (Split-Path -Parent $BazelWorkspace) '.kanai-overlay-fingerprint'
     $overlaySourceForStage = Join-Path $repository 'platform\windows-tsf\tsf\host_overlay'
-    $patchForStage = Join-Path $repository 'platform\windows-tsf\tsf\patches\0001-install-kanai-supplemental-model.patch'
     $currentOverlayFingerprint = ''
-    if ((Test-Path -LiteralPath $overlaySourceForStage -PathType Container) -and
-        (Test-Path -LiteralPath $patchForStage -PathType Leaf)) {
-        $currentOverlayFingerprint = (Get-TsfTreeFingerprint -Root $overlaySourceForStage) + ':' + (Get-TsfSha256 -Path $patchForStage)
+    if (Test-Path -LiteralPath $overlaySourceForStage -PathType Container) {
+        $currentOverlayFingerprint = Get-TsfMozcOverlayFingerprint -RepositoryRoot $repository -OverlayRoot $overlaySourceForStage
     }
     $engineMarker = Join-Path $BazelWorkspace 'engine\modules.cc'
     $enginePatchPresent = $false
@@ -1456,7 +1443,7 @@ try {
     }
     else {
         Write-TsfLog ("Building the first pinned Bazel x64 TIP target (disk/repository caches under {0})." -f $cacheRoot)
-        $builtDll = Invoke-TsfBazelBuild -RepositoryRoot $repository -BazelWorkspace $BazelWorkspace -BazelTarget $BazelTarget -TipDllName $TipDllName -Configuration $Configuration -Config $config -BuildDirectory $buildDirectory -OutputUserRoot $bazelOutputUserRoot -DiskCache $bazelDiskCache -RepositoryCache $bazelRepositoryCache -PythonPath ([string]$toolchain.python.command) -ActionPath ([string]$toolchain.bazel.actionPath) -SymlinkSupport ([bool]$toolchain.bazelSymlinkSupport)
+        $builtDll = Invoke-TsfBazelBuild -RepositoryRoot $repository -BazelWorkspace $BazelWorkspace -BazelTarget $BazelTarget -TipDllName $TipDllName -Configuration $Configuration -Config $config -BuildDirectory $buildDirectory -OutputUserRoot $bazelOutputUserRoot -DiskCache $bazelDiskCache -RepositoryCache $bazelRepositoryCache -PythonPath ([string]$toolchain.python.command) -ActionPath ([string]$toolchain.bazel.actionPath) -SymlinkSupport ([bool]$toolchain.bazelSymlinkSupport) -BuildMozcServer:$BuildMozcServer
     }
 
     Write-TsfLog 'Validating PE32+ x64 architecture and required DLL exports.'

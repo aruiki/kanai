@@ -54,15 +54,15 @@ index 0d8dd6f..a02b900 100644
 +      input.type() != commands::Input::SEND_COMMAND) {
 +    return;
 +  }
-+  auto field_class = kanai::tsf::KanaAiSessionFieldClass::kRegular;
++  auto field_class = kanai::tsf::SessionFieldClass::kRegular;
 +  if (input.has_context() &&
 +      input.context().input_field_type() == commands::Context::PASSWORD) {
-+    field_class = kanai::tsf::KanaAiSessionFieldClass::kPassword;
++    field_class = kanai::tsf::SessionFieldClass::kPassword;
 +  }
 +  if (input.has_context()) {
 +    for (const std::string& feature : input.context().experimental_features()) {
 +      if (feature == "kanai.protected") {
-+        field_class = kanai::tsf::KanaAiSessionFieldClass::kProtected;
++        field_class = kanai::tsf::SessionFieldClass::kProtected;
 +        break;
 +      }
 +    }

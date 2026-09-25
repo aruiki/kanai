@@ -103,14 +103,16 @@ try {
     $patchPaths = @(
         [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0001-install-kanai-supplemental-model.patch')),
         [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0002-kanai-tsf-identity.patch')),
-        [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0003-session-generation-binding.patch'))
+        [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0003-session-generation-binding.patch')),
+        [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0004-windows-python-toolchain.patch')),
+        [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0005-windows-runtime-identity.patch'))
     )
     foreach ($patchPath in $patchPaths) {
         Invoke-Native -FilePath 'git' -WorkingDirectory $sourceDirectory -ArgumentList @(
-            'apply', '--check', $patchPath
+            '-c', 'core.autocrlf=false', 'apply', '--check', $patchPath
         )
         Invoke-Native -FilePath 'git' -WorkingDirectory $sourceDirectory -ArgumentList @(
-            'apply', $patchPath
+            '-c', 'core.autocrlf=false', 'apply', $patchPath
         )
     }
 }
@@ -126,6 +128,7 @@ finally {
     Source = $MozcRoot
     StagedMozcRoot = $sourceDirectory
     PatchedFiles = @(
+        'src/MODULE.bazel',
         'src/engine/BUILD.bazel',
         'src/engine/modules.cc',
         'src/session/BUILD.bazel',

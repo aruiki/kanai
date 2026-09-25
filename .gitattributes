@@ -1,2 +1,9 @@
+# Keep source and build inputs byte-stable across Windows and Unix checkouts.
+# In particular, rustfmt rejects CRLF working-tree files when a Windows Git
+# installation has core.autocrlf=true.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
 # Unified patch files legitimately contain a space-prefixed blank context line.
 *.patch whitespace=-blank-at-eol,-blank-at-eof

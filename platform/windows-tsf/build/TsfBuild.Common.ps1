@@ -61,10 +61,64 @@ function Get-TsfBuildRoot {
     return [System.IO.Path]::GetFullPath($Value)
 }
 
+function Get-TsfBuildCacheRoot {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [string]$Value = ''
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Value)) {
+        return [System.IO.Path]::GetFullPath($Value)
+    }
+
+    # Bazel response files are resolved against a deeply nested execroot. Keeping
+    # the default cache outside a long (and possibly non-ASCII) repository path
+    # keeps MSVC response-file paths below the legacy Windows path limit.
+    $localAppData = [string][System.Environment]::GetEnvironmentVariable('LOCALAPPDATA')
+    if ([string]::IsNullOrWhiteSpace($localAppData)) {
+        $localAppData = Get-TsfWindowsLocalTempRoot
+    }
+    return [System.IO.Path]::GetFullPath((Join-Path $localAppData 'KanaAI\tsf-build-cache'))
+}
+
+function Get-TsfMozcOverlayFingerprint {
+    param(
+        [string]$RepositoryRoot = '',
+        [string]$OverlayRoot = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+        $RepositoryRoot = Get-TsfRepositoryRoot
+    }
+    $RepositoryRoot = [System.IO.Path]::GetFullPath($RepositoryRoot)
+    if ([string]::IsNullOrWhiteSpace($OverlayRoot)) {
+        $OverlayRoot = Join-Path $repositoryRoot 'platform\windows-tsf\tsf\host_overlay'
+    }
+    $OverlayRoot = [System.IO.Path]::GetFullPath($OverlayRoot)
+    $records = @(
+        'overlay|' + (Get-TsfTreeFingerprint -Root $OverlayRoot)
+    )
+    $patchRoot = Join-Path $repositoryRoot 'platform\windows-tsf\tsf\patches'
+    foreach ($patchName in @(
+        '0001-install-kanai-supplemental-model.patch',
+        '0002-kanai-tsf-identity.patch',
+        '0003-session-generation-binding.patch',
+        '0004-windows-python-toolchain.patch',
+        '0005-windows-runtime-identity.patch'
+    )) {
+        $patchPath = Join-Path $patchRoot $patchName
+        if (-not (Test-Path -LiteralPath $patchPath -PathType Leaf)) {
+            throw "Required KanaAI Mozc patch is missing: $patchPath"
+        }
+        $records += ($patchName + '|' + (Get-TsfSha256 -Path $patchPath))
+    }
+    return ($records -join "`n")
+}
+
 function Get-TsfCommandPath {
     param([Parameter(Mandatory = $true)][string]$Name)
 
-    $command = Get-Command -Name $Name -CommandType Application -ErrorAction SilentlyContinue
+    $command = Get-Command -Name $Name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -eq $command) {
         throw "Required Windows command is not on PATH: $Name"
     }
@@ -161,16 +215,26 @@ function Assert-TsfSafeOutputPath {
     $root = [System.IO.Path]::GetFullPath($RepositoryRoot).TrimEnd([char[]]'\/')
     $source = [System.IO.Path]::GetFullPath($SourceRoot).TrimEnd([char[]]'\/')
     $build = [System.IO.Path]::GetFullPath($BuildRoot).TrimEnd([char[]]'\/')
+    if ($full -ieq $root) {
+        throw "Refusing to use the repository root as TSF output: $full"
+    }
+
+    # A dedicated output below the repository (the default
+    # windows-beta/tsf) is valid. Source, build, third_party, and Cargo output
+    # are not: reject both descendants that could be overwritten and ancestors
+    # that could remove the protected tree during forced staging.
     $protected = @(
-        $root,
         $source,
         $build,
         ([System.IO.Path]::GetFullPath((Join-Path $RepositoryRoot 'third_party')).TrimEnd([char[]]'\/')),
         ([System.IO.Path]::GetFullPath((Join-Path $RepositoryRoot 'target')).TrimEnd([char[]]'\/'))
     )
+    $fullPrefix = $full + [System.IO.Path]::DirectorySeparatorChar
     foreach ($item in $protected) {
         $itemPrefix = $item + [System.IO.Path]::DirectorySeparatorChar
-        if ($full -ieq $item -or $full.StartsWith($itemPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        if ($full -ieq $item -or
+            $full.StartsWith($itemPrefix, [System.StringComparison]::OrdinalIgnoreCase) -or
+            $item.StartsWith($fullPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
             throw "Refusing to use a protected source/build directory as TSF output: $full"
         }
     }
@@ -784,7 +848,7 @@ function Get-TsfPinnedMozcInfo {
         -not (Test-Path -LiteralPath $workspace -PathType Container)) {
         throw "The pinned Mozc checkout is missing: $mozcRoot. Initialize the third_party/mozc submodule before building; an unrelated or floating Mozc checkout is not accepted."
     }
-    $git = Get-Command -Name 'git' -CommandType Application -ErrorAction SilentlyContinue
+    $git = Get-Command -Name 'git' -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -eq $git) {
         throw 'Git is required to verify the pinned third_party/mozc gitlink before a TSF build.'
     }
@@ -898,7 +962,7 @@ function Write-TsfJsonFile {
 function Get-TsfGitRevision {
     param([Parameter(Mandatory = $true)][string]$RepositoryRoot)
 
-    $git = Get-Command -Name 'git' -CommandType Application -ErrorAction SilentlyContinue
+    $git = Get-Command -Name 'git' -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -eq $git) {
         return 'unknown'
     }

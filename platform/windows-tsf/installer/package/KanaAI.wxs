@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="KanaAI Development Preview" Manufacturer="KanaAI Project" Version="$(var.Version)"
+           UpgradeCode="381B4CC9-ABAA-4AB2-9DC8-FCA54CE3B964" Language="1041" Scope="perMachine" InstallerVersion="500">
+    <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="新しいバージョンのKanaAIがインストールされています。" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+    <Launch Condition="VersionNT64" Message="64bit版Windowsが必要です。" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/aruiki/kanai" />
+    <StandardDirectory Id="ProgramFilesFolder">
+      <Directory Id="INSTALLFOLDER" Name="KanaAI" />
+    </StandardDirectory>
+    <Feature Id="Core" Title="KanaAI" Level="1">
+      <ComponentGroupRef Id="RuntimeFiles" />
+    </Feature>
+    <Binary Id="Registrar" SourceFile="$(var.HelperPath)" />
+    <CustomAction Id="RegisterTIP" BinaryRef="Registrar" DllEntry="RegisterTIP" Execute="deferred" Impersonate="no" Return="check" />
+    <CustomAction Id="RegisterRollback" BinaryRef="Registrar" DllEntry="RegisterTIPRollback" Execute="rollback" Impersonate="no" Return="check" />
+    <CustomAction Id="UnregisterTIP" BinaryRef="Registrar" DllEntry="UnregisterTIP" Execute="deferred" Impersonate="no" Return="check" />
+    <CustomAction Id="UnregisterRollback" BinaryRef="Registrar" DllEntry="UnregisterTIPRollback" Execute="rollback" Impersonate="no" Return="check" />
+    <CustomAction Id="EnableProfile" BinaryRef="Registrar" DllEntry="EnableTipProfile" Execute="commit" Impersonate="yes" Return="check" />
+    <CustomAction Id="RestoreUserIME" BinaryRef="Registrar" DllEntry="RestoreUserIMEEnvironment" Impersonate="yes" Return="ignore" />
+    <CustomAction Id="ShutdownProcesses" BinaryRef="Registrar" DllEntry="ShutdownServer" Impersonate="yes" Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="ShutdownProcesses" Before="InstallInitialize" />
+      <Custom Action="RestoreUserIME" Before="ShutdownProcesses" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="UnregisterRollback" Before="UnregisterTIP" Condition="REMOVE=&quot;ALL&quot;" />
+      <Custom Action="UnregisterTIP" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
+      <Custom Action="RegisterRollback" Before="RegisterTIP" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED" />
+      <Custom Action="RegisterTIP" After="InstallFiles" Condition="NOT (REMOVE=&quot;ALL&quot;)" />
+      <Custom Action="EnableProfile" Before="InstallFinalize" Condition="NOT (REMOVE=&quot;ALL&quot;)" />
+    </InstallExecuteSequence>
+  </Package>
+</Wix>

@@ -344,3 +344,227 @@ human-onlyの署名/CLSID/Windows operator権限を取得できない項目は�
 - Immediate implementation task remains: prove the Windows x86/x64 TIP/server
   build/register/application path, then add a real local model runtime and
   held-out Mozc quality corpus.
+
+## Windows x64 development iteration (2026-09-25)
+
+### Completed in this iteration
+
+- Cloned `aruiki/kanai` into an empty workspace, initialized the exact Mozc
+  submodule commit `13c98988247aa711d99db9e348ec2a597d14b5cd`, installed the
+  locked npm dependencies, and verified the installed Windows toolchain:
+  Visual Studio 2022 v143, MSVC 19.44, Windows SDK 10.0.26100.0,
+  CMake 3.31.6, Bazel/Bazelisk 9.0.2, Rust 1.98.1, Node 24.19.0, and
+  Python 3.13.15.
+- Added repository LF checkout policy in `.gitattributes` so a Windows Git
+  installation with `core.autocrlf=true` cannot turn Rust sources or replayable
+  patches into CRLF. A synthetic clean checkout with autocrlf explicitly
+  enabled retained LF for `.gitattributes`, Rust, and the TSF patches and
+  passed `cargo fmt --check`.
+- Fixed the Windows-only image allowlist regression assertion (`KanaAI` was
+  misspelled as `kanai`) and added case-insensitive exact-image acceptance plus
+  a sibling-prefix rejection case.
+- Removed the POSIX-only `NODE_ENV=production` prefix from `npm run start`.
+  A bounded Windows integration run now starts the release Rust API, receives
+  `/api/health`, and terminates the complete npm/cargo process tree. The health
+  response correctly reports Mozc fallback/unavailable because the optional
+  `kanai-mozc-bridge.exe` has not been built in this Windows iteration.
+- Fixed the native TSF harness rejecting its own documented default output
+  (`windows-beta/tsf`). Dedicated repository siblings are now allowed, while
+  the repository root and any output that is a child or ancestor of source,
+  build, `third_party`, or Cargo `target` remains rejected.
+- Moved the TSF build-cache helper into the shared PowerShell helper module and
+  changed the default Bazel cache to
+  `%LOCALAPPDATA%\KanaAI\tsf-build-cache`. This avoids MSVC response-file paths
+  exceeding the legacy Windows path limit.
+- Extended prepared-stage fingerprints to cover the host overlay and all three
+  reviewed patches (`0001`, `0002`, and `0003`), preventing reuse of a stage
+  after an identity/session patch changes.
+- Fixed the registration source test's Windows-only Program Files regex so
+  both `Program Files (x86)` and the non-Windows fallback spelling pass while
+  the x86 plan remains blocked and source-only.
+- Built the patched, pinned Mozc `//win32/tip:mozc_tip64` target on native
+  Windows x64 with MSVC/Bazel. The build completed all 1,447 actions and the
+  harness passed PE32+ machine `0x8664` plus
+  `DllGetClassObject`/`DllCanUnloadNow` export gates.
+  - DLL:
+    `C:\Users\aruik\AppData\Local\KanaAI\tsf-build-cache\bazel-output-user-root\jbhltpfs\execroot\_main\bazel-out\x64-opt-ST-1d3326959c70\bin\win32\tip\mozc_tip64.dll`
+  - size: 4,873,216 bytes
+  - SHA-256:
+    `0402923F8D8F37A0E8FEA219B2715368ED9AC7066C1F590F8F4DA2F186BE1EDC`
+  - imports: `msctf.dll`, `GDI32.dll`, `USER32.dll`, `SHELL32.dll`,
+    `ADVAPI32.dll`, `ole32.dll`, `OLEAUT32.dll`, and `KERNEL32.dll`
+  - isolated 64-bit `LoadLibraryExW`, both `GetProcAddress` lookups, and
+    `FreeLibrary` passed.
+  - Authenticode status is `NotSigned`, as expected for this internal build.
+  - This is `mozc-tip-validation-only`; no KanaAI artifact was staged, no TIP
+    was registered, and no native beta/runtime claim is made.
+
+### Test results in this iteration
+
+- `npm run check`: PASS (Cargo format/Clippy/tests, 85 Rust tests including
+  real bridge fallback paths, 3 Vitest tests, and the Vite/TypeScript build).
+- `cargo clippy --locked --workspace --all-targets -- -D warnings`: PASS.
+- `cargo test --locked --workspace --all-targets`: PASS after the Windows
+  allowlist regression fix.
+- `powershell.exe -File platform/windows-tsf/build/tests/Test-TsfWindowsBuildHarness.ps1`:
+  PASS (3 PowerShell files parsed, 38 static checks, 9 safe-output cases,
+  default cache outside the repository, and 4 overlay/patch fingerprint
+  records).
+- Windows registration, smoke, candidate UI, and pinned-host source suites:
+  PASS. The registration suite continues to report `RegistrationComplete`,
+  `TipDllPresent`, and `WindowsTestsPassed` as false.
+- `python platform/windows-tsf/ui/tests/test_candidate_window_source.py`:
+  PASS (7 tests).
+- `python platform/windows-tsf/smoke/tests/test_pinned_mozc_tsf_smoke.py`:
+  PASS (7 tests).
+- `python platform/windows-tsf/tsf/tests/verify_pinned_host.py --repo-root .`:
+  PASS for the exact gitlink and patch/host markers.
+- Windows x64 Bazel TIP build and PE/export/load checks: PASS as recorded
+  above.
+- `git diff --check`: PASS.
+
+### Failed approaches and resolutions
+
+- A default Windows Git checkout converted tracked files to CRLF, causing every
+  Rust file to fail `cargo fmt` and causing the TSF patch context to fail
+  `git apply`. The repository LF policy plus clean-checkout validation fixed
+  both without rewriting Mozc or disabling whitespace checks.
+- The first native TSF build was rejected because the safe-output helper
+  treated the whole repository as protected and therefore rejected its own
+  default child output. The boundary now distinguishes safe siblings from
+  protected source/build trees.
+- A long explicit cache produced a 262-character MSVC `.obj.params` path and
+  `cl D8022`. A `K:` `subst` mapping did not help because Bazel canonicalized
+  it back to the physical path. The shorter default LocalAppData cache reduced
+  the same path to 249 characters and completed the TIP build.
+- `//server:mozc_server_win` progressed through C++ compilation but host tools
+  such as `gen_pos_matcher_code`, `gen_pos_cost_map`, and `mozc_version` failed
+  because their cached Windows `py_binary` launchers embedded the relative
+  value `python` and could not locate `python.exe` inside Bazel actions. The
+  system interpreter and generated zip work directly, and even a clean probe
+  with `--python_path` still embedded `python`; this indicates missing
+  `rules_python` toolchain registration in the staged module, not a missing
+  interpreter. A clean server build remains blocked until that toolchain is
+  registered and pinned.
+- The prepared stage applies the provisional identity patch, while the older
+  pinned-Mozc smoke preflight is intentionally hard-coded to upstream identity
+  metadata. Do not run or interpret that preflight against a KanaAI-identity
+  stage until an explicit identity mode/source-output contract is added.
+
+### Current blockers and next concrete task
+
+- The patched x64 TIP now compiles and loads, but it remains unregistered and
+  has not typed in Notepad/Edge/Office. There is still no installer, x86 TIP,
+  UIA/secure-field matrix, signing identity, or native-beta receipt.
+- Add a reviewed, pinned `rules_python` Windows toolchain registration (or an
+  equivalent local-interpreter toolchain) to the disposable Mozc stage, then
+  clean-build `//server:mozc_server_win` with the same short cache and record
+  its hash/dependencies. Do not copy Python DLLs into the output tree or change
+  global Windows security policy.
+- Separate the `mozc_tip64.dll` source output name from any provisional
+  `KanaAI.TsfTip.dll` staging name with an explicit identity mode and atomic
+  non-registration manifest. Resolve the identity mismatch with the older
+  pinned-Mozc smoke harness before attempting registration.
+- After a real TIP/server pair exists, perform a non-destructive registration
+  preflight, then obtain explicit operator approval for machine/user TSF
+  registration and execute the real Windows host journey. AI ON/OFF, broker
+  named-pipe reconnect, model kill, UIA, secure fields, x86/x64, repair,
+  upgrade, and uninstall remain release gates.
+- `.goal-complete` remains absent; this iteration does not declare project
+  completion.
+
+
+## Codex Windows server build iteration (2026-09-25)
+
+### Completed
+
+- Preserved all changes present at handoff. The user confirmed that opencode
+  is stopped/not editing this repository.
+- Added Windows-only patch `0004-windows-python-toolchain.patch`, using the
+  pinned rules_python 1.9.0 local runtime API to resolve the inspected Python
+  executable to an absolute path. Python host actions and real Mozc dictionary
+  generation now complete on Windows. No upstream submodule changes.
+- Fixed the server session patch referencing nonexistent
+  `KanaAiSessionFieldClass`: the actual adapter type is `SessionFieldClass`.
+  This was a real Windows server compile failure, previously hidden behind
+  the Python build failure.
+- Added `-BuildMozcServer` to the existing Bazel TIP build harness. Reproduction:
+  `powershell -NoProfile -File scripts/build-tsf-windows.ps1 -BuildSystem Bazel -MozcValidationOnly -BuildMozcServer`.
+  It builds both targets; it does not install/register/package them.
+- Changed Bazel PATH arguments to inherit the environment already set by the
+  harness. This avoids duplicating PATH in the Java process command line.
+- Fixed command resolution when two Git installations are on PATH: select
+  the first executable, rather than concatenate both executable paths.
+  Added a two-directory executable-resolution regression test.
+- Windows stage preparation now applies patches with `core.autocrlf=false`;
+  fresh replay byte-matches final staged MODULE.bazel and session_handler.cc.
+  The Python patch is part of stage invalidation and patch replay verification.
+
+### Actual verification results
+
+- Full documented TIP+server harness above: PASS, exit 0. Fresh stage preparation,
+  native MSVC/Bazel build, and TIP PE32+/x64/export checks completed. Final Bazel
+  invocation: 42.429 seconds, 2 targets. This timing includes cache reuse and is
+  not a clean-build or IME latency benchmark.
+- Windows server artifact (not installed):
+  `%LOCALAPPDATA%\KanaAI\tsf-build-cache\bazel-output-user-root\jbhltpfs\execroot\_main\bazel-out\x64-opt-ST-908940cc2e23\bin\server\mozc_server_win.exe`.
+  SHA-256 `59FDD536D4DC9A24971CC66E54160DE1E0B46FA7A5A62082CAE7C9E2E9E94443`;
+  22,333,440 bytes; dumpbin confirms x64 machine 8664 and PE32+ 20B.
+  Imports include Windows system DLLs and MSVC/UCRT runtimes; Python is not an
+  imported runtime dependency. Server startup through Mozc's sandbox/client
+  launcher has NOT yet been exercised.
+- Built and executed `//engine/kanai_ai:kanai_supplemental_model_test` natively
+  on Windows: 7/7 pass. Then ran `--gtest_repeat=100`: exit 0, 100 successful
+  iterations, 700 tests total. Covers inert/unbound behavior, trusted binding,
+  nonblocking async publication, generation invalidation, stale binding,
+  exact permutation, and mutated-candidate rejection. Uses test transports,
+  not an installed TIP, named-pipe integration, or a real model.
+- `Test-TsfWindowsBuildHarness.ps1`: PASS, 38 static checks, PE unit checks,
+  9 path safety cases, duplicate-command regression, 5 fingerprint records.
+- `verify_pinned_host.py --repo-root .`: PASS, all four patches replay.
+- `git diff --check`: PASS. No Rust production code changed in this iteration;
+  previously existing Rust changes were preserved.
+- `scripts/register-tsf-dev.ps1 -DryRun`: executed; CanApply=false. Reports
+  provisional identity, missing installed KanaAI.TsfTip.dll, and missing Windows
+  registration/application receipt. No registration was performed.
+- Logs retained under `%LOCALAPPDATA%\KanaAI\tsf-build-cache`:
+  `server-build.log`, `server-build-retest.log`, `tip-server-harness.log`,
+  `native-model-tests.log`. These are developer evidence from a dirty worktree,
+  not immutable release acceptance.
+
+### Failed approaches and resolutions
+
+- Repeating the entire inherited PATH twice in Bazel flags exceeded Windows'
+  32,767-character CreateProcess limit. A short diagnostic action PATH allowed
+  diagnosis; the permanent harness fix inherits PATH instead of embedding it.
+- After fixing Python, MSVC reported C3083/C2039/C2065 in session_handler.cc.
+  Reading the adapter header identified the wrong enum name; corrected patch
+  0003 and rebuilt successfully.
+- The first final-harness run failed because Get-Command returned two git.exe
+  installations and the helper joined their paths. Selecting the first command
+  fixed it; the full harness and a duplicate-PATH regression test pass.
+- Initial replay hash comparisons failed due solely to CRLF/LF differences.
+  An ignore-EOL diff confirmed identical code. With autocrlf disabled in the
+  preparation script and the harness regenerating the stage, byte comparisons
+  for both changed upstream files passed.
+
+### Remaining problems / next concrete work
+
+1. Build a coherent development runtime layout containing TIP, server, renderer,
+   broker and required data/runtimes. Reconcile upstream executable/path/IPC
+   identity with KanaAI staging identity before installing anything. The current
+   identity patch changes TSF GUIDs but does not establish a complete product
+   installation layout. Verify sandboxed server launch and real IPC sessions.
+2. Replace registration projection-only handling with actual TSF registration
+   and rollback, and resolve provisional identity approval. Prepare a reviewable
+   install/uninstall artifact before requesting the operator's registration
+   approval. Do not bypass receipt guards or mark metadata true prematurely.
+3. Execute Notepad/Edge/Office input, focus, cancel/commit, AI OFF/unavailable,
+   broker lifecycle, password/protected fields and UIA tests using installed
+   binaries. x86 support and Windows 10/11 coverage remain open.
+4. Real local model/runtime packaging, encrypted confirmed-commit learning,
+   held-out quality corpus, installer lifecycle, signing and release performance
+   gates remain open. The native unit tests do not satisfy these gates.
+5. Freeze a source snapshot for independent verification after implementation.
+   VERIFICATION.md remains the prior independent FAIL report; `.goal-complete`
+   remains absent. This iteration does not declare product completion.

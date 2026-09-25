@@ -61,12 +61,18 @@ repository environments also receive an explicit Windows `PATH` containing
 the pinned Python directory, Bazelisk directory, and the initialized MSVC/SDK
 path; this avoids a generated Mozc action failing to launch `python.exe`.
 
-The default cache root is `%LOCALAPPDATA%\KanaAI\tsf-build-cache` for a WSL
-checkout (`windows-beta\tsf-build-cache` for a native checkout). It contains a
-stable CMake build directory, Bazel `output_user_root`, disk cache, and
-repository cache. These are reused by default; use `-ResetBuildCache` only when
-an intentional clean rebuild is wanted. `-Force` replaces only the final
-artifact directory and does not clear build caches.
+The default cache root is `%LOCALAPPDATA%\KanaAI\tsf-build-cache` for both
+native and WSL checkouts. Keeping Bazel's `output_user_root` outside the
+repository avoids MSVC response-file path failures caused by long or non-ASCII
+checkout paths. It contains a stable CMake build directory, Bazel
+`output_user_root`, disk cache, and repository cache. These are reused by
+default; use `-ResetBuildCache` only when an intentional clean rebuild is
+wanted. `-Force` replaces only the final artifact directory and does not clear
+build caches. If a machine-specific path still exceeds the legacy MSVC limit,
+pass a physically shorter local build/workspace directory with
+`-BuildCacheDirectory` and `-WindowsWorkspaceRoot`; a `subst` drive may be
+canonicalized back to the longer physical path by Bazel. Do not weaken compiler
+or source checks.
 
 Useful diagnostic modes are:
 
@@ -156,3 +162,27 @@ They parse the harness, validate the JSON/CMake policy, check that the claim
 gate and WSL/pinned-Mozc paths are present, and exercise the pure PE header
 parser with synthetic x64/x86 images. They do not register a TIP and do not
 substitute for the Windows smoke-test plan.
+
+### Windows Python action runtime
+
+The Windows preparation script applies `0004-windows-python-toolchain.patch`
+to the disposable Mozc stage. It uses the pinned rules_python 1.9.0 local
+runtime API to resolve `python.exe` from the build action PATH to an absolute
+interpreter path and registers it as the default build toolchain. Missing
+Python fails preparation during Bazel analysis instead of silently selecting
+the ambient `python` launcher. The upstream submodule stays unchanged. Python
+is a build prerequisite, not an IME runtime dependency; its version is recorded
+by the TSF harness. The patch is included in stage cache invalidation and patch
+replay checks. Linux staging continues to use its existing preparation script.
+
+To build the pinned x64 TIP and its conversion server together, run:
+
+```powershell
+powershell -NoProfile -File scripts/build-tsf-windows.ps1 -BuildSystem Bazel -MozcValidationOnly -BuildMozcServer
+```
+
+`-BuildMozcServer` adds `//server:mozc_server_win` to the same Bazel invocation.
+It does not install, register, or package the server. The first-target TIP
+validation and registration gates still apply. Bazel receives the prepared
+PATH by environment inheritance to avoid repeating long Windows paths in its
+process command line.

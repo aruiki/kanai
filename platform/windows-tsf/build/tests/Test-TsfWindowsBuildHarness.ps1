@@ -144,7 +144,8 @@ $staticChecks = @(
     @{ Name = 'VS x64 initialization'; Text = $commonText; Needle = 'VsDevCmd.bat -arch=x64 -host_arch=x64' },
     @{ Name = 'WSL UNC handling'; Text = $commonText; Needle = 'pushd' },
     @{ Name = 'pinned Mozc preparation'; Text = $mainText; Needle = 'prepare-pinned-mozc.ps1' },
-    @{ Name = 'overlay cache fingerprint'; Text = $mainText; Needle = 'Get-TsfTreeFingerprint' },
+    @{ Name = 'overlay cache fingerprint'; Text = $commonText; Needle = 'Get-TsfMozcOverlayFingerprint' },
+    @{ Name = 'all Mozc patches fingerprinted'; Text = $commonText; Needle = '0003-session-generation-binding.patch' },
     @{ Name = 'pinned Mozc check'; Text = $commonText; Needle = 'Get-TsfPinnedMozcInfo' },
     @{ Name = 'Bazel symlink fallback'; Text = $mainText; Needle = 'no-runfiles fallback' },
     @{ Name = 'no runfile links flag'; Text = $mainText; Needle = '--nobuild_runfile_links' },
@@ -159,8 +160,8 @@ $staticChecks = @(
     @{ Name = 'MSVC Bazel config'; Text = $mainText; Needle = 'msvcConfig' },
     @{ Name = 'platform config isolation'; Text = $mainText; Needle = '--noenable_platform_specific_config' },
     @{ Name = 'Bazel batch mode'; Text = $mainText; Needle = '--batch' },
-    @{ Name = 'action PATH'; Text = $mainText; Needle = '--action_env=PATH=' },
-    @{ Name = 'repository PATH'; Text = $mainText; Needle = '--repo_env=PATH=' },
+    @{ Name = 'action PATH'; Text = $mainText; Needle = "'--action_env=PATH'" },
+    @{ Name = 'repository PATH'; Text = $mainText; Needle = "'--repo_env=PATH'" },
     @{ Name = 'explicit Python path'; Text = $mainText; Needle = 'Get-TsfWindowsActionPath' },
     @{ Name = 'explicit Bazel path'; Text = $mainText; Needle = 'BazelPath' },
     @{ Name = 'first x64 target guard'; Text = $mainText; Needle = 'x64 TIP-only' },
@@ -216,6 +217,92 @@ if (-not $SkipPeUnit) {
         if (-not $x86Rejected) {
             throw 'PE parser accepted a non-x64 image.'
         }
+
+        $safeRepository = Join-Path $testRoot 'safe-output\repository'
+        $safeSource = Join-Path $safeRepository 'platform\windows-tsf'
+        $safeBuild = Join-Path $safeSource 'build'
+        $safeOutputCases = @(
+            @{ Path = (Join-Path $safeRepository 'windows-beta\tsf'); Allowed = $true },
+            @{ Path = (Join-Path $testRoot 'external-output'); Allowed = $true },
+            @{ Path = $safeRepository; Allowed = $false },
+            @{ Path = $testRoot; Allowed = $false },
+            @{ Path = (Join-Path $safeRepository 'platform'); Allowed = $false },
+            @{ Path = (Join-Path $safeSource 'generated'); Allowed = $false },
+            @{ Path = (Join-Path $safeBuild 'generated'); Allowed = $false },
+            @{ Path = (Join-Path $safeRepository 'third_party\stage'); Allowed = $false },
+            @{ Path = (Join-Path $safeRepository 'target\tsf'); Allowed = $false }
+        )
+        foreach ($case in $safeOutputCases) {
+            $accepted = $true
+            try {
+                Assert-TsfSafeOutputPath `
+                    -Path ([string]$case.Path) `
+                    -RepositoryRoot $safeRepository `
+                    -SourceRoot $safeSource `
+                    -BuildRoot $safeBuild | Out-Null
+            }
+            catch {
+                $accepted = $false
+            }
+            if ($accepted -ne [bool]$case.Allowed) {
+                throw "Unexpected safe-output decision for '$($case.Path)': accepted=$accepted expected=$($case.Allowed)"
+            }
+        }
+
+        $oldLocalAppData = [System.Environment]::GetEnvironmentVariable('LOCALAPPDATA')
+        try {
+            $testLocalAppData = Join-Path $testRoot 'LocalAppData'
+            [System.Environment]::SetEnvironmentVariable('LOCALAPPDATA', $testLocalAppData, 'Process')
+            $actualCacheRoot = Get-TsfBuildCacheRoot -RepositoryRoot $safeRepository
+            $expectedCacheRoot = [System.IO.Path]::GetFullPath((Join-Path $testLocalAppData 'KanaAI\tsf-build-cache'))
+            if ($actualCacheRoot -ine $expectedCacheRoot) {
+                throw "Default TSF cache root '$actualCacheRoot' does not match '$expectedCacheRoot'."
+            }
+        }
+        finally {
+            [System.Environment]::SetEnvironmentVariable('LOCALAPPDATA', $oldLocalAppData, 'Process')
+        }
+
+        # Multiple installed copies must resolve in PATH order, never as a
+        # space-joined string that cannot be invoked.
+        $originalCommandPath = $env:PATH
+        try {
+            $firstToolDirectory = Join-Path $testRoot 'first-tool'
+            $secondToolDirectory = Join-Path $testRoot 'second-tool'
+            New-Item -ItemType Directory -Path $firstToolDirectory, $secondToolDirectory | Out-Null
+            foreach ($directory in @($firstToolDirectory, $secondToolDirectory)) {
+                [System.IO.File]::WriteAllBytes((Join-Path $directory 'kanai-path-probe.exe'), [byte[]]@(0))
+            }
+            $env:PATH = "$firstToolDirectory;$secondToolDirectory;$originalCommandPath"
+            $resolvedCommand = Get-TsfCommandPath -Name 'kanai-path-probe.exe'
+            if ($resolvedCommand -ine (Join-Path $firstToolDirectory 'kanai-path-probe.exe')) {
+                throw "Multiple command resolution did not preserve PATH precedence: $resolvedCommand"
+            }
+        }
+        finally {
+            $env:PATH = $originalCommandPath
+        }
+
+        $fingerprint = Get-TsfMozcOverlayFingerprint
+        $fingerprintRecords = @($fingerprint -split "`n")
+        $expectedFingerprintNames = @(
+            'overlay',
+            '0001-install-kanai-supplemental-model.patch',
+            '0002-kanai-tsf-identity.patch',
+            '0003-session-generation-binding.patch',
+        '0004-windows-python-toolchain.patch',
+        '0005-windows-runtime-identity.patch'
+        )
+        if ($fingerprintRecords.Count -ne $expectedFingerprintNames.Count) {
+            throw "Mozc overlay fingerprint has $($fingerprintRecords.Count) records; expected $($expectedFingerprintNames.Count)."
+        }
+        for ($index = 0; $index -lt $expectedFingerprintNames.Count; $index++) {
+            $parts = $fingerprintRecords[$index] -split '\|', 2
+            if ($parts.Count -ne 2 -or $parts[0] -cne $expectedFingerprintNames[$index] -or
+                $parts[1] -notmatch '^[0-9a-f]{64}$') {
+                throw "Mozc overlay fingerprint record $index is invalid: $($fingerprintRecords[$index])"
+            }
+        }
     }
     finally {
         if (Test-Path -LiteralPath $testRoot) {
@@ -229,6 +316,9 @@ if (-not $SkipPeUnit) {
     RequiredFiles = $requiredPaths.Count
     StaticChecks = $staticChecks.Count
     PeUnit = (-not $SkipPeUnit)
+    SafeOutputCases = 9
+    DefaultCacheOutsideRepository = $true
+    OverlayFingerprintRecords = 6
     PinnedTarget = [string]$config.target
     PinnedMozcCommit = [string]$config.mozc.gitlink
     NativeBeta = $false

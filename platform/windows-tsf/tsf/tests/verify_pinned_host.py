@@ -65,6 +65,8 @@ def main() -> int:
         tsf_root / "patches" / "0001-install-kanai-supplemental-model.patch",
         tsf_root / "patches" / "0002-kanai-tsf-identity.patch",
         tsf_root / "patches" / "0003-session-generation-binding.patch",
+        tsf_root / "patches" / "0004-windows-python-toolchain.patch",
+        tsf_root / "patches" / "0005-windows-runtime-identity.patch",
     ]
 
     if not mozc_src.is_dir():
