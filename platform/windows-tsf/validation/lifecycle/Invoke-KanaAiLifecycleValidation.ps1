@@ -1153,16 +1153,19 @@ if ($baseReceipt.overall -ne 'passed') {
 }
 
 $artifacts = @()
-$artifacts += New-KanaAiLifecycleArtifactEntry -Path $planCopyPath -Root $script:CurrentOutputDirectory -Role 'validated-plan-copy'
-$artifacts += New-KanaAiLifecycleArtifactEntry -Path $planPath -Root $script:CurrentOutputDirectory -Role 'source-plan'
 foreach ($phase in $phaseResults) {
-    $logName = [string](Get-KanaAiLifecycleOptionalProperty -Object (Get-KanaAiLifecyclePhase -Plan $planObject -Name ([string]$phase.phase)) -Name 'command' -Default $null)
-    if ($null -eq $logName) { continue }
-    $logFile = [string](Get-KanaAiLifecycleOptionalProperty -Object $logName -Name 'logFile' -Default '')
+    # The command SPEC, not its string form.  Casting the ordered dictionary to
+    # a string yields "System.Collections.Specialized.OrderedDictionary", which
+    # has no logFile key, so every phase was skipped and the receipt ended up
+    # with two artifacts and no digest for a single verbose log.  The logs are
+    # the evidence the msi-log-classification verdicts rest on, so a receipt
+    # that does not digest them cannot be audited.
+    $commandSpec = Get-KanaAiLifecycleOptionalProperty -Object (Get-KanaAiLifecyclePhase -Plan $planObject -Name ([string]$phase.phase)) -Name 'command' -Default $null
+    if ($null -eq $commandSpec) { continue }
+    $logFile = [string](Get-KanaAiLifecycleOptionalProperty -Object $commandSpec -Name 'logFile' -Default '')
     if ([string]::IsNullOrWhiteSpace($logFile)) { continue }
     $artifacts += New-KanaAiLifecycleArtifactEntry -Path (Join-Path $script:CurrentOutputDirectory $logFile) -Root $script:CurrentOutputDirectory -Role ('windows-installer-verbose-log:' + [string]$phase.phase)
 }
-$baseReceipt.artifacts = $artifacts
 $baseReceipt.findings = @($script:Findings.ToArray())
 $baseReceipt.completedAtUtc = Get-KanaAiLifecycleUtcNow
 $baseReceipt.machineInteraction = (Get-KanaAiLifecycleInteractionCounters -Ledger $script:Ledger)
@@ -1178,7 +1181,22 @@ $planCopyRun = [ordered]@{
     resume         = $resumePlan
     plan           = $planObject
 }
+# Written before the artifacts are measured, or the receipt reports its own plan
+# copy as zero bytes with no digest because the file did not exist yet.
 [void](Write-KanaAiLifecycleJson -Path $planCopyPath -Value $planCopyRun)
+
+$artifacts += New-KanaAiLifecycleArtifactEntry -Path $planCopyPath -Root $script:CurrentOutputDirectory -Role 'validated-plan-copy'
+$artifacts += New-KanaAiLifecycleArtifactEntry -Path $planPath -Root $script:CurrentOutputDirectory -Role 'source-plan'
+$baseReceipt.artifacts = $artifacts
+
+# The plan's own status text says no lifecycle run has been performed.  On an
+# -Execute receipt that is false while the same object says lifecycleRunCount 1,
+# so the run states the status here and records what the plan claimed.  A reader
+# must not have to guess which of two fields in one object is the real one.
+$baseReceipt.w2.planStatus = 'VERIFIED-BY-RECEIPT'
+$baseReceipt.w2.planStatusNote = ('This -Execute receipt is itself the W2 observation: overall={0}, exitCode={1}. The plan''s own w2Status field says "{2}" because the plan is a static document that cannot know about runs; it is kept in planStatusDeclaredByPlan so a reader can see the disagreement instead of being shown a stale claim.' -f [string]$baseReceipt.overall, [int]$baseReceipt.exitCode, [string](Get-KanaAiLifecycleOptionalProperty -Object $planObject -Name 'w2Status' -Default 'UNVERIFIED'))
+$baseReceipt.w2.planStatusDeclaredByPlan = [string](Get-KanaAiLifecycleOptionalProperty -Object $planObject -Name 'w2Status' -Default 'UNVERIFIED')
+$baseReceipt.w2.planStatusNoteDeclaredByPlan = [string](Get-KanaAiLifecycleOptionalProperty -Object $planObject -Name 'w2StatusNote' -Default '')
 
 $sanitySubject = New-KanaAiLifecycleSanitySubject -Receipt $baseReceipt -Exclude @('privacy')
 $preSanityJson = ($sanitySubject.subject | ConvertTo-Json -Depth 40)
@@ -1190,6 +1208,7 @@ $baseReceipt.privacy.sanity = [ordered]@{
     excludedTopLevelFields = @($sanitySubject.excluded)
     excludedReason         = "the plan's own privacy policy names the categories it never collects, so quoting it verbatim would always trip the scan. The excluded field is recorded here with the SHA-256 of its text."
     policyTextSha256       = (Get-KanaAiLifecycleTextSha256 -Text (($baseReceipt.privacy.policy | ConvertTo-Json -Depth 20)))
+    pathProtection         = (New-KanaAiLifecyclePathProtectionRecord)
 }
 if (-not $sanity.ok) {
     Add-RunFinding -Id 'PRIVACY-SANITY' -Severity 'critical' -Message 'The serialized receipt contains something the privacy policy forbids. The receipt is written anyway so the defect is visible, but the run is marked failed.' -Evidence @($sanity.problems)

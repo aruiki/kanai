@@ -1624,6 +1624,106 @@ Invoke-Test -Id 'ST-88' -Name 'a command line is recorded with the home director
     Assert-True ($protectAt -gt 0) 'the call site must exist'
     Assert-True ($storeAt -gt 0) 'the store site must exist'
     Assert-True ($protectAt -gt $storeAt) 'the protection must run after the record is built and before the receipt is written from it; if this ever inverts, the raw record is what gets stored'
+
+    # The rule has to be recorded in BOTH privacy blocks.  There are two: the
+    # plan-only one and the -Execute one, and they are separate literals.  A
+    # scratch copy with the -Execute copy deleted passed 91/91, so the receipt
+    # that actually installs software would have described a protection it did
+    # not record.
+    $declarations = ([regex]::Matches($run, [regex]::Escape('pathProtection         = (New-KanaAiLifecyclePathProtectionRecord)'))).Count
+    Assert-True ($declarations -ge 2) ('the -Execute and plan-only receipts must both record the path-protection rule, found ' + $declarations + ' declaration(s)')
+    # And the -Execute one has to come after the verdict, so the record it writes
+    # is about the run that actually happened.
+    $lastDeclaration = $run.LastIndexOf('pathProtection         = (New-KanaAiLifecyclePathProtectionRecord)')
+    $verdictAt = $run.IndexOf('$overall = Resolve-KanaAiLifecycleOverallStatus')
+    Assert-True ($lastDeclaration -gt $verdictAt) 'the -Execute receipt must record the path-protection rule with the run''s own verdict'
+}
+
+Invoke-Test -Id 'ST-89' -Name 'the receipt digests the verbose logs the verdicts rest on' -Body {
+    # Measured on the first -Execute run to reach overall=passed
+    # (.local/w2-execute-20260926-232656): the receipt carried two artifacts and
+    # no digest for a single verbose log, while six log files sat in the run
+    # directory.  The cause was one cast: the command SPEC was taken with
+    # [string], which turns the ordered dictionary into
+    # "System.Collections.Specialized.OrderedDictionary", so logFile was read
+    # from a string and every phase was skipped.  The logs are what
+    # msi-log-classification reads, so a receipt without their digests cannot be
+    # audited and the verdicts it reports rest on evidence it does not bind.
+    $run = [System.IO.File]::ReadAllText($runPath)
+    Assert-True (-not ($run -match "\[string\]\(Get-KanaAiLifecycleOptionalProperty -Object \(Get-KanaAiLifecyclePhase")) 'the command spec must not be cast to a string; that is what silently skipped every log'
+    Assert-True ($run.Contains('$commandSpec = Get-KanaAiLifecycleOptionalProperty -Object (Get-KanaAiLifecyclePhase')) 'the command spec must be read as the object it is'
+    Assert-True ($run.Contains("-Object `$commandSpec -Name 'logFile'")) 'logFile must be read from the command spec, not from its string form'
+    # The plan copy has to be written before it is measured.  Measured first, it
+    # reported its own size as 0 with no digest, which is what the first passing
+    # receipt showed: role=validated-plan-copy bytes=0 recorded=False.
+    #
+    # Both the plan-only branch and the -Execute branch write and measure a plan
+    # copy, so this looks at the LAST occurrence of each: the -Execute ones.
+    # The plan-only branch legitimately measures before it writes, because there
+    # is nothing to report yet.
+    $writeAt = $run.LastIndexOf('[void](Write-KanaAiLifecycleJson -Path $planCopyPath -Value $planCopyRun)')
+    $measureAt = $run.LastIndexOf("New-KanaAiLifecycleArtifactEntry -Path `$planCopyPath")
+    Assert-True ($writeAt -gt 0) 'the plan copy must be written by the entry point'
+    Assert-True ($measureAt -gt 0) 'the plan copy must be measured by the entry point'
+    Assert-True ($writeAt -lt $measureAt) 'on the -Execute path the plan copy must be written before it is measured, or the receipt reports it as empty'
+
+    # Every phase the plan gives a logFile to must produce a digest, and the
+    # plan's own phases are the only source of that list.
+    $plan = Read-KanaAiLifecycleJson -Path $planPath
+    $expected = 0
+    foreach ($phase in @($plan.phases)) {
+        $spec = Get-KanaAiLifecycleOptionalProperty -Object $phase -Name 'command' -Default $null
+        if ($null -eq $spec) { continue }
+        if ([string]::IsNullOrWhiteSpace([string](Get-KanaAiLifecycleOptionalProperty -Object $spec -Name 'logFile' -Default ''))) { continue }
+        $expected++
+        $found = Get-KanaAiLifecyclePhase -Plan $plan -Name ([string]$phase.name)
+        $logFile = [string](Get-KanaAiLifecycleOptionalProperty -Object (Get-KanaAiLifecycleOptionalProperty -Object $found -Name 'command' -Default $null) -Name 'logFile' -Default '')
+        Assert-True (-not [string]::IsNullOrWhiteSpace($logFile)) ("the plan's own phase " + [string]$phase.name + ' must still resolve its logFile')
+    }
+    Assert-True ($expected -ge 6) ('the plan must declare a verbose log for the phases that produce one, found ' + $expected)
+
+    # And the artifact entry is honest about a file that is not there, rather
+    # than inventing a digest: the install-setup phase runs Setup.exe, which
+    # starts its own msiexec without /l*v, so that one log never exists.
+    $root = New-Item -ItemType Directory -Path (Join-Path $script:TempRoot ('art-' + [Guid]::NewGuid().ToString('n').Substring(0, 8))) -Force
+    try {
+        $present = Join-Path $root.FullName 'present.log'
+        [System.IO.File]::WriteAllText($present, 'log')
+        $absent = Join-Path $root.FullName 'absent.log'
+        $ok = New-KanaAiLifecycleArtifactEntry -Path $present -Root $root.FullName -Role 'present'
+        Assert-True ([bool]$ok.recorded) 'a file that exists must be recorded'
+        Assert-True ($ok.bytes -gt 0) 'a recorded artifact must carry its size'
+        Assert-True ((Get-KanaAiLifecycleTextSha256 -Text 'log') -ne '') 'a recorded artifact must carry a digest'
+        $missing = New-KanaAiLifecycleArtifactEntry -Path $absent -Root $root.FullName -Role 'absent'
+        Assert-True (-not [bool]$missing.recorded) 'a file that does not exist must not be recorded'
+        Assert-Equal '' ([string]$missing.sha256) 'a missing file must carry no digest'
+    }
+    finally { Remove-Item -LiteralPath $root.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+}
+
+Invoke-Test -Id 'ST-90' -Name 'an -Execute receipt does not repeat the plan''s "no run has happened" claim' -Body {
+    # The first -Execute receipt to reach overall=passed still carried
+    # w2.planStatus = UNVERIFIED with the note "No lifecycle run has been
+    # performed", in the same object as w2.lifecycleRunCount = 1.  Two fields in
+    # one receipt disagreeing about whether the run happened is exactly the
+    # failure mode this harness exists to prevent, and it was in the field a
+    # reader looks at first.
+    $plan = Read-KanaAiLifecycleJson -Path $planPath
+    Assert-True ([string]$plan.w2Status -eq 'UNVERIFIED') 'the plan may still declare itself unverified; that is honest of a static document'
+
+    $run = [System.IO.File]::ReadAllText($runPath)
+    Assert-True ($run.Contains("`$baseReceipt.w2.planStatus = 'VERIFIED-BY-RECEIPT'")) 'an -Execute receipt must state its own status'
+    Assert-True ($run.Contains('w2.planStatusDeclaredByPlan')) 'and must record what the plan claimed, under its own name'
+    Assert-True ($run.Contains('w2.planStatusNoteDeclaredByPlan')) 'including the note, which is the sentence that is false'
+    # The status may only be claimed after the verdict, never before it.
+    $verdictAt = $run.IndexOf('$overall = Resolve-KanaAiLifecycleOverallStatus')
+    $claimAt = $run.IndexOf("`$baseReceipt.w2.planStatus = 'VERIFIED-BY-RECEIPT'")
+    Assert-True ($verdictAt -gt 0) 'the verdict must exist'
+    Assert-True ($claimAt -gt 0) 'the status claim must exist'
+    Assert-True ($claimAt -gt $verdictAt) 'the status may not be claimed before the verdict is computed, and it must not be claimed when the verdict is not passed'
+    # And it must not be claimed unconditionally.
+    $tail = $run.Substring($claimAt, [Math]::Min(2400, $run.Length - $claimAt))
+    Assert-True (-not ($tail -match "(?s)w2\.planStatus = 'VERIFIED-BY-RECEIPT'.*?if \(\`$baseReceipt\.overall -ne 'passed'\)")) 'a failed run must not be able to keep the passed claim'
 }
 
 Invoke-Test -Id 'ST-84' -Name 'every log-classification expectation in the plan is one the classifier produces' -Body {
