@@ -1872,7 +1872,12 @@ function Get-KanaAiLifecycleMsiFilePlan {
             $fileId = [string]$row[0]
             $component = [string]$row[1]
             $fileName = [string]$row[2]
-            if ($fileName.Contains('|')) { $fileName = $fileName.Substring(0, $fileName.IndexOf('|')) }
+            # The File table's FileName is 'shortname|longname' when the long name
+            # is not 8.3 compliant.  The installed file is the LONG name, so the
+            # part after the pipe is the one to compare against the directory.
+            # Taking the part before the pipe measured every long-named file as
+            # missing from a real install (expected-files failed on every phase).
+            if ($fileName.Contains('|')) { $fileName = $fileName.Substring($fileName.IndexOf('|') + 1) }
             if (-not $componentDirectory.ContainsKey($component)) { continue }
             $directory = [string]$componentDirectory[$component]
             if (-not $relativeToRoot.ContainsKey($directory)) {
