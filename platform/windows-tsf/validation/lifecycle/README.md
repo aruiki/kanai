@@ -1,18 +1,35 @@
 # KanaAI installer lifecycle verification (verification stage W2)
 
-## Status: NO LIFECYCLE RUN HAS HAPPENED. W2 IS UNVERIFIED.
+## Status: THREE `-Execute` RUNS HAVE HAPPENED. W2 IS **NOT** VERIFIED.
 
-Nothing in this directory has been installed, uninstalled, registered or
-unregistered. No `msiexec`, no `Setup.exe`, no `msi.dll`, no Windows Installer
-COM object, no registry read and no process launch has been performed by the
-`-Execute` path. The only commands that have been run against this harness are
-`-PlanOnly`, `-SelfTest`, and the Windows PowerShell 5.1 parser. The receipts
-this directory can produce today carry `mode = "plan-only"`, all machine
-interaction counters at zero, and a `w2.claim` that says in plain words that
-nothing about the candidate has been proven.
+This section used to say that no lifecycle run had ever happened. That was
+false. `-Execute` has been run three times on this machine and the receipts
+exist; see [What is still unverified](#what-is-still-unverified) for what each run
+established.
+
+W2 is still not verified, for one reason: **no receipt yet exists in which every
+phase passes.** The most recent run
+(`.local/w2-execute-20260926-202806/w2/receipt.json`, `exitCode = 1`) records
+`UF-01` and `DR-01` as failures, and the fixes for both have not been executed.
+The three defects those two phases hit were found and fixed in this directory
+after that run:
+
+1. the `product-code` expectation was compared against the plan's instruction text
+   and was keyed off the phase name, so it reported two equal codes as a
+   disagreement and pointed `downgrade-refused` at the wrong product (`d754745`);
+2. the verbose log classifier was a bag of mutually exclusive markers whose
+   patterns could never match a real log, so it could not decide four of the
+   phases that assert it;
+3. the plan expected `1638` for a refused downgrade when this package's
+   `LaunchCondition` returns `1603` under `/qn`.
+
+The first and the third are harness and plan defects. The second is a harness
+defect that hid the third. None of them is a product defect, and none of them may
+be written up as one.
 
 A W2 claim may only come from a receipt written by an `-Execute` run, on a real
-machine, for one fixed-hash candidate. Until then, do not report W2 as passed.
+machine, for one fixed-hash candidate, **in which no phase failed**. Until then,
+do not report W2 as passed.
 
 ## What this is
 
@@ -46,7 +63,7 @@ Read from the source, not guessed:
 | InstallerVersion | 500 | `KanaAI.wxs:4` |
 | Language | 1041 | `KanaAI.wxs:4` |
 | Upgrade policy | `MajorUpgrade Schedule="afterInstallInitialize"` with a `DowngradeErrorMessage` | `KanaAI.wxs:5` |
-| MSI directory id | `INSTALLFOLDER`, leaf `KanaAI`, parent `ProgramFilesFolder` | `KanaAI.wxs:10-12` |
+| MSI directory id | `INSTALLFOLDER`, leaf `KanaAI`, parent `ProgramFiles64Folder` | `KanaAI.wxs:10-12` |
 | TIP CLSID | `{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}` | `platform/windows-tsf/registration/registration.json`, `installer/Common-TsfRegistration.ps1:11` |
 | Language profile GUID | `{F3C2B7A1-6D54-4E8B-9A10-2C7D8E9F0A12}` | `registration.json`, `Common-TsfRegistration.ps1:12` |
 | Language segment / id | `0x00000411` / 1041 | `Common-TsfRegistration.ps1:13-14` |
@@ -57,28 +74,43 @@ Read from the source, not guessed:
 reads it out of the candidate MSI's own `Property` table and requires the
 installed product to be exactly that code.
 
-### One disagreement with the work ticket, resolved by measurement
+### One disagreement with the work ticket, and one with our own first reading
 
 The work ticket for this harness said the package installs into
-`Program Files (x86)\KanaAI`. The sources say something different:
-`<StandardDirectory Id="ProgramFilesFolder">` in a package built with
-`wix build -arch x64` resolves to the **64-bit** Program Files, and the sibling
-registration slice documents `C:\Program Files\KanaAI\TSF` for x64 and reserves
-`Program Files (x86)` for a future x86 TIP
-(`platform/windows-tsf/installer/README.md:62-68`). This harness therefore does
-not assert a hand-written absolute path. It resolves the directory chain from the
-candidate MSI's own `Directory` table, records the resolution and its reason in
-the receipt, and after the install it reads the authoritative location back from
-the Windows Installer (`ProductInfo(InstallLocation)`). The receipt states which
-of the two paths was observed.
+`Program Files (x86)\KanaAI`.
+
+Our own first reading went the other way: it said `<StandardDirectory
+Id="ProgramFilesFolder">` in a package built with `wix build -arch x64` resolves
+to the **64-bit** Program Files, and cited the sibling registration slice's
+`C:\Program Files\KanaAI\TSF` for x64 (`platform/windows-tsf/installer/README.md:62-68`).
+**That reading was wrong, and it was settled by measurement rather than by
+argument.** `KanaAI.wxs:10` said `ProgramFilesFolder`, and `ProgramFilesFolder`
+is the 32-bit directory in every Windows Installer context: the older x86
+candidate and the `0.0.9` / `0.1.1` upgrade fixtures all installed to
+`C:\Program Files (x86)\KanaAI` and their verbose logs record
+`INSTALLFOLDER = C:\Program Files (x86)\KanaAI\`, while the same logs record
+`ProgramFiles64Folder = C:\Program Files\`. The `wxs` is now
+`ProgramFiles64Folder` (`KanaAI.wxs:10`), and the 64-bit candidate installs to
+`C:\Program Files\KanaAI` — measured, in the run receipt.
+
+The lesson generalises past this file: **a standard directory's bitness is a
+property of Windows Installer, not of the `-arch` a package was built with.**
+The same confusion is what made the upgrade fixtures look like a harness fault.
+
+This harness therefore does not assert a hand-written absolute path. It resolves
+the directory chain from the candidate MSI's own `Directory` table, records the
+resolution and its reason in the receipt, and after the install it reads the
+authoritative location back from the Windows Installer
+(`ProductInfo(InstallLocation)`). The receipt states which of the two paths was
+observed.
 
 ## Files
 
 | File | Lines | Purpose |
 | --- | --- | --- |
-| `Invoke-KanaAiLifecycleValidation.ps1` | 1104 | Entry point. Modes `-PlanOnly`, `-SelfTest`, `-Execute`. Gates, phase loop, receipt. |
-| `LifecycleValidation.Common.ps1` | 2406 | Shared helpers, split into a pure half (plan validation, comparison engine, verdict engine, resume planner, receipt assembler, privacy scan) and an observation half that every function routes through one action gate. |
-| `Invoke-KanaAiLifecycleValidationSelfTest.ps1` | 1411 | 82 self-test cases, synthetic data only, no machine interaction. |
+| `Invoke-KanaAiLifecycleValidation.ps1` | 1191 | Entry point. Modes `-PlanOnly`, `-SelfTest`, `-Execute`. Gates, phase loop, receipt. |
+| `LifecycleValidation.Common.ps1` | 2997 | Shared helpers, split into a pure half (plan validation, comparison engine, verdict engine, log classifier, resume planner, receipt assembler, privacy scan) and an observation half that every function routes through one action gate. |
+| `Invoke-KanaAiLifecycleValidationSelfTest.ps1` | 1582 | 87 self-test cases. No machine interaction. Synthetic inputs, plus the decisive msiexec lines of the five classified logs of one real measured run, reduced to the tokens that are evidence. |
 | `lifecycle-validation-plan.json` | 11 phases | The plan: pinned identity, registration identity, phase order, per-phase assertions, per-phase `proves` / `cannotProve`, safety gates, privacy policy, non-goals. |
 | `README.md` | this file | What each phase proves, what it cannot, how to read the receipt, the elevation and UAC expectation. |
 
@@ -104,7 +136,7 @@ machine-touching helper throws `LIFECYCLE-GATE-SEALED` if it is called anyway
 powershell -NoProfile -ExecutionPolicy Bypass -File platform\windows-tsf\validation\lifecycle\Invoke-KanaAiLifecycleValidationSelfTest.ps1
 ```
 
-Exit code 0 when all 82 cases pass, 1 otherwise. Or through the entry point with
+Exit code 0 when all 87 cases pass, 1 otherwise. Or through the entry point with
 `-SelfTest`.
 
 ### A real lifecycle run (NOT performed; requires an elevated 64-bit shell)
@@ -197,8 +229,92 @@ that have nothing to do with the command's own return value:
 - **processes** — only the product's own executable names, by name only. A process
   counts as an orphan only if the harness neither started it nor saw it at the
   baseline.
-- **verbose log** — classified only when it carries a decisive marker. An
-  unclassifiable or ambiguous log is `unconfirmed`.
+- **verbose log** — read for **facts** and then classified by an ordered
+  derivation, not matched against one marker per outcome. An unclassifiable or
+  self-contradicting log is `unconfirmed`.
+
+### How a verbose log is classified, and why it is not a marker bag
+
+The classifier used to be four mutually exclusive markers and required exactly
+one to fire. Measured against the six real logs of one W2 run
+(`.local/w2-execute-20260926-202806/w2`), that rule classified **one** of them,
+called three `ambiguous-multiple-markers`, and found nothing in the sixth — and
+four of the eleven phases assert this check, one of them as a **required** check
+that could therefore never pass.
+
+The reason is that the facts that identify a log are not exclusive. A reinstall
+contains an install sequence. A MajorUpgrade contains a product removal. An
+uninstall contains both. A bag of markers cannot tell *two facts that belong
+together* from *two facts that contradict each other*.
+
+So the log is read once for facts, and the classification is derived from them in
+order. Every fact pattern is anchored on a token msiexec emits in the same shape
+on every localisation; the Japanese text is an extra alternative, never the only
+way to see a fact.
+
+| Fact | Read from | Meaning |
+| --- | --- | --- |
+| `alreadyInstalled` | `Property(S): ProductState = 5` | the product was already registered when this transaction started. `5` is `INSTALLSTATE_DEFAULT`, the same value `Get-KanaAiLifecycleProductInstallStateName` maps |
+| `installDatePresent` | `Property(S): Installed = <date>` | the cached install date, written only for an already-registered product |
+| `productRemoved` | `CleanupConfigData(RemovingProduct=1)` | **this** transaction removed the product. `RemoveExistingProducts` in a MajorUpgrade is not that, which is why `RemoveFiles` is not used at all |
+| `upgradeDetected` | `Adding WIX_UPGRADE_DETECTED property` | `FindRelatedProducts` found a strictly older related product |
+| `downgradeDetected` | `Adding WIX_DOWNGRADE_DETECTED property` | it found an equal-or-newer one, and the package refuses |
+| `reinstallRequested` | `Property (REINSTALL):` or `Property(S): REINSTALL =` | a reinstall or repair was asked for explicitly. The shipped plan never asks, so a real W2 log does not carry it |
+| `installSequence` | `Doing action: InstallInitialize` and its two other spellings | an install transaction ran |
+| `legacy1638` | `Error 1638` and its localised form | the documented version-conflict refusal, for a package that reports it that way |
+
+The derivation, in order, with the earlier rules being the stronger facts:
+
+1. `upgradeDetected` **and** `downgradeDetected` → `ambiguous-multiple-markers`.
+   `FindRelatedProducts` cannot set both in one transaction, so a log that claims
+   it did is not believed.
+2. `downgradeDetected` or `legacy1638` → `downgrade-refused`.
+3. `upgradeDetected` → `upgrade`.
+4. `alreadyInstalled` and `productRemoved` → `uninstall`.
+5. `alreadyInstalled` → `reinstall`. This is the decisive difference from a first
+   install, and it does **not** need a `REINSTALL` property: a first install
+   starts with the product absent.
+6. `reinstallRequested` → `reinstall`.
+7. `installSequence` and not `productRemoved` → `first-install`.
+8. anything else → not confident.
+
+`any` is an instruction, not a classification name: any confident classification
+satisfies it, and it still cannot rescue a log that could not be classified. It
+used to be compared like a name, so it could only ever fail — which is why every
+phase that used it also had to mark the check not required.
+
+Two traps this table exists to close, both found by reading real logs:
+
+- **Nothing may be anchored with `^`.** A verbose log prefixes every line with
+  `MSI (s) (pid) [time]: `. The earlier patterns were anchored, so they matched a
+  real log exactly never, and the self test used strings without the prefix — so
+  the cases passed while the check could not fire on any run. ST-83 drives both
+  shapes.
+- **The facts are read out of real logs, not invented.** ST-82 carries the
+  decisive lines of the five classified logs of the measured run, with the
+  account name, the install path and the log bulk left out because none of them is
+  evidence.
+
+### The refused downgrade returns 1603, not 1638
+
+`KanaAI.wxs` sets `MajorUpgrade/@DowngradeErrorMessage`. WiX compiles that into
+the launch condition `NOT WIX_DOWNGRADE_DETECTED`, read out of the package's own
+`LaunchCondition` and `Upgrade` tables. A failed launch condition under `/qn` is
+**1603**; 1638 is the code Windows documents for the same policy and is what a
+bundled install reports. Measured on this machine, installing 0.0.9 over 0.1.1:
+
+```
+PROPERTY CHANGE: Adding WIX_DOWNGRADE_DETECTED property. Its value is '{B89B09D1-...}'.
+Action start name="LaunchConditions" ...  returned 3
+MainEngineThread is returning 1603
+```
+
+The phase therefore accepts exactly `{1603, 1638}` and nothing else, and the exit
+code decides nothing on its own: the refusal is proven by `msi-log-classification`
+(the `WIX_DOWNGRADE_DETECTED` assignment, which only this transaction can make),
+`product-state`, `product-code` and `file-inventory-unchanged` together. An
+earlier version of this plan named `1638` from documentation rather than from an
+observation, so a correct machine failed the phase.
 
 ### The `product-code` expectation is an instruction, never a value
 
@@ -355,6 +471,23 @@ prototype and passed the bug it was written to catch.
 - **Never decide a phase from a command exit code alone**, and never let a
   registry key with no real file behind it count as a registration. Enforced by
   ST-10, ST-12, ST-13, ST-28, ST-29 and ST-30.
+- **Never identify a log by one marker, and never anchor a pattern to the start
+  of a line.** The facts that identify a transaction are not exclusive — a
+  reinstall has an install sequence, a MajorUpgrade has a product removal, an
+  uninstall has both — so mutually exclusive markers call ordinary runs
+  ambiguous. And a verbose log prefixes every line, so `^` matches a real log
+  never. Both were true at once, and the self test could not see either because
+  its strings had no prefix. Enforced by ST-07, ST-82 and ST-83.
+- **Never let an expectation be a name the machinery cannot produce.** Every
+  `msi-log-classification` expectation in the plan is checked against the
+  classifications the classifier really emits, and against the measured log of
+  the phase that asserts it. `any` means any confident classification and cannot
+  rescue an unclassifiable log. Enforced by ST-84 and ST-85.
+- **Never let a plan claim something the artifact does not contain.** RS-01's
+  `proves` list said the log shows a `REINSTALL` property, for a phase whose own
+  command deliberately supplies none. It never could, and the real log does not.
+  The decisive evidence is the log's record that the product was already
+  registered when the transaction started. Enforced by ST-82, ST-84 and ST-86.
 - **Never nest one self-test case inside another case's body.** ST-63 to ST-66
   once ended up inside ST-62: the file still parsed and every case still
   reported ok, but the outer cases could no longer fail on their own. Enforced
@@ -390,40 +523,51 @@ command line in the receipt.
 
 ## What is still unverified
 
-Everything below is unverified, and this harness has not begun to change that:
+**Three `-Execute` runs have happened.** Their receipts are in
+`.local/w2-execute-*`. The most recent is
+`.local/w2-execute-20260926-202806/w2/receipt.json`. What those runs established,
+and what they did not, is stated here rather than left to a reader of the JSON:
 
-- No `Setup.exe` install has been run. The one-double-click path is untested.
-- No MSI install or uninstall has been run. The TSF registration has never been
-  observed to appear or disappear on a real machine through this harness.
-- Reinstall-over-the-same-product-code has not been run. Whether the Windows
-  Installer log carries a decisive `REINSTALL` marker on this machine is unknown;
-  if it does not, that phase is designed to report `unconfirmed` rather than
-  guess.
-- The upgrade-forward and downgrade-refused phases have not been run. The
-  `1638` expectation comes from `KanaAI.wxs:5` and the Windows Installer
-  documentation, not from an observation on this machine.
+| Phase | Run #3 outcome | What is still open |
+| --- | --- | --- |
+| `PF-01` / `PF-02` | pass | — |
+| `IS-01` `Setup.exe` | **all checks pass** | the operator still has to click the launcher's modal box; the harness cannot |
+| `UC-01` clean uninstall | pass | — |
+| `IM-01` MSI install | pass except `msi-log-classification`, recorded `unconfirmed` | the classifier has since been rewritten; the new verdict needs a new run |
+| `RS-01` reinstall | pass except `msi-log-classification`, `unconfirmed` | as above. The log carries no `REINSTALL` property and cannot: the phase supplies none |
+| `UF-01` upgrade forward | **fail**: `product-code` and `expected-files` | `product-code` failed on the defect fixed in `d754745`; `expected-files` failed because the 0.1.1 fixture was built from a **32-bit** `KanaAI.wxs` while the candidate installs 64-bit, so its files went to a different directory |
+| `DR-01` downgrade refused | **fail**: `command-exit-code` and `product-code` | the exit code was the `1603` finding resolved above; `product-code` failed on the same `d754745` defect; the 0.0.9 fixture has the same 32-bit problem |
+| `UC-02` / `OB-01` / `CL-01` | pass | — |
+
+Still unverified, and this harness has not begun to change any of it:
+
+- **No run has yet produced a W2 receipt in which every phase passes.** Run #3
+  still carries `UF-01` and `DR-01` as failures, and the fixes for them have not
+  been executed. Until a receipt says so, W2 is not verified.
+- The 0.1.1 and 0.0.9 upgrade/downgrade fixtures have not been rebuilt from the
+  current 64-bit `KanaAI.wxs`. Until they are, `UF-01` and `DR-01` cannot pass
+  their `expected-files` check, whatever the harness does.
+- Whether the pinned `INSTALLFOLDER` resolves to `Program Files\KanaAI` is now
+  **measured**: the run recorded the resolution, and it agrees with the 64-bit
+  `ProgramFiles64Folder` in the current `KanaAI.wxs:10`.
 - The `product-code` expectations of `upgrade-forward` and `downgrade-refused`
-  have never been exercised by a real run. Their logic is fixed and proven by
-  ST-77 to ST-81 against synthetic data, but only a W2 receipt can turn them
-  into an observation. In the W2 receipt at
-  `.local/w2-execute-20260926-202806/w2/receipt.json` these two phases failed for
-  a second, independent reason as well: the downgrade command returned **1603**,
-  not **1638**. That is a separate finding which nothing on this page resolves.
-- Whether the pinned `INSTALLFOLDER` really resolves to `Program Files\KanaAI` on
-  a 64-bit package is unmeasured here; the harness records what it observes.
+  have not been exercised against a machine that passes them. Their logic is
+  proven by ST-77 to ST-81 against synthetic data, and their previous verdicts
+  were the self-contradicting line `d754745` removed, but only a new receipt can
+  turn them into an observation.
 - The registration identity is still `identityApproved: false` in
   `platform/windows-tsf/registration/registration.json`, and
   `KanaAI.TsfTip.dll` is still `presentInSourceTree: false`. Whether the shipped
   helper registers `KanaAI.TsfTip.dll`, `mozc_tip64.dll` or something else is not
   asserted by this harness; it records the `InProcServer32` value it actually
-  reads and then checks whether a real file is there.
+  reads and then checks whether a real file is there. The runs did observe real
+  TIP, language-profile and COM keys appearing and disappearing, so the surface is
+  reachable; which DLL it should point at is still undecided.
 - The self test and plan-only mode prove the harness's own logic only. They are
   not evidence about the product, and they do not make W2 any closer to verified.
-- The observation half of `LifecycleValidation.Common.ps1` (the Windows Installer
-  COM calls, the MSI table walks, the registry reads, the process launch) has
-  never been executed. It is written, reviewed and parse-checked, and that is the
-  whole of its track record. The first real run must be treated as the first
-  execution of that code.
+- The runs were made against a candidate built from an earlier commit, not from
+  the current `main`. Any statement here about the product is about that
+  candidate's hashes, as recorded in its `pinnedIdentity` block.
 
 ## Non-goals
 

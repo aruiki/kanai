@@ -241,9 +241,17 @@ Invoke-Test -Id 'ST-07' -Name 'the verbose log classifier only claims what the l
     $empty = Get-KanaAiLifecycleMsiLogClassification -Text '' -Expected 'reinstall'
     Assert-True (-not [bool]$empty.confident) 'a missing log must never be confident'
 
-    $ambiguous = Get-KanaAiLifecycleMsiLogClassification -Text "Property (REINSTALL): ALL`r`nAction start: InstallInitialize`r`n" -Expected 'reinstall'
-    Assert-True (-not [bool]$ambiguous.confident) 'a log with two decisive markers must not be confident'
-    Assert-Equal 'ambiguous-multiple-markers' $ambiguous.classification 'an ambiguous log must be named as such'
+    # Contradiction, not merely two facts.  FindRelatedProducts evaluates the
+    # Upgrade table once and cannot set both action properties, so a log that
+    # carries both is not evidence of anything and is not confident.
+    $contradiction = Get-KanaAiLifecycleMsiLogClassification -Text "PROPERTY CHANGE: Adding WIX_UPGRADE_DETECTED property. Its value is '{11111111-1111-4111-8111-111111111111}'.`r`nPROPERTY CHANGE: Adding WIX_DOWNGRADE_DETECTED property. Its value is '{22222222-2222-4222-8222-222222222222}'.`r`n" -Expected 'upgrade'
+    Assert-True (-not [bool]$contradiction.confident) 'a log carrying both upgrade and downgrade detection must not be confident'
+    Assert-Equal 'ambiguous-multiple-markers' $contradiction.classification 'a self-contradicting log must be named as such'
+
+    # A log that is a plain success with no transaction fact at all decides
+    # nothing rather than guessing.
+    $nothing = Get-KanaAiLifecycleMsiLogClassification -Text "MainEngineThread is returning 0`r`n" -Expected 'first-install'
+    Assert-True (-not [bool]$nothing.confident) 'a success line alone must not be confident'
 }
 
 # ===========================================================================
@@ -1393,6 +1401,169 @@ Invoke-Test -Id 'ST-81' -Name 'the entry point wires the expectation through the
     Assert-True ($text.Contains("-Name 'expectedProductCodeSource'")) 'the check must read the recorded provenance'
     Assert-True ($text.Contains('elseif ($installed -eq $expected)')) 'the verdict must compare the two resolved product codes with each other'
     Assert-True (-not ($text -match '\$installed -eq \$expect(?!ed)')) 'a resolved product code must never be compared with the plan instruction itself'
+}
+
+# ---------------------------------------------------------------------------
+# the log classifier, against the six real logs of one W2 run
+# ---------------------------------------------------------------------------
+$script:RealLogFacts = @(
+    # Each entry is only the decisive lines of one real log from
+    # .local/w2-execute-20260926-202806/w2, read out of that file and reduced to
+    # the msiexec tokens.  The Japanese account name, the install path and the
+    # log's own bulk are deliberately not carried into the repository, because
+    # none of them is evidence.
+    [pscustomobject]@{
+        log = 'install-msi.log'; phase = 'IM-01'; expect = 'first-install'
+        text = "Property(S): ProductState = -1`r`nDoing action: InstallInitialize`r`nMainEngineThread is returning 0`r`n"
+    },
+    [pscustomobject]@{
+        log = 'reinstall-same.log'; phase = 'RS-01'; expect = 'reinstall'
+        text = "Property(S): ProductState = 5`r`nProperty(S): Installed = 00:00:00`r`nDoing action: InstallInitialize`r`nMainEngineThread is returning 0`r`n"
+    },
+    [pscustomobject]@{
+        log = 'uninstall-clean-1.log'; phase = 'UC-01'; expect = 'uninstall'
+        text = "Property(S): ProductState = 5`r`nProperty(S): Installed = 00:00:00`r`nDoing action: InstallInitialize`r`nCleanupConfigData(RemovingProduct=1)`r`nMainEngineThread is returning 0`r`n"
+    },
+    [pscustomobject]@{
+        log = 'upgrade-forward.log'; phase = 'UF-01'; expect = 'upgrade'
+        text = "Property(S): ProductState = -1`r`nPROPERTY CHANGE: Adding WIX_UPGRADE_DETECTED property. Its value is '{B89B09D1-1FB2-42D2-AA31-2CD52DB113C7}'.`r`nDoing action: InstallInitialize`r`nCleanupConfigData(RemovingProduct=1)`r`nMainEngineThread is returning 0`r`n"
+    },
+    [pscustomobject]@{
+        log = 'downgrade-refused.log'; phase = 'DR-01'; expect = 'downgrade-refused'
+        text = "Property(S): ProductState = -1`r`nPROPERTY CHANGE: Adding WIX_DOWNGRADE_DETECTED property. Its value is '{B89B09D1-1FB2-42D2-AA31-2CD52DB113C7}'.`r`nDoing action: LaunchConditions`r`nMainEngineThread is returning 1603`r`n"
+    }
+)
+
+Invoke-Test -Id 'ST-82' -Name 'the classifier reads every real W2 log of the measured run' -Body {
+    # The old classifier was a bag of mutually exclusive markers that required
+    # exactly one to fire.  Driven with the decisive lines of the six real logs
+    # of .local/w2-execute-20260926-202806, it classified one of them, called
+    # three ambiguous and found nothing in the sixth.  Four of the eleven W2
+    # phases assert this check, and one of those four (RS-01) can then never
+    # pass.  The real logs are the fixture here, not a synthetic string.
+    foreach ($case in $script:RealLogFacts) {
+        $r = Get-KanaAiLifecycleMsiLogClassification -Text $case.text
+        Assert-True ([bool]$r.confident) ("{0} must classify with confidence, got '{1}' ({2})" -f $case.log, $r.classification, (@($r.evidence) -join ' '))
+        Assert-Equal $case.expect ([string]$r.classification) ("{0} must classify as {1}" -f $case.log, $case.expect)
+    }
+    # The first install and the reinstall differ by exactly one fact: whether
+    # the product was already registered when the transaction started.  If the
+    # classifier ever collapsed them again, these two would swap.
+    $first = Get-KanaAiLifecycleMsiLogFacts -Text $script:RealLogFacts[0].text
+    $again = Get-KanaAiLifecycleMsiLogFacts -Text $script:RealLogFacts[1].text
+    Assert-True (-not [bool]$first.alreadyInstalled) 'a first install starts with the product absent'
+    Assert-True ([bool]$again.alreadyInstalled) 'a reinstall starts with the product installed'
+    Assert-True ([bool]$again.installDatePresent) 'an already-registered product carries a cached install date in the log'
+    # A removal and an upgrade both carry RemoveExistingProducts, so neither is
+    # what tells them apart: only the Upgrade table result is.
+    $uninstall = Get-KanaAiLifecycleMsiLogFacts -Text $script:RealLogFacts[2].text
+    $upgrade = Get-KanaAiLifecycleMsiLogFacts -Text $script:RealLogFacts[3].text
+    Assert-True ([bool]$uninstall.productRemoved) 'an uninstall removes the product'
+    Assert-True ([bool]$upgrade.productRemoved) 'a MajorUpgrade removes the old product inside the same transaction'
+    Assert-True (-not [bool]$upgrade.downgradeDetected) 'a forward upgrade never records a downgrade'
+    Assert-True (-not [bool]$uninstall.upgradeDetected) 'a plain uninstall never records an upgrade'
+}
+
+Invoke-Test -Id 'ST-83' -Name 'no log fact is anchored to the start of a line' -Body {
+    # A verbose log prefixes every line with "MSI (s) (pid) [time]: ", so a
+    # pattern anchored with ^ never matches a real log.  The earlier marker bag
+    # was written that way and its self test used strings without the prefix,
+    # which is how four phases ended up asserting a check that could not fire on
+    # any run.  The prefix is the reason, so it is in the test.
+    $prefixed = "MSI (s) (30:58) [20:30:24:780]: PROPERTY CHANGE: Adding WIX_DOWNGRADE_DETECTED property. Its value is '{B89B09D1-1FB2-42D2-AA31-2CD52DB113C7}'.`r`n" +
+        "MSI (s) (30:58) [20:30:24:780]: Property(S): ProductState = 5`r`n" +
+        "MSI (s) (30:58) [20:30:24:780]: Property(S): Installed = 00:00:00`r`n" +
+        "MSI (s) (30:58) [20:30:24:780]: CleanupConfigData(RemovingProduct=1)`r`n" +
+        "MSI (s) (30:58) [20:30:24:780]: Doing action: InstallInitialize`r`n"
+    $facts = Get-KanaAiLifecycleMsiLogFacts -Text $prefixed
+    foreach ($name in @('alreadyInstalled', 'installDatePresent', 'downgradeDetected', 'productRemoved', 'installSequence')) {
+        Assert-True ([bool]$facts[$name]) ("the fact '{0}' must be seen through a verbose log's own line prefix" -f $name)
+    }
+    # The same six tokens in a synthetic block with no prefix must give the same
+    # facts, so the prefix is what is tolerated, not depended on.
+    $bare = "PROPERTY CHANGE: Adding WIX_DOWNGRADE_DETECTED property. Its value is '{B89B09D1-1FB2-42D2-AA31-2CD52DB113C7}'.`r`nProperty(S): ProductState = 5`r`nProperty(S): Installed = 00:00:00`r`nCleanupConfigData(RemovingProduct=1)`r`nDoing action: InstallInitialize`r`n"
+    $bareFacts = Get-KanaAiLifecycleMsiLogFacts -Text $bare
+    foreach ($name in @('alreadyInstalled', 'installDatePresent', 'downgradeDetected', 'productRemoved', 'installSequence')) {
+        Assert-True ([bool]$bareFacts[$name]) ("the fact '{0}' must not depend on a line prefix" -f $name)
+    }
+    Assert-Equal 'downgrade-refused' ([string](Get-KanaAiLifecycleMsiLogClassification -Text $prefixed).classification) 'the prefixed form must classify the same way'
+    # A Japanese log is the only one this machine produces, so the facts must
+    # not be English-only.  These two are the same two facts in the form a
+    # localised installer writes them.
+    $localised = Get-KanaAiLifecycleMsiLogFacts -Text "MSI (s) (30:58) [20:30:24:781]: 操作開始 20:30:24: LaunchConditions (PID 12345)。`r`nMSI (s) (30:58) [20:30:24:781]: アクションの終了 20:30:24: LaunchConditions。戻値 3。`r`nMSI (s) (30:58) [20:30:24:796]: MainEngineThread is returning 1603`r`n"
+    Assert-True ([bool]$localised.installFailed) 'a localised failure line must still be read as a failure'
+}
+
+Invoke-Test -Id 'ST-84' -Name 'every log-classification expectation in the plan is one the classifier produces' -Body {
+    # The plan's msi-log-classification expectations are read against real logs,
+    # so an expectation the classifier can never emit is a phase that can never
+    # pass.  `any` is exempt: it is an instruction, not a classification.
+    $plan = Read-KanaAiLifecycleJson -Path $planPath
+    $produced = @('first-install', 'reinstall', 'uninstall', 'upgrade', 'downgrade-refused')
+    $seen = 0
+    foreach ($phase in @($plan.phases)) {
+        foreach ($assert in @(Get-KanaAiLifecycleOptionalProperty -Object $phase -Name 'asserts' -Default @())) {
+            if ([string]$assert.check -ne 'msi-log-classification') { continue }
+            $seen++
+            $expect = [string]$assert.expect
+            Assert-True ($expect -eq 'any' -or $produced -contains $expect) ("phase {0} expects '{1}', which the classifier cannot produce" -f $phase.id, $expect)
+            if ($expect -ne 'any') {
+                # And the real log of that phase really does produce it.
+                $fixture = @($script:RealLogFacts | Where-Object { $_.phase -eq [string]$phase.id })
+                if ($fixture.Count -eq 1) {
+                    Assert-Equal $expect ([string](Get-KanaAiLifecycleMsiLogClassification -Text $fixture[0].text).classification) ("phase {0}'s own real log must produce {1}" -f $phase.id, $expect)
+                }
+            }
+        }
+    }
+    Assert-True ($seen -ge 4) ('the plan must keep asserting the log classification, found ' + $seen)
+}
+
+Invoke-Test -Id 'ST-85' -Name 'the any expectation accepts any confident classification and nothing else' -Body {
+    # `any` used to be compared like a classification name, so it could only
+    # ever fail and every phase that used it also had to mark the check not
+    # required.  It has to mean what it says, and it still must not rescue a
+    # log that could not be classified.
+    foreach ($expect in @('first-install', 'reinstall', 'uninstall', 'upgrade', 'downgrade-refused')) {
+        $phase = [pscustomobject]@{ id = 'X-01'; asserts = @([pscustomobject]@{ check = 'msi-log-classification'; expect = 'any'; required = $true }) }
+        $observation = New-KanaAiLifecycleSyntheticObservation -LogClassification $expect -LogConfident $true
+        $check = @(Resolve-KanaAiLifecyclePhaseOutcome -Phase $phase -Context ([ordered]@{ observation = $observation })).checks | Where-Object { $_.check -eq 'msi-log-classification' }
+        Assert-Equal 'pass' ([string]$check.outcome) ("any must accept a confident {0}" -f $expect)
+    }
+    $unconfident = [pscustomobject]@{ id = 'X-01'; asserts = @([pscustomobject]@{ check = 'msi-log-classification'; expect = 'any'; required = $true }) }
+    $ambiguous = New-KanaAiLifecycleSyntheticObservation -LogClassification 'ambiguous-multiple-markers' -LogConfident $false
+    $check = @(Resolve-KanaAiLifecyclePhaseOutcome -Phase $unconfident -Context ([ordered]@{ observation = $ambiguous })).checks | Where-Object { $_.check -eq 'msi-log-classification' }
+    Assert-Equal 'unconfirmed' ([string]$check.outcome) 'any must not turn an unclassifiable log into a pass'
+}
+
+Invoke-Test -Id 'ST-86' -Name 'the refused downgrade is decided by the log, not by an exit code' -Body {
+    # Measured: this package refuses a downgrade with a failed LaunchCondition,
+    # which under /qn is 1603, while 1638 is the code Windows documents for the
+    # same policy.  The plan used to name 1638 only, from documentation rather
+    # than from an observation, so the phase could not pass on a correct
+    # machine.  It now names exactly the two codes and refuses everything else,
+    # and the refusal itself is proven by the log and the state checks.
+    $plan = Read-KanaAiLifecycleJson -Path $planPath
+    $dr = Get-KanaAiLifecyclePhase -Plan $plan -Name 'downgrade-refused'
+    $exitAssert = @(Get-KanaAiLifecycleOptionalProperty -Object $dr -Name 'asserts' -Default @()) | Where-Object { [string]$_.check -eq 'command-exit-code' }
+    $accepted = @(([string]$exitAssert.expect) -split ',') | ForEach-Object { $_.Trim() }
+    Assert-True ($accepted -contains '1603') 'the plan must accept the 1603 this package actually returns'
+    Assert-True ($accepted -contains '1638') 'the plan must keep the documented 1638'
+    Assert-Equal 2 $accepted.Count ('the accepted set must be exactly those two codes, got: ' + ($accepted -join ','))
+    # 1603 is the generic failure code, so accepting it must not be enough on
+    # its own: the phase needs the log and the state.
+    $stateChecks = @(Get-KanaAiLifecycleOptionalProperty -Object $dr -Name 'asserts' -Default @()) | Where-Object { [string]$_.check -ne 'command-exit-code' -and [bool]$_.required }
+    foreach ($needed in @('msi-log-classification', 'product-state', 'product-code', 'file-inventory-unchanged')) {
+        Assert-True (@($stateChecks | Where-Object { [string]$_.check -eq $needed }).Count -eq 1) ("a refused downgrade must require '{0}' as well" -f $needed)
+    }
+    # A refusal whose log says nothing is not a refusal this harness can report.
+    $phase = [pscustomobject]@{ id = 'X-01'; asserts = @([pscustomobject]@{ check = 'msi-log-classification'; expect = 'downgrade-refused'; required = $true }) }
+    $quiet = New-KanaAiLifecycleSyntheticObservation -LogClassification 'unclassified' -LogConfident $false
+    $check = @(Resolve-KanaAiLifecyclePhaseOutcome -Phase $phase -Context ([ordered]@{ observation = $quiet })).checks | Where-Object { $_.check -eq 'msi-log-classification' }
+    Assert-Equal 'unconfirmed' ([string]$check.outcome) 'an unclassifiable downgrade log must be unconfirmed'
+    # And the real refused-downgrade log does produce the classification.
+    $fixture = @($script:RealLogFacts | Where-Object { $_.log -eq 'downgrade-refused.log' })[0]
+    Assert-Equal 'downgrade-refused' ([string](Get-KanaAiLifecycleMsiLogClassification -Text $fixture.text).classification) 'the real refused-downgrade log must classify as a refused downgrade'
 }
 
 

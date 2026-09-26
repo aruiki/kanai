@@ -234,7 +234,7 @@
         "acceptedExitCodes": "0,3010,1641,3011",
         "timeoutSeconds": 3600,
         "logFile": "reinstall-same.log",
-        "note": "No REINSTALL or REINSTALLMODE property is supplied. The harness records that fact, because supplying it would turn this phase into the repair test it is supposed to be distinct from."
+        "note": "No REINSTALL or REINSTALLMODE property is supplied. The harness records that fact, because supplying it would turn this phase into the repair test it is supposed to be distinct from. Measured consequence: msiexec writes no REINSTALL property for this command, so the decisive evidence is the log's own record that the product was already installed when the transaction started (ProductState=5, i.e. INSTALLSTATE_DEFAULT, with a cached Installed date) while the transaction neither removed, upgraded nor downgraded it."
       },
       "requires": ["msi"],
       "preconditions": [
@@ -248,17 +248,17 @@
         { "check": "file-inventory-unchanged", "expect": "true", "required": true, "note": "the install directory file set is identical before and after" },
         { "check": "expected-files", "expect": "all-present", "required": true },
         { "check": "registration-present", "expect": "true", "required": true, "note": "the reinstall must not leave the TIP unregistered, which is what an uninstall/reinstall pair would look like from the outside" },
-        { "check": "msi-log-classification", "expect": "reinstall", "required": true, "note": "the decisive evidence that Windows Installer treated this as a reinstall of the existing product. If the log carries no decisive marker the phase is unconfirmed; the harness does not decide this from the exit code" }
+        { "check": "msi-log-classification", "expect": "reinstall", "required": true, "note": "the decisive evidence that this transaction ran over an already-registered product rather than installing it for the first time: the log records ProductState=5 (INSTALLSTATE_DEFAULT) and a cached Installed date, and records neither a product removal nor WIX_UPGRADE_DETECTED nor WIX_DOWNGRADE_DETECTED. An earlier version of this note claimed the log shows a REINSTALL property; it does not, and cannot, because this phase deliberately supplies none. If the log carries no decisive fact the phase is unconfirmed; the harness does not decide this from the exit code" }
       ],
       "proves": [
         "Reinstalling the same MSI over the same product code is accepted and leaves the product installed.",
         "The installed InstallDate did not change, so no new installation record was created.",
         "The install directory file set is identical, so nothing was re-extracted from scratch and nothing was removed.",
-        "The Windows Installer log for this run shows a REINSTALL property, which is the difference between a reinstall and a first install."
+        "The Windows Installer log records that the product was already registered when this transaction started and that the transaction neither removed, upgraded nor downgraded it, which is what separates a reinstall from a first install."
       ],
       "cannotProve": [
         "That the reinstall is idempotent under a rollback, or that a deliberately corrupted file is restored; the harness does not damage the install to find out.",
-        "Whether Windows Installer would behave identically with REINSTALLMODE set; that is deliberately out of scope for this phase.",
+        "Whether Windows Installer would behave identically with REINSTALLMODE set; that is deliberately out of scope for this phase, and no REINSTALL property appears in the log because none was requested.",
         "If the log cannot be classified, this phase proves nothing about repair-versus-reinstall and says so."
       ]
     },
@@ -315,15 +315,15 @@
         { "observed": "olderIsOlder", "equals": "true", "note": "the supplied older MSI must really carry a lower ProductVersion than what is installed, otherwise this phase is not a downgrade and would silently prove something else" }
       ],
       "asserts": [
-        { "check": "command-exit-code", "expect": "1638", "required": true, "note": "1638 is the Windows Installer's 'another version of this product is already installed'. KanaAI.wxs sets MajorUpgrade DowngradeErrorMessage, so a downgrade must be refused, not performed." },
+        { "check": "command-exit-code", "expect": "1603,1638", "required": true, "note": "The refusal is a LaunchCondition, so the exit code depends on the UI mode and is the weakest evidence in this phase. Measured on this machine with /qn, installing KanaAI 0.0.9 over 0.1.1: Action start name=LaunchConditions returns 3, Property(S): WIX_DOWNGRADE_DETECTED names the newer product, MainEngineThread is returning 1603. WiX compiles MajorUpgrade/@DowngradeErrorMessage into the LaunchCondition NOT WIX_DOWNGRADE_DETECTED (read out of that package's own LaunchCondition and Upgrade tables), a failed LaunchCondition under /qn is 1603, and 1638 is the code Windows documents for the same policy. This set is exactly those two codes and anything else fails; the code alone decides nothing, because the refusal is proven by msi-log-classification, product-state, product-code and file-inventory-unchanged together." },
         { "check": "product-state", "expect": "installed", "required": true, "note": "the refusal must leave the newer product installed" },
         { "check": "product-code", "expect": "from-current-msi", "required": true, "note": "from-current-msi is a resolution instruction, never a value: it resolves to the product code that was installed immediately before this phase's command ran, which by this point is the newer fixture's, not the candidate's. The installed product code must still be that one; a downgrade that quietly replaced the product would be a policy failure. It is not the candidate MSI's code, and a before-picture that was never taken is unconfirmed rather than a pass." },
         { "check": "file-inventory-unchanged", "expect": "true", "required": true, "note": "a refused downgrade must not have touched the installed files" },
         { "check": "registration-present", "expect": "true", "required": true },
-        { "check": "msi-log-classification", "expect": "downgrade-refused", "required": true }
+        { "check": "msi-log-classification", "expect": "downgrade-refused", "required": true, "note": "the decisive evidence, and what this phase is really about: FindRelatedProducts set WIX_DOWNGRADE_DETECTED to the newer product's code from this package's own Upgrade table, which is the package refusing the downgrade. A log that says nothing about a downgrade is unconfirmed, never a pass." }
       ],
       "proves": [
-        "Installing an older package over the newer one is refused with 1638, as the package source declares.",
+        "Installing an older package over the newer one is refused, as the package source declares: FindRelatedProducts records a downgrade and the transaction aborts at the LaunchCondition.",
         "The refusal is inert: the newer product, its files and its TSF registration are untouched."
       ],
       "cannotProve": [

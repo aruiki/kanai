@@ -413,63 +413,186 @@ function Get-KanaAiLifecycleMsiExitCodeMeaning {
 }
 
 # ---------------------------------------------------------------------------
-# pure: the verbose MSI log classifier
+# pure: the verbose MSI log fact reader
 # ---------------------------------------------------------------------------
+function Get-KanaAiLifecycleMsiLogFacts {
+    <#
+        One scan of the verbose log for the facts a classification is derived
+        from.  Every pattern is language-neutral: a Japanese Windows writes
+        操作開始 / 削除を正しく完了しました, so each fact is anchored on a token
+        msiexec itself emits in the same shape on every localisation.  The
+        Japanese text is kept as an additional alternative, never as the only
+        way to see a fact.
+
+        These facts were read out of the six real logs of the W2 run
+        .local/w2-execute-20260926-202806, not invented.  What each one
+        separates, measured:
+
+          install-msi        ProductState=-1  RemovingProduct=0  no WIX_*
+          reinstall-same     ProductState=5   RemovingProduct=0  no WIX_*
+          uninstall-clean-*  ProductState=5   RemovingProduct=1  no WIX_*
+          upgrade-forward    ProductState=-1  RemovingProduct=1  WIX_UPGRADE_DETECTED
+          downgrade-refused  ProductState=-1  RemovingProduct=0  WIX_DOWNGRADE_DETECTED
+
+        `ProductState = 5` is INSTALLSTATE_DEFAULT, the same documented value
+        Get-KanaAiLifecycleProductInstallStateName maps, so "the product was
+        already installed when this transaction started" is read with the same
+        vocabulary the rest of the harness uses.  `CleanupConfigData
+        (RemovingProduct=1)` is msiexec's own token for "this transaction
+        removed the product"; RemoveExistingProducts in a MajorUpgrade is not
+        that, which is why RemoveFiles is not used as a removal marker at all.
+    #>
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyString()][AllowNull()][string]$Text
+    )
+    $facts = [ordered]@{
+        # 5 = INSTALLSTATE_DEFAULT, i.e. installed, read at CostFinalize/InstallValidate time.
+        #
+        # Nothing here is anchored with ^.  A verbose log prefixes every line
+        # with "MSI (s) (pid) [time]: ", so an anchored pattern matches a real
+        # log exactly never, and the earlier marker bag was written that way and
+        # so was silently inert outside its synthetic self test.
+        alreadyInstalled   = ($Text -match '(?im)Property\s*\(S\)\s*:\s*ProductState\s*=\s*5\s*$')
+        # The cached install date is written only when the product was already registered.
+        installDatePresent = ($Text -match '(?im)Property\s*\(S\)\s*:\s*Installed\s*=\s*\S')
+        # An explicitly requested reinstall/repair.  The shipped plan never asks
+        # for one, so this fact is expected to be absent from a real W2 log.
+        # Both spellings are accepted because a verbose log writes a property
+        # set from the command line as "Property (REINSTALL): ALL" and the same
+        # property inside the client database as "Property(S): REINSTALL = ALL".
+        reinstallRequested = ($Text -match '(?im)Property\s*\(S\)\s*:\s*REINSTALL(MODE)?\s*=|(?im)Property\s*\(REINSTALL(MODE)?\)\s*:')
+        # Set by FindRelatedProducts from the package's own Upgrade table.  These
+        # two cannot both be set, and neither is set by a plain reinstall.
+        upgradeDetected   = ($Text -match '(?im)PROPERTY CHANGE: Adding WIX_UPGRADE_DETECTED property')
+        downgradeDetected = ($Text -match '(?im)PROPERTY CHANGE: Adding WIX_DOWNGRADE_DETECTED property')
+        # msiexec's own token for "this transaction removed the product".
+        productRemoved    = ($Text -match '(?im)CleanupConfigData\(RemovingProduct=1\)')
+        installSequence   = ($Text -match '(?im)\bDoing action: InstallInitialize\b|(?im)\bActionStart\(Name=InstallInitialize|(?im)\bAction start: InstallInitialize\b')
+        installSucceeded  = ($Text -match '(?im)MainEngineThread is returning 0\b|(?im)Installation completed successfully|(?im)インストールは正しく完了しました')
+        installFailed     = ($Text -match '(?im)MainEngineThread is returning (?!0\b)\d+|(?im)Installation failed|(?im)インストールは正しく完了しませんでした')
+        # The documented 1638 refusal text, for a package that reports the
+        # version conflict rather than a failed launch condition.
+        legacy1638        = ($Text -match '(?im)\bError 1638\.|(?im)\b1638\b.*(already installed|older version)|(?im)DowngradeErrorMessage|(?im)エラー 1638')
+    }
+    $present = @()
+    foreach ($name in $facts.Keys) {
+        if ([bool]$facts[$name]) { $present += [string]$name }
+    }
+    $facts['present'] = @($present)
+    return $facts
+}
+
 function Get-KanaAiLifecycleMsiLogClassification {
     <#
-        Conservative and fail-closed.  A log is only classified when it carries
-        a decisive marker.  Anything else returns Confident = $false, which the
-        verdict engine turns into "unconfirmed", never into a pass.
-        The harness deliberately does not guess what Windows Installer did when
-        the log does not say so in so many words.
+        Conservative and fail-closed, and derived from facts rather than from a
+        single marker per outcome.
+
+        The earlier shape was a bag of mutually exclusive markers and required
+        exactly one to fire.  Measured against the six real W2 logs that rule
+        classified only one of them, because the facts that identify a log are
+        not exclusive: a reinstall contains an install sequence, a MajorUpgrade
+        contains a removal sequence, and an uninstall contains both.  A bag of
+        markers cannot tell "two facts that belong together" from "two facts
+        that contradict each other", so it called ordinary runs ambiguous.
+
+        The rules below are ordered, and the earlier rules are the stronger
+        facts.  A rule only fires on facts that cannot both be true of one
+        transaction, and the leftovers are reported as not confident, which the
+        verdict engine turns into "unconfirmed" and never into a pass.
     #>
     param(
         [Parameter(Mandatory = $true)][AllowEmptyString()][AllowNull()][string]$Text,
         [string]$Expected = ''
     )
     $result = [ordered]@{
-        readable      = (-not [string]::IsNullOrEmpty($Text))
+        readable       = (-not [string]::IsNullOrEmpty($Text))
         classification = 'unreadable'
-        confident     = $false
-        evidence      = @()
-        expected      = $Expected
-        method        = 'decisive-marker scan of the Windows Installer verbose log; absence of a marker is reported as not confident'
+        confident      = $false
+        evidence       = @()
+        expected       = $Expected
+        method         = 'fact scan of the Windows Installer verbose log, then an ordered derivation; no decisive fact means not confident'
     }
     if ([string]::IsNullOrEmpty($Text)) {
         $result.evidence = @('the verbose log is missing or empty')
         return $result
     }
-    $markers = @(
-        # The log is localized (a Japanese Windows writes 操作開始 /
-        # 削除を正しく完了しました), so every marker also accepts the
-        # language-neutral msiexec token.  A fresh install legitimately contains
-        # InstallInitialize *and* RemoveFiles, so RemoveFiles alone is not a
-        # removal marker; a real removal is the removal-completed text or
-        # CleanupConfigData(RemovingProduct=1).  Multiple distinct markers stay
-        # unconfirmed, which is the whole point of the check (ST-07).
-        [pscustomobject]@{ Classification = 'downgrade-refused'; Pattern = '(?im)^\s*Error 1638\.|(?im)\b1638\b.*(already installed|older version)|(?im)DowngradeErrorMessage|(?im)エラー 1638'; Label = '1638 / downgrade refusal' },
-        [pscustomobject]@{ Classification = 'uninstall'; Pattern = '(?im)Product: .*(Removal|removal) completed successfully|(?im)Removing product\s*:|(?im)CleanupConfigData\(RemovingProduct=1\)|(?im)削除を正しく完了しました'; Label = 'removal sequence' },
-        [pscustomobject]@{ Classification = 'reinstall'; Pattern = '(?im)^Property \(REINSTALL(MODE)?\)\s*:|(?im)\bREINSTALL\b|(?im)再インストール'; Label = 'REINSTALL property' },
-        [pscustomobject]@{ Classification = 'first-install'; Pattern = '(?im)^Action start: InstallInitialize|(?im)Doing action: InstallInitialize|(?im)ActionStart\(Name=InstallInitialize|(?im)Installation completed successfully|(?im)インストールは正しく完了しました'; Label = 'install sequence' }
-    )
-    $hits = @()
-    foreach ($marker in $markers) {
-        if ($Text -match $marker.Pattern) { $hits += [string]$marker.Classification }
-    }
-    $distinct = @($hits | Select-Object -Unique)
-    if ($distinct.Count -eq 0) {
-        $result.evidence = @('no decisive marker was present in the log')
+    $facts = Get-KanaAiLifecycleMsiLogFacts -Text $Text
+    $result['facts'] = @($facts['present'])
+    if (@($facts['present']).Count -eq 0) {
+        $result.evidence = @('no decisive fact was present in the log')
         return $result
     }
-    # A log that shows both an install and a removal sequence is a repair or
-    # upgrade, not a clean install, and is reported as such rather than as a
-    # first install.
-    $result.classification = $distinct[0]
-    $result.confident = ($distinct.Count -eq 1)
-    $result.evidence = @($distinct)
-    if (-not $result.confident) {
+
+    # 0. FindRelatedProperties cannot set both Upgrade table action properties in
+    #    one transaction, and a log that claims it did is contradicting itself.
+    #    That is reported as not confident, before either one is believed.
+    if ($facts.upgradeDetected -and $facts.downgradeDetected) {
         $result.classification = 'ambiguous-multiple-markers'
+        $result.evidence = @('the log records both WIX_UPGRADE_DETECTED and WIX_DOWNGRADE_DETECTED, which FindRelatedProducts cannot do in one transaction')
+        return $result
     }
+    # 1. The package's own Upgrade table recorded that an equal-or-newer version
+    #    is installed, or the installer reported the documented 1638.  Nothing
+    #    else sets these, and a successful transaction never carries them.
+    if ($facts.downgradeDetected -or $facts.legacy1638) {
+        $result.classification = 'downgrade-refused'
+        $result.confident = $true
+        $result.evidence = @('the log records a downgrade refusal: ' + ((@($facts['present']) | Where-Object { $_ -in @('downgradeDetected', 'legacy1638') }) -join ', '))
+        return $result
+    }
+    # 2. FindRelatedProducts recorded a strictly older related product, which is
+    #    the forward MajorUpgrade path: the old product is removed inside the
+    #    same transaction that installs the new one.
+    if ($facts.upgradeDetected) {
+        $result.classification = 'upgrade'
+        $result.confident = $true
+        $result.evidence = @('the log records WIX_UPGRADE_DETECTED, the forward MajorUpgrade path')
+        return $result
+    }
+    # 3. The product was already installed and this transaction removed it.
+    $wasInstalled = ($facts.alreadyInstalled -and $facts.installDatePresent)
+    if ($wasInstalled -and $facts.productRemoved) {
+        $result.classification = 'uninstall'
+        $result.confident = $true
+        $result.evidence = @('the product was already installed and this transaction removed it (CleanupConfigData RemovingProduct=1)')
+        return $result
+    }
+    # 4. The product was already installed, and this transaction neither
+    #    upgraded, downgraded, nor removed it.  That is a reinstall, whether or
+    #    not REINSTALL was requested, and it is the decisive difference from a
+    #    first install: a first install starts with the product absent.
+    if ($wasInstalled) {
+        $result.classification = 'reinstall'
+        $result.confident = $true
+        $result.evidence = @('the product was already installed (ProductState=5, i.e. INSTALLSTATE_DEFAULT) and this transaction did not remove it')
+        if ($facts.reinstallRequested) { $result.evidence = @($result.evidence + ' REINSTALL was requested explicitly as well') }
+        return $result
+    }
+    # 5. An explicitly requested reinstall, on a log that did not record an
+    #    existing installation.  Kept so a package whose log omits ProductState
+    #    is still classified from the property it was asked with.
+    if ($facts.reinstallRequested) {
+        $result.classification = 'reinstall'
+        $result.confident = $true
+        $result.evidence = @('REINSTALL was requested explicitly')
+        return $result
+    }
+    # 6. An install sequence over a product that was not present.  A removal
+    #    marker here without a WIX_UPGRADE_DETECTED is a contradiction the log
+    #    does not explain, so it is not classified.
+    if ($facts.installSequence -and -not $facts.productRemoved) {
+        $result.classification = 'first-install'
+        $result.confident = $true
+        $result.evidence = @('an install sequence ran over a product that was not already installed')
+        return $result
+    }
+    if ($facts.installSequence -or $facts.productRemoved) {
+        $result.classification = 'ambiguous-multiple-markers'
+        $result.evidence = @('the log carries an install sequence and a product removal, and nothing that says which transaction this was: ' + ((@($facts['present'])) -join ', '))
+        return $result
+    }
+    $result.classification = 'unclassified'
+    $result.evidence = @('the log carries no fact that identifies the transaction: ' + ((@($facts['present'])) -join ', '))
     return $result
 }
 
@@ -1202,6 +1325,16 @@ function Resolve-KanaAiLifecyclePhaseChecks {
                 }
                 elseif (-not (Get-KanaAiLifecycleBoolProperty -Object $log -Name 'confident')) {
                     [void]$results.Add((New-KanaAiLifecycleCheckResult -Check $check -Outcome 'unconfirmed' -Required $required -Detail ('the log was not classifiable with confidence; expected "' + $expect + '"') -Evidence @(Get-KanaAiLifecycleOptionalProperty -Object $log -Name 'evidence' -Default @())))
+                }
+                elseif ($expect -eq 'any') {
+                    # "any" is a real instruction, not a classification name: any
+                    # confident classification satisfies it.  It used to be
+                    # compared like a name, so it could only ever fail, which is
+                    # why every phase that used it also had to mark the check
+                    # not required.  A log that is not confidently classified is
+                    # still unconfirmed above; "any" never rescues that.
+                    $anyClassification = [string](Get-KanaAiLifecycleOptionalProperty -Object $log -Name 'classification' -Default '')
+                    [void]$results.Add((New-KanaAiLifecycleCheckResult -Check $check -Outcome 'pass' -Required $required -Detail ("the plan accepts any classification for this phase, and the log is classified as '{0}'" -f $anyClassification) -Evidence @(Get-KanaAiLifecycleOptionalProperty -Object $log -Name 'evidence' -Default @())))
                 }
                 elseif ([string](Get-KanaAiLifecycleOptionalProperty -Object $log -Name 'classification' -Default '') -eq $expect) {
                     [void]$results.Add((New-KanaAiLifecycleCheckResult -Check $check -Outcome 'pass' -Required $required -Detail ("the Windows Installer log is classified as '{0}'" -f $expect) -Evidence @(Get-KanaAiLifecycleOptionalProperty -Object $log -Name 'evidence' -Default @())))
