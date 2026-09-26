@@ -415,6 +415,7 @@ if ($PlanOnly) {
         excludedTopLevelFields = @($sanitySubject.excluded)
         excludedReason         = "the plan's own privacy policy names the categories it never collects, so quoting it verbatim would always trip the scan. The excluded field is recorded here with the SHA-256 of its text."
         policyTextSha256       = (Get-KanaAiLifecycleTextSha256 -Text (($baseReceipt.privacy.policy | ConvertTo-Json -Depth 20)))
+        pathProtection         = (New-KanaAiLifecyclePathProtectionRecord)
     }
     if (-not $sanity.ok) {
         $baseReceipt.overall = 'failed'
@@ -916,6 +917,21 @@ foreach ($action in @($resumePlan.Actions)) {
         }
     }
     $record.command = $commandRecord
+
+    # The command record is the one place in the receipt that quotes a path
+    # verbatim, and it quotes it four times: executable, every argument, the
+    # command line and the what-if render.  The candidate and the log both live
+    # under the operator's home directory, so the command line carried
+    # C:\Users\<name>\Documents\... in the middle of the string, where a
+    # leading-prefix scrub cannot reach it.  The privacy scan caught it and
+    # failed a run whose eleven phases had all passed, so the protection is
+    # applied here, once, before the record is stored.  Doing it here rather
+    # than inside the comparison engine also means the `command-exit-code`
+    # check's evidence is protected, because that evidence is this very
+    # commandLine.  The run still executes the real paths: only what is written
+    # down is tokenised.
+    Protect-KanaAiLifecycleCommandRecord -Record $record.renderedCommand
+    Protect-KanaAiLifecycleCommandRecord -Record $commandRecord
 
     # --- independent observation ------------------------------------------
     $expectedFilesObject = $null

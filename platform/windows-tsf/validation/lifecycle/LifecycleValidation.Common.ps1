@@ -1677,26 +1677,125 @@ function New-KanaAiLifecycleArtifactEntry {
     return $entry
 }
 
-function Protect-KanaAiLifecyclePath {
-    <# Replace a user profile prefix with a token. #>
-    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Path)
-    $value = $Path
+function New-KanaAiLifecyclePathPrefixTable {
+    <#
+        The one machine-dependent input to path protection: the directory
+        prefixes that must never reach the receipt.  Built once per run and
+        passed to the pure Protect-KanaAiLifecycleText, so the protection rule
+        itself has no environment in it and can be driven by the self test with a
+        synthetic table.
+
+        Longest prefix first, so USERPROFILE is replaced before a shorter prefix
+        that happens to sit inside it.
+    #>
+    $pairs = New-Object System.Collections.Generic.List[object]
     foreach ($variable in @('USERPROFILE', 'LOCALAPPDATA', 'APPDATA', 'TEMP', 'TMP')) {
-        $profile = [System.Environment]::GetEnvironmentVariable($variable)
-        if ([string]::IsNullOrWhiteSpace($profile)) { continue }
-        $prefix = $profile.TrimEnd('\') + '\'
-        if ($value.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-            $value = ('<{0}>\' -f $variable) + $value.Substring($prefix.Length)
-        }
+        $value = [System.Environment]::GetEnvironmentVariable($variable)
+        if ([string]::IsNullOrWhiteSpace($value)) { continue }
+        [void]$pairs.Add([pscustomobject]@{ token = ('<' + $variable + '>'); prefix = ($value.TrimEnd('\') + '\') })
     }
     $documents = [System.Environment]::GetFolderPath('MyDocuments')
     if (-not [string]::IsNullOrWhiteSpace($documents)) {
-        $prefix = $documents.TrimEnd('\') + '\'
-        if ($value.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-            $value = '<MyDocuments>\' + $value.Substring($prefix.Length)
-        }
+        [void]$pairs.Add([pscustomobject]@{ token = '<MyDocuments>'; prefix = ($documents.TrimEnd('\') + '\') })
+    }
+    return @($pairs | Sort-Object -Property @{ Expression = { $_.prefix.Length }; Descending = $true })
+}
+
+function Protect-KanaAiLifecycleText {
+    <#
+        Pure: replaces EVERY occurrence of every protected prefix, not only a
+        leading one.
+
+        The leading-only form is not enough for the thing that most needed
+        protecting.  A phase's command line reads
+
+          C:\WINDOWS\system32\msiexec.exe /i C:\Users\<name>\Documents\... /qn
+
+        where the home directory sits in the middle, and that whole string is
+        what the receipt recorded, in `command`, in `renderedCommand`, in
+        `observation.command` and as the evidence of the `command-exit-code`
+        check.  The privacy scan then failed the run: measured, the last
+        -Execute run on this machine reached all eleven phases with every check
+        passing and still exited 1, because the receipt carried the operator's
+        home directory 111 times.
+
+        The audit value is not lost.  What remains is the path relative to the
+        token, the argument list, and the digest of every artifact, so a reader
+        can still tie the run to exact bytes.  What goes is the operator's home
+        directory, which the privacy policy forbids.
+    #>
+    param(
+        [AllowEmptyString()][AllowNull()][string]$Text,
+        [AllowNull()]$Prefixes
+    )
+    if ([string]::IsNullOrEmpty($Text) -or $null -eq $Prefixes) { return $Text }
+    $value = $Text
+    foreach ($pair in @($Prefixes)) {
+        $prefix = [string]$pair.prefix
+        if ([string]::IsNullOrWhiteSpace($prefix)) { continue }
+        $value = $value.Replace($prefix, ([string]$pair.token + '\'))
     }
     return $value
+}
+
+function New-KanaAiLifecyclePathProtectionRecord {
+    <#
+        What the receipt says about path protection, and deliberately not the
+        prefixes themselves: a prefix IS the operator's home directory, so
+        recording it would put back exactly what the protection removed.  The
+        tokens and the count are enough for a reader to know what was replaced,
+        and the scan below is what proves none of it survived.
+    #>
+    $table = New-KanaAiLifecyclePathPrefixTable
+    return [ordered]@{
+        rule = 'every occurrence of the operator''s user profile, local app data, roaming app data, temp and MyDocuments prefixes is replaced with a token, in the path-bearing fields of every command record (executable, arguments, commandLine, whatIfRender) and in every recorded install path'
+        tokens = @($table | ForEach-Object { [string]$_.token })
+        prefixCount = @($table).Count
+        prefixValuesRecorded = $false
+        prefixValuesReason = 'a prefix is the operator''s home directory; recording it would restore what the protection removed'
+        verifiedBy = 'the receipt sanity scan, which reads the serialized receipt back and fails the run if a forbidden value pattern survives'
+    }
+}
+
+function Protect-KanaAiLifecycleCommandRecord {
+    <#
+        Replaces the operator's directory prefixes inside one command record, in
+        place: `executable`, every element of `arguments`, `commandLine` and
+        `whatIfRender`.  Anything else in the record is left exactly as it is, so
+        this cannot quietly change what the receipt says about the run's result.
+
+        The record is mutated rather than copied because the same object is
+        reachable from three places in the receipt (`command`,
+        `renderedCommand`, `observation.command`) and from the
+        `command-exit-code` check's evidence.  Scrubbing each copy separately
+        would be four chances to forget one.
+    #>
+    param(
+        [AllowNull()]$Record,
+        [AllowNull()]$Prefixes
+    )
+    if ($null -eq $Record) { return $Record }
+    if ($null -eq $Prefixes) { $Prefixes = New-KanaAiLifecyclePathPrefixTable }
+    $fields = @('executable', 'commandLine', 'whatIfRender')
+    foreach ($field in $fields) {
+        $current = [string](Get-KanaAiLifecycleOptionalProperty -Object $Record -Name $field -Default '')
+        if ([string]::IsNullOrWhiteSpace($current)) { continue }
+        $Record[$field] = (Protect-KanaAiLifecycleText -Text $current -Prefixes $Prefixes)
+    }
+    $arguments = Get-KanaAiLifecycleOptionalProperty -Object $Record -Name 'arguments' -Default $null
+    if ($null -eq $arguments) { return $Record }
+    $protected = @()
+    foreach ($argument in @($arguments)) {
+        $protected += (Protect-KanaAiLifecycleText -Text ([string]$argument) -Prefixes $Prefixes)
+    }
+    $Record['arguments'] = $protected
+    return $Record
+}
+
+function Protect-KanaAiLifecyclePath {
+    <# Replace a user profile prefix with a token. #>
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Path)
+    return (Protect-KanaAiLifecycleText -Text $Path -Prefixes (New-KanaAiLifecyclePathPrefixTable))
 }
 
 function Get-KanaAiLifecycleRepositoryRelativePath {

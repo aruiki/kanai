@@ -1550,6 +1550,82 @@ Invoke-Test -Id 'ST-87' -Name 'every harness source file is ASCII, so the 5.1 ho
     Assert-True ($body -notmatch '(?m)-match\s*''[^'']*[^\x00-\x7F]') 'no fact pattern may contain a non-ASCII character'
 }
 
+Invoke-Test -Id 'ST-88' -Name 'a command line is recorded with the home directory tokenised, not deleted' -Body {
+    # Measured: the -Execute run at .local/w2-execute-20260926-231336 reached
+    # all eleven phases with every check passing and still exited 1, because the
+    # receipt carried the operator's home directory 111 times and the privacy
+    # scan failed it.  The path was in the middle of the command line, so the
+    # leading-prefix scrub could not reach it.  The whole command line is the
+    # point of the evidence, so the fix has to tokenise, not truncate.
+    $synthetic = @(
+        [pscustomobject]@{ token = '<MyDocuments>'; prefix = 'C:\Users\someone\Documents\' }
+        [pscustomobject]@{ token = '<USERPROFILE>'; prefix = 'C:\Users\someone\' }
+    )
+    # Longest prefix first, as the real table is, so USERPROFILE cannot eat the
+    # MyDocuments token.
+    $synthetic = @($synthetic | Sort-Object -Property @{ Expression = { $_.prefix.Length }; Descending = $true })
+
+    $record = [ordered]@{
+        executable   = 'C:\WINDOWS\system32\msiexec.exe'
+        arguments    = @('/i', 'C:\Users\someone\Documents\repo\.local\KanaAI.msi', '/qn', '/norestart', '/l*v', 'C:\Users\someone\Documents\repo\.local\run\install-msi.log')
+        commandLine  = 'C:\WINDOWS\system32\msiexec.exe /i C:\Users\someone\Documents\repo\.local\KanaAI.msi /qn /norestart /l*v C:\Users\someone\Documents\repo\.local\run\install-msi.log'
+        whatIfRender = 'WHATIF: would run -> C:\WINDOWS\system32\msiexec.exe /i C:\Users\someone\Documents\repo\.local\KanaAI.msi'
+        exitCode     = '0'
+        timedOut     = $false
+    }
+    Protect-KanaAiLifecycleCommandRecord -Record $record -Prefixes $synthetic
+
+    Assert-True (-not ([string]$record.commandLine -match '(?i)\\Documents\\')) 'the command line must not carry the home directory'
+    Assert-True (-not ([string]$record.whatIfRender -match '(?i)\\Documents\\')) 'the what-if render must not carry the home directory'
+    foreach ($argument in @($record.arguments)) {
+        Assert-True (-not ([string]$argument -match '(?i)\\Documents\\')) ('no argument may carry the home directory: ' + [string]$argument)
+    }
+    # The audit value survives: the artifact name, every flag, the log name and
+    # the executable are all still there, and the exit code is untouched.
+    Assert-True ([string]$record.commandLine -match 'KanaAI\.msi') 'the recorded command must still name the artifact'
+    Assert-True ([string]$record.commandLine -match '/qn') 'the recorded command must still name the flags'
+    Assert-True ([string]$record.commandLine -match 'install-msi\.log') 'the recorded command must still name the log it wrote'
+    Assert-True ([string]$record.commandLine -match 'msiexec\.exe') 'the recorded command must still name the executable'
+    Assert-Equal '0' ([string]$record.exitCode) 'the protection must not touch the exit code'
+    Assert-True ([string]$record.executable -match 'msiexec\.exe') 'an executable outside the profile is untouched'
+
+    # A prefix must never be able to eat a shorter one, or a Documents path
+    # would be tokenised as <USERPROFILE> and stop being recognisable.
+    Assert-Equal '<MyDocuments>\repo\.local\KanaAI.msi' (Protect-KanaAiLifecycleText -Text 'C:\Users\someone\Documents\repo\.local\KanaAI.msi' -Prefixes $synthetic) 'the longest matching prefix wins'
+    Assert-Equal '<USERPROFILE>\other\thing.msi' (Protect-KanaAiLifecycleText -Text 'C:\Users\someone\other\thing.msi' -Prefixes $synthetic) 'a non-Documents path still uses the profile token'
+
+    # Null and empty inputs must not throw: a phase that runs no command has a
+    # null record, and the protection runs on every phase.
+    Assert-True ($null -eq (Protect-KanaAiLifecycleCommandRecord -Record $null -Prefixes $synthetic)) 'a null record stays null'
+    Assert-Equal '' (Protect-KanaAiLifecycleText -Text '' -Prefixes $synthetic) 'empty text stays empty'
+    Assert-Equal 'plain text' (Protect-KanaAiLifecycleText -Text 'plain text' -Prefixes $synthetic) 'text with no prefix is unchanged'
+
+    # The record the receipt carries must declare the rule and must not carry
+    # the prefix values, which are the thing being removed.
+    $protection = New-KanaAiLifecyclePathProtectionRecord
+    Assert-True (@($protection.tokens).Count -ge 1) 'the record must name the tokens it used'
+    Assert-Equal $false ([bool]$protection.prefixValuesRecorded) 'the record must state that it does not carry the prefix values'
+    $protectionJson = $protection | ConvertTo-Json -Depth 4 -Compress
+    $userProfile = [System.Environment]::GetEnvironmentVariable('USERPROFILE')
+    if (-not [string]::IsNullOrWhiteSpace($userProfile)) {
+        Assert-True (-not ($protectionJson -match [regex]::Escape($userProfile))) 'the protection record must not contain the user profile path'
+    }
+
+    # The function being correct is worth nothing if nothing calls it.  A
+    # scratch copy with both call sites deleted passes every other case, because
+    # the leak only exists in a real run's receipt, so the call site is asserted
+    # from the entry point the way ST-62, ST-72, ST-74 and ST-81 assert theirs.
+    $run = [System.IO.File]::ReadAllText($runPath)
+    Assert-True ($run.Contains('Protect-KanaAiLifecycleCommandRecord -Record $record.renderedCommand')) 'the rendered command must be protected before it is stored'
+    Assert-True ($run.Contains('Protect-KanaAiLifecycleCommandRecord -Record $commandRecord')) 'the executed command record must be protected before it is stored'
+    # And before either is stored, or the receipt keeps the raw copy.
+    $protectAt = $run.IndexOf('Protect-KanaAiLifecycleCommandRecord -Record $record.renderedCommand')
+    $storeAt = $run.IndexOf('$record.command = $commandRecord')
+    Assert-True ($protectAt -gt 0) 'the call site must exist'
+    Assert-True ($storeAt -gt 0) 'the store site must exist'
+    Assert-True ($protectAt -gt $storeAt) 'the protection must run after the record is built and before the receipt is written from it; if this ever inverts, the raw record is what gets stored'
+}
+
 Invoke-Test -Id 'ST-84' -Name 'every log-classification expectation in the plan is one the classifier produces' -Body {
     # The plan's msi-log-classification expectations are read against real logs,
     # so an expectation the classifier can never emit is a phase that can never
