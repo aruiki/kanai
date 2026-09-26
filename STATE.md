@@ -70,11 +70,24 @@ D-1〜D-5 の決定はそのまま有効（下の履歴区切りを参照）。
 
 確実に言えること:
 
+- **Windows Installer は 2026-09-26 15:29:07 に新候補の install 成功を記録している**
+  （Application log / MsiInstaller event 1033、`status: 0`、product `KanaAI Development
+  Preview` 0.1.0）。15:29:20 に event 1035 reconfigure 成功。15:27:17 と 15:29:01 に
+  `Temp\KanaAI-<guid>\KanaAI.msi` の transaction があり、これは WiX Burn（Setup.exe）が
+  MSI を temp に展開する形。**したがって「候補は未導入」という記述は誤りである。導入は
+  成功していた。** ただし **receipt がどちらの worktree にも存在しない**。
 - `Installer.Products` 列挙に KanaAI が**2件**。`{307FE767-…}`（旧 x86 ビルド）と
   `{FBDCE95B-…}`（新候補 `{c729da4…}` 版）。
 - 新候補は cached MSI `32193a0.msi`（18,427,904 bytes）を持つ。`ProductInfo.InstallDate = 20260926`（本日）。
-- `C:\Program Files\KanaAI` は**存在しない**。`C:\Program Files (x86)\KanaAI` のみ 12 ファイル。
-- Uninstall レジストリにも 2 件（`WindowsInstaller=1`）。
+- install 成功が記録されたにもかかわらず `C:\Program Files\KanaAI` は**存在しない**。
+  `C:\Program Files (x86)\KanaAI` のみ 12 ファイル。**event 1034（uninstall）は本日 1 件も
+  logged されていない。**
+- 実行主体は特定できていない。15:25:20 / 15:27:36 / 15:27:56 にこの repo の
+  `.git/objects` へ **dangling commit**（`On main: cline checkpoint
+  session=1790394028106_96yht run=7` と `index on main` の stash 相当）が書かれており、
+  install の 15:27〜15:29 を挟んでいる。`cline-app` は今も起動中（16:09:15 開始）、
+  worktree `cline/16435` が 16:12:04 に作成されている。**自律 agent がこの machine を
+  操作していた可能性が高い。**
 
 **撤回**: 前回「両 products とも installState=5 (installed)」と報告したが、これは
 MsiQueryProductState の P/Invoke シグネチャを間違えた**私の誤り**だった。正しくは
@@ -136,8 +149,18 @@ parse され全て `ok` に見えたが、**外側の case は独立に失敗で
 
 ## 未解決・未検証（隠さない）
 
-- **W2（install / uninstall / reinstall / rollback）は、依然として 1 phase も未観測。**
-  今回判明した installer 非回答のため、**この machine では W2 を成立させられない**。
+- **W2（install / uninstall / reinstall / rollback）は、1 phase も receipt として観測されていない。**
+  ただし「何も起きなかった」ではない。**event 1033 により install は 15:29:07 に成功している**
+  （§3）。receipt が無いのはハーネスが install 後の観測で落ちて記録できなかったためで、
+  したがって **W2 は「未実行」ではなく「実行されたが証跡が残っていない」状態**であり、
+  さらに **成功した install のファイルが後から消えている**。この 2 点は Product Release
+  Contract 上の「未検証のインストーラーを公開する許可ではない」に該当するため公開不可。
+  加えて §2 のとおりinstaller が install state を回答しないため、**この machine では
+  W2 を成立させられない**。
+- **自律 agent の操作が重なっている**（§3）。Cline session が 15:25-15:29 に
+  この machine を操作し、`cline-app` は今も起動中。**この machine に対する mutation を
+  行う前に、どの agent を停止/idle にするかをユーザーと決めること。**
+
 - **W1（実アプリ入力）未実施**。desktop validation は新候補で一度も走っていない。
   旧試行は登録・ファイル・プロファイルは PASS したが共有 desktop 上の SendInput が全滅した。
   人が別途、文字入力・変換・かな切替成功を報告（user report のみ）。D-2 の事前連絡が必要。
