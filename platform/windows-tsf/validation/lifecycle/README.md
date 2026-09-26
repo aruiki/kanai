@@ -109,8 +109,8 @@ observed.
 | File | Lines | Purpose |
 | --- | --- | --- |
 | `Invoke-KanaAiLifecycleValidation.ps1` | 1191 | Entry point. Modes `-PlanOnly`, `-SelfTest`, `-Execute`. Gates, phase loop, receipt. |
-| `LifecycleValidation.Common.ps1` | 2997 | Shared helpers, split into a pure half (plan validation, comparison engine, verdict engine, log classifier, resume planner, receipt assembler, privacy scan) and an observation half that every function routes through one action gate. |
-| `Invoke-KanaAiLifecycleValidationSelfTest.ps1` | 1582 | 87 self-test cases. No machine interaction. Synthetic inputs, plus the decisive msiexec lines of the five classified logs of one real measured run, reduced to the tokens that are evidence. |
+| `LifecycleValidation.Common.ps1` | 3010 | Shared helpers, split into a pure half (plan validation, comparison engine, verdict engine, log classifier, resume planner, receipt assembler, privacy scan) and an observation half that every function routes through one action gate. |
+| `Invoke-KanaAiLifecycleValidationSelfTest.ps1` | 1638 | 88 self-test cases. No machine interaction. Synthetic inputs, plus the decisive msiexec lines of the five classified logs of one real measured run, reduced to the tokens that are evidence. |
 | `lifecycle-validation-plan.json` | 11 phases | The plan: pinned identity, registration identity, phase order, per-phase assertions, per-phase `proves` / `cannotProve`, safety gates, privacy policy, non-goals. |
 | `README.md` | this file | What each phase proves, what it cannot, how to read the receipt, the elevation and UAC expectation. |
 
@@ -136,7 +136,7 @@ machine-touching helper throws `LIFECYCLE-GATE-SEALED` if it is called anyway
 powershell -NoProfile -ExecutionPolicy Bypass -File platform\windows-tsf\validation\lifecycle\Invoke-KanaAiLifecycleValidationSelfTest.ps1
 ```
 
-Exit code 0 when all 87 cases pass, 1 otherwise. Or through the entry point with
+Exit code 0 when all 88 cases pass, 1 otherwise. Or through the entry point with
 `-SelfTest`.
 
 ### A real lifecycle run (NOT performed; requires an elevated 64-bit shell)
@@ -233,6 +233,38 @@ that have nothing to do with the command's own return value:
   derivation, not matched against one marker per outcome. An unclassifiable or
   self-contradicting log is `unconfirmed`.
 
+### The harness source is ASCII-only, and that is enforced
+
+`LifecycleValidation.Common.ps1` carries the header "This file is ASCII-only so
+the system ANSI code page cannot corrupt it". That claim was **false**: the file
+carried Japanese log-text alternatives, and this machine's ANSI code page is
+932.
+
+That is not cosmetic. A `.ps1` file with no byte order mark is read by the
+Windows PowerShell 5.1 host as ANSI, so a UTF-8 Japanese literal inside it is
+decoded as Shift-JIS and matches no log line at all. Measured through the 5.1
+host on this machine, with a Japanese removal line as the only evidence:
+
+```
+japanese-only removal fact seen by the 5.1 host: False
+with the language-neutral token too:              True
+```
+
+So the Japanese patterns were not weak alternatives. They were inert.
+
+Every fact the classifier depends on is anchored on a token msiexec writes in
+the same shape on every localisation — `Property(S): ProductState = 5`,
+`CleanupConfigData(RemovingProduct=1)`, `PROPERTY CHANGE: Adding
+WIX_DOWNGRADE_DETECTED property`, `Doing action: InstallInitialize`,
+`MainEngineThread is returning 0` — and those tokens sit on the same log lines as
+the Japanese text, so the Japanese line is still read. The Japanese alternatives
+were removed, all four harness source files are now genuinely ASCII (measured: 0
+non-ASCII bytes each), and ST-87 fails the run if a non-ASCII byte reappears in
+any of them or inside a fact pattern. ST-83 drives a log line assembled from
+Japanese code points, so the source stays ASCII while the fixture does not.
+
+A claim in a comment is not a guarantee. This one is now a test.
+
 ### How a verbose log is classified, and why it is not a marker bag
 
 The classifier used to be four mutually exclusive markers and required exactly
@@ -261,7 +293,8 @@ way to see a fact.
 | `downgradeDetected` | `Adding WIX_DOWNGRADE_DETECTED property` | it found an equal-or-newer one, and the package refuses |
 | `reinstallRequested` | `Property (REINSTALL):` or `Property(S): REINSTALL =` | a reinstall or repair was asked for explicitly. The shipped plan never asks, so a real W2 log does not carry it |
 | `installSequence` | `Doing action: InstallInitialize` and its two other spellings | an install transaction ran |
-| `legacy1638` | `Error 1638` and its localised form | the documented version-conflict refusal, for a package that reports it that way |
+| `installSucceeded` / `installFailed` | `MainEngineThread is returning <n>` | how the transaction ended, and it distinguishes 0 from every failure code |
+| `legacy1638` | `Error 1638`, `1638 … already installed`, `DowngradeErrorMessage` | the documented version-conflict refusal, for a package that reports it that way |
 
 The derivation, in order, with the earlier rules being the stronger facts:
 
@@ -471,13 +504,16 @@ prototype and passed the bug it was written to catch.
 - **Never decide a phase from a command exit code alone**, and never let a
   registry key with no real file behind it count as a registration. Enforced by
   ST-10, ST-12, ST-13, ST-28, ST-29 and ST-30.
-- **Never identify a log by one marker, and never anchor a pattern to the start
-  of a line.** The facts that identify a transaction are not exclusive — a
-  reinstall has an install sequence, a MajorUpgrade has a product removal, an
-  uninstall has both — so mutually exclusive markers call ordinary runs
-  ambiguous. And a verbose log prefixes every line, so `^` matches a real log
-  never. Both were true at once, and the self test could not see either because
-  its strings had no prefix. Enforced by ST-07, ST-82 and ST-83.
+- **Never identify a log by one marker, never anchor a pattern to the start of a
+  line, and never let a fact depend on translated text.** The facts that identify
+  a transaction are not exclusive — a reinstall has an install sequence, a
+  MajorUpgrade has a product removal, an uninstall has both — so mutually
+  exclusive markers call ordinary runs ambiguous. A verbose log prefixes every
+  line, so `^` matches a real log never. And a `.ps1` with no byte order mark is
+  read as ANSI by the 5.1 host, so a Japanese literal in the source matches no
+  Japanese log line. All three were true at once, and the self test could not see
+  any of them because its strings had neither the prefix nor the encoding. Enforced
+  by ST-07, ST-82, ST-83 and ST-87.
 - **Never let an expectation be a name the machinery cannot produce.** Every
   `msi-log-classification` expectation in the plan is checked against the
   classifications the classifier really emits, and against the measured log of

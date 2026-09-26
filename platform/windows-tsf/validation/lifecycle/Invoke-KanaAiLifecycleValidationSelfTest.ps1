@@ -40,7 +40,8 @@ $root = $PSScriptRoot
 $commonPath = Join-Path $root 'LifecycleValidation.Common.ps1'
 $planPath = Join-Path $root 'lifecycle-validation-plan.json'
 $runPath = Join-Path $root 'Invoke-KanaAiLifecycleValidation.ps1'
-foreach ($required in @($commonPath, $planPath, $runPath)) {
+$selfPath = Join-Path $root 'Invoke-KanaAiLifecycleValidationSelfTest.ps1'
+foreach ($required in @($commonPath, $planPath, $runPath, $selfPath)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "self-test cannot run: missing $required" }
 }
 . $commonPath
@@ -1487,11 +1488,66 @@ Invoke-Test -Id 'ST-83' -Name 'no log fact is anchored to the start of a line' -
         Assert-True ([bool]$bareFacts[$name]) ("the fact '{0}' must not depend on a line prefix" -f $name)
     }
     Assert-Equal 'downgrade-refused' ([string](Get-KanaAiLifecycleMsiLogClassification -Text $prefixed).classification) 'the prefixed form must classify the same way'
-    # A Japanese log is the only one this machine produces, so the facts must
-    # not be English-only.  These two are the same two facts in the form a
-    # localised installer writes them.
-    $localised = Get-KanaAiLifecycleMsiLogFacts -Text "MSI (s) (30:58) [20:30:24:781]: 操作開始 20:30:24: LaunchConditions (PID 12345)。`r`nMSI (s) (30:58) [20:30:24:781]: アクションの終了 20:30:24: LaunchConditions。戻値 3。`r`nMSI (s) (30:58) [20:30:24:796]: MainEngineThread is returning 1603`r`n"
-    Assert-True ([bool]$localised.installFailed) 'a localised failure line must still be read as a failure'
+
+    # A Japanese Windows is the only one this machine has, and the harness's
+    # source files are read by the Windows PowerShell 5.1 host as ANSI because
+    # they carry no byte order mark.  A Japanese literal written into one of them
+    # is therefore decoded as Shift-JIS and matches nothing, which is why no fact
+    # may depend on translated text.  The Japanese log line is built here from
+    # code points so this file stays ASCII too, and the assertion is the one that
+    # matters: the language-neutral tokens are read off a line whose surrounding
+    # text is Japanese.
+    $japaneseActionStart = [string]([char]0x64CD + [char]0x4F5C + [char]0x306E + [char]0x958B + [char]0x59CB)   # action no kai hajimari
+    $japaneseActionEnd = [string]([char]0x30A2 + [char]0x30B7 + [char]0x30E7 + [char]0x30F3 + [char]0x306E + [char]0x7D42 + [char]0x4E86) # akushon no shuuryou
+    $japaneseReturned = [string]([char]0x623B + [char]0x5024)   # modori chi
+    $localised = 'MSI (s) (30:58) [20:30:24:781]: ' + $japaneseActionStart + ' 20:30:24: LaunchConditions (PID 12345)' + [char]0x3002 + "`r`n" +
+        'MSI (s) (30:58) [20:30:24:781]: ' + $japaneseActionEnd + ' 20:30:24: LaunchConditions' + [char]0x3002 + ' ' + $japaneseReturned + ' 3' + [char]0x3002 + "`r`n" +
+        'MSI (s) (30:58) [20:30:24:796]: MainEngineThread is returning 1603' + "`r`n"
+    Assert-True ($localised -match '[^\x00-\x7F]') 'the fixture must really carry Japanese text, or it proves nothing'
+    $localisedFacts = Get-KanaAiLifecycleMsiLogFacts -Text $localised
+    Assert-True ([bool]$localisedFacts.installFailed) 'a failure recorded on a Japanese log line must still be read as a failure'
+    # And the localised refusal log still classifies, without any Japanese
+    # pattern existing to do it.
+    $localisedDowngrade = 'MSI (s) (30:58) [20:30:24:780]: PROPERTY CHANGE: Adding WIX_DOWNGRADE_DETECTED property. Its value is ''{B89B09D1-1FB2-42D2-AA31-2CD52DB113C7}''.' + [char]0x3002 + "`r`n" +
+        'MSI (s) (30:58) [20:30:24:795]: ' + $japaneseActionEnd + ' 20:30:24: LaunchConditions' + [char]0x3002 + ' ' + $japaneseReturned + ' 3' + [char]0x3002 + "`r`n" +
+        'MSI (s) (30:58) [20:30:24:796]: MainEngineThread is returning 1603' + "`r`n"
+    Assert-Equal 'downgrade-refused' ([string](Get-KanaAiLifecycleMsiLogClassification -Text $localisedDowngrade).classification) 'a Japanese refused-downgrade log must classify from the language-neutral tokens alone'
+}
+
+Invoke-Test -Id 'ST-87' -Name 'every harness source file is ASCII, so the 5.1 host cannot misdecode it' -Body {
+    # The header of LifecycleValidation.Common.ps1 claims the file is ASCII-only
+    # so the system ANSI code page cannot corrupt it.  That claim was false: the
+    # file carried Japanese log-text alternatives, and on this machine (code page
+    # 932) the Windows PowerShell 5.1 host decoded them as Shift-JIS, so the fact
+    # they belonged to was False for the Japanese line alone.  Measured, not
+    # assumed.  A claim in a comment is not a guarantee, so it is checked here.
+    $files = @{
+        'Invoke-KanaAiLifecycleValidation.ps1'           = $runPath
+        'LifecycleValidation.Common.ps1'                 = $commonPath
+        'Invoke-KanaAiLifecycleValidationSelfTest.ps1'   = $selfPath
+        'lifecycle-validation-plan.json'                 = $planPath
+    }
+    foreach ($name in $files.Keys) {
+        $bytes = [System.IO.File]::ReadAllBytes([string]$files[$name])
+        $offenders = @()
+        for ($i = 0; $i -lt $bytes.Length; $i++) {
+            if ($bytes[$i] -gt 127) { $offenders += $i }
+        }
+        if ($offenders.Count -gt 0) {
+            $at = $offenders[0]
+            $preview = ''
+            if ($at -ge 24 -and $at -lt $bytes.Length) { $preview = [System.Text.Encoding]::ASCII.GetString($bytes, [Math]::Max(0, $at - 12), [Math]::Min(40, $bytes.Length - [Math]::Max(0, $at - 12))) }
+            throw ("{0} has {1} non-ASCII byte(s), first at offset {2}: '{3}'. A .ps1 with no byte order mark is read as ANSI by the 5.1 host, so a non-ASCII literal is decoded with the system code page and matches nothing." -f $name, $offenders.Count, $at, $preview)
+        }
+    }
+    # The facts the classifier depends on must all be reachable from a log whose
+    # lines are otherwise Japanese.  The absence of any Japanese pattern in the
+    # classifier is what makes that true, so the classifier is checked for it
+    # here too rather than trusted.
+    $text = [System.IO.File]::ReadAllText($commonPath)
+    $body = [regex]::Match($text, 'function Get-KanaAiLifecycleMsiLogFacts \{[\s\S]*?\n\}').Value
+    Assert-True ($body -match '-match') 'the fact reader must exist'
+    Assert-True ($body -notmatch '(?m)-match\s*''[^'']*[^\x00-\x7F]') 'no fact pattern may contain a non-ASCII character'
 }
 
 Invoke-Test -Id 'ST-84' -Name 'every log-classification expectation in the plan is one the classifier produces' -Body {

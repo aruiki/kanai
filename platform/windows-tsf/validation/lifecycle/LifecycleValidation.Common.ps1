@@ -418,11 +418,24 @@ function Get-KanaAiLifecycleMsiExitCodeMeaning {
 function Get-KanaAiLifecycleMsiLogFacts {
     <#
         One scan of the verbose log for the facts a classification is derived
-        from.  Every pattern is language-neutral: a Japanese Windows writes
-        操作開始 / 削除を正しく完了しました, so each fact is anchored on a token
-        msiexec itself emits in the same shape on every localisation.  The
-        Japanese text is kept as an additional alternative, never as the only
-        way to see a fact.
+        from.
+
+        Every pattern here is language-neutral, and that is a requirement rather
+        than a preference.  The machine this harness runs on is a Japanese
+        Windows whose ANSI code page is 932, and a .ps1 file with no byte order
+        mark is read by the Windows PowerShell 5.1 host as ANSI.  A Japanese
+        literal in this file is therefore decoded as Shift-JIS and matches no log
+        line at all: it is not a weaker alternative, it is inert.  So this file
+        stays ASCII-only (see the header) and no fact depends on translated
+        text.  The Japanese lines in the logs are still visible to the facts,
+        because the facts are anchored on the tokens msiexec writes in the same
+        shape on every localisation, and those tokens sit on the same lines as
+        the Japanese text.
+
+        This is not a theoretical worry.  A Japanese removal line was carried here
+        as an extra alternative, and a probe through the 5.1 host showed the fact
+        it belonged to was False for the Japanese line alone.  ST-87 keeps the
+        file ASCII, and ST-83 drives a log line built from Japanese code points.
 
         These facts were read out of the six real logs of the W2 run
         .local/w2-execute-20260926-202806, not invented.  What each one
@@ -468,11 +481,11 @@ function Get-KanaAiLifecycleMsiLogFacts {
         # msiexec's own token for "this transaction removed the product".
         productRemoved    = ($Text -match '(?im)CleanupConfigData\(RemovingProduct=1\)')
         installSequence   = ($Text -match '(?im)\bDoing action: InstallInitialize\b|(?im)\bActionStart\(Name=InstallInitialize|(?im)\bAction start: InstallInitialize\b')
-        installSucceeded  = ($Text -match '(?im)MainEngineThread is returning 0\b|(?im)Installation completed successfully|(?im)インストールは正しく完了しました')
-        installFailed     = ($Text -match '(?im)MainEngineThread is returning (?!0\b)\d+|(?im)Installation failed|(?im)インストールは正しく完了しませんでした')
+        installSucceeded  = ($Text -match '(?im)MainEngineThread is returning 0\b')
+        installFailed     = ($Text -match '(?im)MainEngineThread is returning (?!0\b)\d+')
         # The documented 1638 refusal text, for a package that reports the
         # version conflict rather than a failed launch condition.
-        legacy1638        = ($Text -match '(?im)\bError 1638\.|(?im)\b1638\b.*(already installed|older version)|(?im)DowngradeErrorMessage|(?im)エラー 1638')
+        legacy1638        = ($Text -match '(?im)\bError 1638\.|(?im)\b1638\b.*(already installed|older version)|(?im)DowngradeErrorMessage')
     }
     $present = @()
     foreach ($name in $facts.Keys) {
