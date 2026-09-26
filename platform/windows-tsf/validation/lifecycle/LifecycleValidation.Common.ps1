@@ -1962,6 +1962,143 @@ function Get-KanaAiLifecycleExpectedInstallPath {
     }
 }
 
+function Initialize-KanaAiLifecycleMsiNative {
+    <#
+        MsiQueryProductState is the only source the harness can use for the
+        InstallState that Installer.ProductInfo refuses, and it is the
+        authoritative answer rather than an inference from the registry.
+
+        The signature is the whole point.  MsiQueryProductState returns a UINT
+        error code and writes the state through an out parameter.  A probe that
+        read the return value as the state reported 5 for an installed product,
+        and 5 is both ERROR_ACCESS_DENIED as an error code and
+        INSTALLSTATE_DEFAULT as a state - two different meanings of one number.
+        Only the out-parameter form is used here, and any non-zero return is
+        reported as unknown rather than guessed.
+
+        Add-Type is used the same way the desktop harness already uses it, and
+        the type is compiled at most once per process.
+    #>
+    if ($null -ne ('KanaAiLifecycleMsiNative' -as [type])) { return }
+    Add-Type -ErrorAction Stop -TypeDefinition @'
+public static class KanaAiLifecycleMsiNative
+{
+    [System.Runtime.InteropServices.DllImport("msi.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    public static extern uint MsiQueryProductStateW(string product, out int installState);
+}
+'@
+}
+
+function ConvertTo-KanaAiLifecycleProductState {
+    <#
+        The Windows Installer state vocabulary to the harness vocabulary, with
+        no machine access at all, so the mapping is unit-testable.
+
+        'unknown' is returned for anything the installer did not answer with a
+        documented state, and it is never treated as absent.
+    #>
+    param([string]$Raw)
+    if ([string]::IsNullOrWhiteSpace($Raw)) { return 'unknown' }
+    switch ($Raw.Trim().ToUpperInvariant()) {
+        'DEFAULT' { return 'installed' }
+        'LOCAL' { return 'installed' }
+        'ADVERTISED' { return 'advertised' }
+        'SOURCE' { return 'staged' }
+        'ABSENT' { return 'absent' }
+        'REMOVED' { return 'absent' }
+        default { return 'unknown' }
+    }
+}
+
+function Get-KanaAiLifecycleProductInstallStateName {
+    <#
+        The raw Windows Installer state name for one product, or '' when the
+        installer could not answer.
+
+        Read through MsiQueryProductState because ProductInfo refuses
+        InstallState.  Measured against the real installed product on this
+        machine: ProductInfo raised "ProductInfo,Product,Attribute" for
+        InstallState and for UpgradeCode, while ProductName, LocalPackage,
+        InstallLocation, VersionString, InstallDate and InstallSource all
+        returned real values.
+    #>
+    param([Parameter(Mandatory = $true)]$Ledger, [Parameter(Mandatory = $true)][string]$ProductCode)
+    [void](Enter-KanaAiLifecycleAction -Ledger $Ledger -Kind 'installer-com' -Detail ($ProductCode + '/InstallState'))
+    try {
+        Initialize-KanaAiLifecycleMsiNative
+        $state = 0
+        $rc = [KanaAiLifecycleMsiNative]::MsiQueryProductStateW($ProductCode, [ref]$state)
+        # A non-zero rc is an error code, never an install state.
+        if ($rc -ne 0) { return '' }
+        switch ($state) {
+            5 { return 'DEFAULT' }
+            3 { return 'LOCAL' }
+            1 { return 'ADVERTISED' }
+            4 { return 'SOURCE' }
+            2 { return 'ABSENT' }
+            7 { return 'REMOVED' }
+            default { return '' }
+        }
+    }
+    catch {
+        return ''
+    }
+}
+
+function Get-KanaAiLifecycleCachedMsiProperty {
+    <#
+        One Property-table value out of a product's cached MSI.  This is how
+        UpgradeCode is read, because ProductInfo cannot return it.
+
+        The cached package under C:\WINDOWS\Installer is the copy the installer
+        itself registered, and its Property table is read through the same
+        reader the candidate identity gate uses, so there is no second, weaker
+        way of asking the same question.  Returns '' when there is no cached
+        package, which is the normal case for an advertised product that has
+        never been installed.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]$Ledger,
+        [Parameter(Mandatory = $true)][string]$ProductCode,
+        [Parameter(Mandatory = $true)][string]$PropertyName
+    )
+    $localPackage = Get-KanaAiLifecycleProductInfo -Ledger $Ledger -ProductCode $ProductCode -PropertyName 'LocalPackage'
+    if ([string]::IsNullOrWhiteSpace([string]$localPackage)) { return '' }
+    if (-not (Test-Path -LiteralPath ([string]$localPackage) -PathType Leaf)) { return '' }
+    try {
+        $map = Get-KanaAiLifecycleMsiPropertyMap -Ledger $Ledger -Path ([string]$localPackage)
+        if ($null -eq $map) { return '' }
+        if ($map.Contains($PropertyName)) { return [string]$map[$PropertyName] }
+        return ''
+    }
+    catch {
+        return ''
+    }
+}
+
+function Get-KanaAiLifecycleInstallerProductCodes {
+    <#
+        Every product code this machine's installer knows about.
+
+        'Products' is a property, not a method, and that distinction is
+        measured rather than theoretical.  On this machine, against the same
+        object: InvokeMethod raised DISP_E_MEMBERNOTFOUND (0x80020003), the
+        direct PowerShell property read returned $null, and GetProperty
+        returned 182 GUID strings.  Only brace-delimited GUIDs are returned, so
+        a malformed element cannot reach a later comparison.
+    #>
+    param([Parameter(Mandatory = $true)]$Installer)
+    $codes = New-Object System.Collections.Generic.List[string]
+    $raw = $Installer.GetType().InvokeMember('Products', 'GetProperty', $null, $Installer, $null)
+    foreach ($item in @($raw)) {
+        $code = [string]$item
+        if ([string]::IsNullOrWhiteSpace($code)) { continue }
+        if ($code -notmatch '^\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}$') { continue }
+        $codes.Add($code)
+    }
+    return $codes.ToArray()
+}
+
 function Get-KanaAiLifecycleProductInfo {
     <# Read-only Windows Installer query.  Returns $null for an unknown product. #>
     param(
@@ -1972,7 +2109,21 @@ function Get-KanaAiLifecycleProductInfo {
     [void](Enter-KanaAiLifecycleAction -Ledger $Ledger -Kind 'installer-com' -Detail ($ProductCode + '/' + $PropertyName))
     $installer = Get-KanaAiLifecycleInstallerCom -Ledger $Ledger -Detail $ProductCode
     try {
-        return [string](Invoke-KanaAiLifecycleMsiCom -Installer $installer -Method 'ProductInfo' -Arguments @($ProductCode, $PropertyName))
+        # Measured defect: Installer.ProductInfo does not resolve through
+        # Type.InvokeMember on this machine.  It raised DISP_E_MEMBERNOTFOUND
+        # (0x80020003) for every product and every property, so this function
+        # returned $null for a product that is genuinely installed and
+        # Get-KanaAiLifecycleProductState reported 'unknown' for it.  The
+        # PowerShell call adapter does resolve ProductInfo.
+        #
+        # The adapter is not sufficient on its own, and that is measured too:
+        # ProductInfo raises "ProductInfo,Product,Attribute" for UpgradeCode and
+        # for InstallState on this machine, while ProductName, LocalPackage,
+        # InstallLocation, VersionString, InstallDate and InstallSource all
+        # return real values.  Callers that need one of the two refused
+        # attributes must go through Get-KanaAiLifecycleCachedMsiProperty or
+        # Get-KanaAiLifecycleProductInstallStateName instead of retrying here.
+        return [string]$installer.ProductInfo($ProductCode, $PropertyName)
     }
     catch {
         return $null
@@ -1991,14 +2142,9 @@ function Get-KanaAiLifecycleProductState {
                        as absent
     #>
     param([Parameter(Mandatory = $true)]$Ledger, [Parameter(Mandatory = $true)][string]$ProductCode)
-    $installState = Get-KanaAiLifecycleProductInfo -Ledger $Ledger -ProductCode $ProductCode -PropertyName 'InstallState'
-    if ($null -eq $installState -or [string]::IsNullOrWhiteSpace($installState)) { return 'unknown' }
-    $text = $installState.Trim().ToUpperInvariant()
-    if ($text -eq 'DEFAULT' -or $text -eq 'LOCAL') { return 'installed' }
-    if ($text -eq 'ADVERTISED') { return 'advertised' }
-    if ($text -eq 'SOURCE') { return 'staged' }
-    if ($text -eq 'ABSENT') { return 'absent' }
-    return 'unknown'
+    $raw = Get-KanaAiLifecycleProductInstallStateName -Ledger $Ledger -ProductCode $ProductCode
+    if ([string]::IsNullOrWhiteSpace($raw)) { return 'unknown' }
+    return ConvertTo-KanaAiLifecycleProductState -Raw $raw
 }
 
 function Find-KanaAiLifecycleInstalledProducts {
@@ -2016,22 +2162,22 @@ function Find-KanaAiLifecycleInstalledProducts {
     $found = New-Object System.Collections.Generic.List[object]
     $scanned = 0
     try {
-        $all = Invoke-KanaAiLifecycleMsiCom -Installer $installer -Method 'Products' -Arguments @()
+        $all = Get-KanaAiLifecycleInstallerProductCodes -Installer $installer
         foreach ($code in @($all)) {
             $scanned++
-            $upgrade = $null
-            try {
-                $upgrade = [string](Invoke-KanaAiLifecycleMsiCom -Installer $installer -Method 'ProductInfo' -Arguments @([string]$code, 'UpgradeCode'))
-            }
-            catch { $upgrade = $null }
-            if ($null -eq $upgrade) { continue }
+            $upgrade = Get-KanaAiLifecycleCachedMsiProperty -Ledger $Ledger -ProductCode ([string]$code) -PropertyName 'UpgradeCode'
+            if ([string]::IsNullOrWhiteSpace([string]$upgrade)) { continue }
             if ((ConvertTo-KanaAiLifecycleGuid -Value $upgrade) -ne (ConvertTo-KanaAiLifecycleGuid -Value $UpgradeCode)) { continue }
-            $installState = $null
-            try { $installState = [string](Invoke-KanaAiLifecycleMsiCom -Installer $installer -Method 'ProductInfo' -Arguments @([string]$code, 'InstallState')) } catch { }
+            # The raw name is kept, not the harness vocabulary, because the
+            # comparison in the entry point matches ^(DEFAULT|LOCAL)$ to decide
+            # whether the product is locally installed.  Widening that field to
+            # 'installed' would silently make the match fail and the phase
+            # report an installed product as absent.
+            $installState = Get-KanaAiLifecycleProductInstallStateName -Ledger $Ledger -ProductCode ([string]$code)
             $localPackage = $null
-            try { $localPackage = [string](Invoke-KanaAiLifecycleMsiCom -Installer $installer -Method 'ProductInfo' -Arguments @([string]$code, 'LocalPackage')) } catch { }
+            try { $localPackage = [string](Get-KanaAiLifecycleProductInfo -Ledger $Ledger -ProductCode ([string]$code) -PropertyName 'LocalPackage') } catch { }
             $installLocation = $null
-            try { $installLocation = [string](Invoke-KanaAiLifecycleMsiCom -Installer $installer -Method 'ProductInfo' -Arguments @([string]$code, 'InstallLocation')) } catch { }
+            try { $installLocation = [string](Get-KanaAiLifecycleProductInfo -Ledger $Ledger -ProductCode ([string]$code) -PropertyName 'InstallLocation') } catch { }
             [void]$found.Add([ordered]@{
                     productCode      = (ConvertTo-KanaAiLifecycleGuid -Value ([string]$code))
                     upgradeCode      = (ConvertTo-KanaAiLifecycleGuid -Value $upgrade)

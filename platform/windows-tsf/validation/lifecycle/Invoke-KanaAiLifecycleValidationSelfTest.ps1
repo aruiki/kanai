@@ -842,6 +842,7 @@ Invoke-Test -Id 'ST-62' -Name 'the -Execute path unseals with Open-, never with 
     $text = [System.IO.File]::ReadAllText($runPath)
     Assert-True ($text.Contains('Open-KanaAiLifecycleActionLedger -Ledger $script:Ledger -Reason ''unsealed by -Execute')) 'the -Execute path must unseal the ledger through Open-'
     Assert-True (-not $text.Contains('Close-KanaAiLifecycleActionLedger -Ledger $script:Ledger -Reason ''unsealed by -Execute')) 'the -Execute path must not seal its own ledger with Close-'
+}
 Invoke-Test -Id 'ST-63' -Name 'MSI SQL identifiers use one backtick, never two' -Body {
     # A single-quoted PowerShell string does not treat the backtick as an escape
     # character, so a doubled backtick reaches Windows Installer as two of them
@@ -876,6 +877,7 @@ Invoke-Test -Id 'ST-65' -Name 'SummaryInformation is read from the Database thro
     Assert-True ($text.Contains('$database.SummaryInformation(0)')) 'SummaryInformation must be called on the Database object'
     Assert-True (-not $text.Contains("-Method 'SummaryInformation'")) 'SummaryInformation must not be reached through InvokeMember'
     Assert-True ($text.Contains('[string]$summary.Property(7)')) 'the template must be read with the Property accessor'
+}
 Invoke-Test -Id 'ST-66' -Name 'the candidate identity gate reads a property dictionary, not raw table rows' -Body {
     # Measured defect: Get-KanaAiLifecycleMsiPropertyMap returned the raw rows, an
     # array of two-element arrays.  Get-KanaAiLifecycleOptionalProperty finds
@@ -906,13 +908,106 @@ Invoke-Test -Id 'ST-66' -Name 'the candidate identity gate reads a property dict
     Assert-True ($map -is [System.Collections.IDictionary]) 'the shape the reader now returns must be the shape the gate reads'
 }
 
-
+Invoke-Test -Id 'ST-67' -Name 'the product list is read as a property, never as a method' -Body {
+    # Measured defect, and the reason the third elevated run died: 'Products' is
+    # a property of the Windows Installer automation object, not a method.
+    # InvokeMethod raised DISP_E_MEMBERNOTFOUND (0x80020003) and the direct
+    # PowerShell property read returned $null, while GetProperty returned 182
+    # GUID strings from the same object on the same machine.  A $null result is
+    # the dangerous half: @($null).Count is 1, so a count-only check would have
+    # reported one product and compared it as a code.
+    $text = [System.IO.File]::ReadAllText($commonPath)
+    Assert-True ($text.Contains("InvokeMember('Products', 'GetProperty'")) 'Products must be read with the GetProperty binding'
+    Assert-True (-not $text.Contains("-Method 'Products'")) 'Products must not be reached through the InvokeMethod wrapper'
+    Assert-True (-not $text.Contains("InvokeMember('Products', 'InvokeMethod'")) 'Products must never be bound as a method'
+    # The empty-result trap has to stay closed, so the reader is asserted to
+    # filter rather than to pass a null element through.
+    Assert-True ($text.Contains('Get-KanaAiLifecycleInstallerProductCodes')) 'the enumeration must go through a named reader'
+    Assert-True ($text.Contains("'^\{[0-9A-Fa-f]{8}-")) 'the reader must keep only brace-delimited GUIDs'
 }
 
-
+Invoke-Test -Id 'ST-68' -Name 'ProductInfo is never reached through InvokeMember, and UpgradeCode comes from the cached MSI' -Body {
+    # Measured: Type.InvokeMember raised DISP_E_MEMBERNOTFOUND for ProductInfo on
+    # every product and every property.  The direct adapter resolves it for
+    # ProductName, LocalPackage, InstallLocation, VersionString, InstallDate and
+    # InstallSource, but it raises "ProductInfo,Product,Attribute" for UpgradeCode
+    # and for InstallState, so neither of those two may be requested through it.
+    $text = [System.IO.File]::ReadAllText($commonPath)
+    Assert-True (-not $text.Contains("-Method 'ProductInfo'")) 'ProductInfo must not be reached through the InvokeMethod wrapper'
+    Assert-True ($text.Contains('$installer.ProductInfo($ProductCode, $PropertyName)')) 'ProductInfo must be read through the direct call adapter'
+    Assert-True ($text.Contains('Get-KanaAiLifecycleCachedMsiProperty')) 'the refused attributes need a second, authoritative reader'
+    Assert-True ($text.Contains("Get-KanaAiLifecycleCachedMsiProperty -Ledger `$Ledger -ProductCode ([string]`$code) -PropertyName 'UpgradeCode'")) 'UpgradeCode must be read from the cached MSI Property table'
+    Assert-True (-not $text.Contains("Get-KanaAiLifecycleProductInfo -Ledger `$Ledger -ProductCode ([string]`$code) -PropertyName 'UpgradeCode'")) 'UpgradeCode must not still be requested from ProductInfo'
 }
 
+Invoke-Test -Id 'ST-69' -Name 'the install state comes from the out-parameter form of MsiQueryProductState' -Body {
+    # MsiQueryProductState returns a UINT error code and writes the state through
+    # an out parameter.  A probe that read the return value as the state reported
+    # 5 for an installed product, and 5 is both ERROR_ACCESS_DENIED and
+    # INSTALLSTATE_DEFAULT.  Asserting the signature is what stops that swap from
+    # coming back, and a non-zero rc must stay unknown rather than become a state.
+    $text = [System.IO.File]::ReadAllText($commonPath)
+    Assert-True ($text.Contains('MsiQueryProductStateW(string product, out int installState)')) 'the declaration must take the state through an out parameter'
+    Assert-True (-not ($text -match 'MsiQueryProductStateW\(\s*string\s+\w+\s*\)')) 'no single-argument declaration may exist, that is the swapped signature'
+    Assert-True ($text.Contains('if ($rc -ne 0) { return ')) 'a non-zero error code must return no state instead of a guessed one'
+    Assert-True ($text.Contains('[KanaAiLifecycleMsiNative]::MsiQueryProductStateW($ProductCode, [ref]$state)')) 'the call must pass the state by reference'
+}
 
+Invoke-Test -Id 'ST-70' -Name 'the install state vocabulary maps to the harness vocabulary without machine access' -Body {
+    # The mapping is split out so it can be asserted here without touching the
+    # machine, and 'unknown' has to stay distinct from 'absent': the harness
+    # treats unknown as never absent.
+    Assert-Equal 'installed' (ConvertTo-KanaAiLifecycleProductState -Raw 'DEFAULT') 'DEFAULT is a local install'
+    Assert-Equal 'installed' (ConvertTo-KanaAiLifecycleProductState -Raw 'LOCAL') 'LOCAL is a local install'
+    Assert-Equal 'installed' (ConvertTo-KanaAiLifecycleProductState -Raw 'local') 'the comparison must not depend on the case'
+    Assert-Equal 'advertised' (ConvertTo-KanaAiLifecycleProductState -Raw 'ADVERTISED') 'ADVERTISED is advertised'
+    Assert-Equal 'staged' (ConvertTo-KanaAiLifecycleProductState -Raw 'SOURCE') 'SOURCE is staged'
+    Assert-Equal 'absent' (ConvertTo-KanaAiLifecycleProductState -Raw 'ABSENT') 'ABSENT is absent'
+    Assert-Equal 'absent' (ConvertTo-KanaAiLifecycleProductState -Raw 'REMOVED') 'REMOVED is absent'
+    Assert-Equal 'unknown' (ConvertTo-KanaAiLifecycleProductState -Raw '') 'an unanswered state is unknown'
+    Assert-Equal 'unknown' (ConvertTo-KanaAiLifecycleProductState -Raw 'SOMETHING-ELSE') 'an undocumented state is unknown'
+    Assert-Equal 'unknown' (ConvertTo-KanaAiLifecycleProductState -Raw $null) 'a null state is unknown'
+    # The entry point decides "locally installed" with this exact pattern, so the
+    # producer of that field has to keep emitting the raw name.  If the field were
+    # widened to 'installed' the match would fail and an installed product would
+    # be reported as absent, which no unit test above would notice.
+    $run = [System.IO.File]::ReadAllText($runPath)
+    Assert-True ($run.Contains("installState -match '^(DEFAULT|LOCAL)$'")) 'the entry point must keep filtering on the raw state name'
+    $text = [System.IO.File]::ReadAllText($commonPath)
+    Assert-True ($text.Contains('Get-KanaAiLifecycleProductInstallStateName -Ledger $Ledger -ProductCode ([string]$code)')) 'the found record must take the raw state name, not the harness vocabulary'
+}
+
+Invoke-Test -Id 'ST-71' -Name 'no case is nested inside another case body' -Body {
+    # Measured defect in this very file: three successive fixes each appended an
+    # Invoke-Test without closing the previous body, so ST-63 to ST-66 ended up
+    # inside ST-62 and ST-66 inside ST-65.  The file still parsed and every case
+    # still reported ok, but the outer cases could no longer fail on their own:
+    # any inner failure was reported as the outer case failing too, and ST-62
+    # passing said nothing about ST-62.  The nesting is asserted structurally so
+    # the next appended case cannot reintroduce it.
+    $selfErrors = $null
+    $selfTokens = $null
+    $selfAst = [System.Management.Automation.Language.Parser]::ParseFile($PSCommandPath, [ref]$selfTokens, [ref]$selfErrors)
+    Assert-Equal 0 @($selfErrors).Count 'the self test file must parse'
+    $commands = @($selfAst.FindAll({ param($node) $node -is [System.Management.Automation.Language.CommandAst] }, $true) |
+            Where-Object { $_.GetCommandName() -eq 'Invoke-Test' })
+    Assert-True ($commands.Count -ge 60) ('the file must really contain the cases, found ' + $commands.Count)
+    $ids = @()
+    foreach ($command in $commands) {
+        $id = 'unknown'
+        if ($command.Extent.Text -match "-Id\s+'([^']+)'") { $id = $matches[1] }
+        $ids += $id
+        $node = $command.Parent
+        $nested = $false
+        while ($null -ne $node) {
+            if ($node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Invoke-Test') { $nested = $true; break }
+            $node = $node.Parent
+        }
+        Assert-True (-not $nested) ("case $id must be a top-level case, not nested inside another case body")
+    }
+    $duplicates = @($ids | Group-Object | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
+    Assert-Equal 0 $duplicates.Count ('every case id must be unique, duplicated: ' + ($duplicates -join ', '))
+}
 
 # ---------------------------------------------------------------------------
 # report
