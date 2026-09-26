@@ -17,3 +17,9 @@ target/
 # restage + build fail with "Runtime manifest source identity changed".
 # Durable evidence belongs in a release receipt or .local/, not in source.
 platform/windows-tsf/validation/*/runs/
+
+# Browser-automation scratch output from tooling that drives a real browser
+# (page snapshots and console logs). Same reasoning as the entries above: it is
+# rewritten on every run and would otherwise make `git status` dirty, which is
+# part of the staging manifest's repositoryStatusLines source identity.
+.playwright-mcp/
