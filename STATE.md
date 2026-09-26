@@ -1,97 +1,171 @@
-# 最新の引き継ぎ — 2026-09-26 clean-source ベータ候補の完成（単独実行・実測）
+# 最新の引き継ぎ — 2026-09-26 W2 ハーネスの COM 経路を実測で修正 / 実機が install state を回答しない blocker を新規発見
 
 Status: NOT COMPLETE / public beta NOT RELEASED / `.goal-complete` 未作成
 
-基準HEAD: `c729da4dc8fc0df163cd449eef5c90950cfa0c81`（**tree clean**、下記候補と一致）。
+基準HEAD: `940ddd3`（origin/main との分岐を解消した merge commit、**tree clean**）。
+ベータ候補 `.local/installer-beta-final` は §6 のとおり内容・SHA-256 とも未変。
 D-1〜D-5 の決定はそのまま有効（下の履歴区切りを参照）。
 
-## 1. clean tree でビルドが不可能だった実バグを修正（CRITICAL・新規発見）
+## 1. W2 ハーネスの Windows Installer 呼び出しを「実際に答える束」だけで直す（`d98771a`）
 
-`scripts/stage-tsf-runtime.ps1` と `scripts/build-windows-installer.ps1` の
-`Get-SourceIdentity` が git status を
-`$statusLines = if ([string]::IsNullOrWhiteSpace($statusText)) { @() } else { @(...) }`
-で代入していた。**clean tree では git が何も出力しないため `if` が返す空配列が
-パイプラインで `$null` にアンロールされ**、`Set-StrictMode -Version Latest` 下の後続
-`$statusLines.Count` が `PropertyNotFoundStrict` で例外になった。
-実測: stage は tree が clean 化した瞬間に497行で停止（dirty tree では通る）。
-公開候補は `-RequireCleanSource` 必須なので、**clean-source 候補が構造的に作れなかった**。
-修正: 空配列を式から返さず直接代入し、`@($statusLines).Count` で二重に防御。
-非空虚性の証明（StrictMode Latest 実測）: `NEW_count=0`/`NEW_dirty=False`（clean で空配列を維持）、
-`OLD_FAILS_AS_EXPECTED=...Count...`（旧形は実際に例外）、`DIRTY_count=1`（dirty の既存挙動は不変）。
-PowerShell 5.1 parser 両スクリプト 0 errors。コミット `dcf27c2977c603bf3c6461fe3be2fbe561dcdeb2`。
+前セッションは `ProductInfo` を直接呼び出す修正を**未コミットのまま停止**していた。
+その形だけでは不十分で、そのままでは W2 を再実行しても同じ箇所で落ちる。実測結果（読み取り専用）:
 
-## 2. インストーラーテストが non-interactive でハングする実バグを修正
+| 呼び出し | 実測結果 |
+|---|---|
+| `InvokeMember('Products', InvokeMethod)` | `0x80020003 DISP_E_MEMBERNOTFOUND` |
+| `InvokeMember('Products', GetProperty)` | **182 件の GUID 文字列**（`Products` はメソッドではなく **プロパティ**） |
+| `$inst.Products`（直接） | `$null`。`@($null).Count` が 1 になるのが罠 |
+| `InvokeMember('ProductInfo', …)` | 全 product・全 property で `0x80020003` |
+| `ProductInfo` の直接呼び出し（`ProductName` / `LocalPackage` / `InstallLocation` / `VersionString` / `InstallDate` / `InstallSource`） | 実値 |
+| `ProductInfo` の直接呼び出し（`UpgradeCode` / `InstallState`） | `ProductInfo,Product,Attribute` |
 
-`platform/windows-tsf/installer/package/tests/Test-InstallerBuildScript.ps1` の
-`Remove-TestJunction` が junction に `Remove-Item -Force`（`-Recurse` なし）を呼び、
-PowerShell 5.1 が「項目には子があり…」の確認プロンプトを出して**実行が永久停止**した。
-`-ErrorAction Stop` は確認を抑制しない（抑制するのは `-Confirm` のみ）ため、catch 内の正しい
-`[IO.Directory]::Delete($Path,$false)` に到達しなかった。実測: finally cleanup の
-`runtime-junction` で停止し、result もログも生成されず。reparse point を
-`Directory::Delete(path,$false)` で削除すると junction だけが消え、**リンク先
-`.local/tsf-runtime` の12ファイルは無傷**だった。修正: reparse point を検出して直接削除、
-残りの `Remove-Item` に `-Confirm:$false`。コミット `c729da4dc8fc0df163cd449eef5c90950cfa0c81`。
+修正内容:
 
-## 3. 22時間残っていた build lock を実保持者特定して回収
+- `Products` は **GetProperty** で読み、brace 付き GUID だけを残す reader にした。null 要素が
+  後の比較に到達しないよう、GUID 形式でない要素は捨てている。
+- `ProductInfo` は直接呼び出しに統一した。
+- `UpgradeCode` は **cached MSI の Property テーブル**から読む。候補 identity gate が既に
+  使っている reader をそのまま流用したもので、**同じ authority に対して2つ目の弱い道を
+  作らない**。実測で 180 cached MSI を開いて 4.0 秒、KanaAI 2件を正しく同定した。
+- `InstallState` は Property テーブルに**存在しない**ため `MsiQueryProductState` の
+  out 引数形を使う。戻り値はエラーコードであり、状態は out パラメータで受け取る。
+- 生の状態名からハーネス語彙への変換を、副作用のない純関数に切り出した。`found` の
+  `installState` は**生のまま**を保つ。entry point が `^(DEFAULT|LOCAL)$` で判定しているため、
+  ここを `installed` に広げて「導入済み」を「不在」と誤報告する事故を避ける。
+- phase 間で結果をキャッシュしていないのは**意図的**。lifecycle harness が前の答えを
+  再利用すると「その時点の state」を観測しなくなる。
 
-`Resource 'build' is in use` で stage/build/test が全て停止した。Restart Manager API
-（rstrtmgr）で実保持者を特定 → **PID 30636（このセッションの VS Code シェル、CPU 25.8秒）**が
-上記2のハングしたテスト実行のままハンドルを保持。他セッションの所有物でないと確認してから
-`Stop-Process` し、`NO_OWNER` と実ハンドル取得（4回 ACQUIRED）で解放を確認した。
-特定用実装は `.local/lockowner.cs`（`.local` は `.gitignore:8` で無視済み）。
+## 2. 【新規・CRITICAL】実機が install state を回答しない。この machine では W2 が成立しない
 
-## 4. 固定コミット上の clean-source ベータ候補（`.local/installer-beta-final`）
+ユーザー承認のうえ、管理権限・**読み取り専用** probe（install/uninstall/ファイル変更なし）で実測:
+
+- `MsiQueryProductState` は**有効な全 product code** に対し `ERROR_ACCESS_DENIED`。
+  P/Invoke 3 形（`out int` / `ref int` / `ExactSpelling`+`SetLastError`）すべて同一結果。
+  一方 無効な製品名では `-1`、全ゼロ GUID では `-2` を返す。**呼び出しは正しく dispatch され、
+  installer が回答を拒否している**ことの証拠になる。
+- **管理権限あり/なしで同じ rc**。これが権限問題ではなく machine 側の問題である根拠。
+- `Installer.ProductInfo('InstallState')` も全 product で例外。
+- `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Installer\Components` **キー自体が存在しない**。
+  一方 `Classes\Installer\Products` 171 件、`Features` 169 件は存在。per-machine component 登録が欠落。
+- OS build 26200、msiserver は Manual/Stopped、installer policy key は無し。
+
+### これが最も危険だった理由と、その修正（`b0092f9`）
+
+`Get-KanaAiLifecycleProductState` の docstring は "unknown is never treated as absent" と
+明記している。しかし **entry point は `$targetState -eq 'installed'` のときだけ拒否**していた。
+回答不能な状態はそのまま素通りし、後段の `^(DEFAULT|LOCAL)$` フィルタも一件も一致せず、
+**この machine に KanaAI が2件登録されているのに「未導入」と報告して3件目を導入する**
+挙動になっていた。落ちない false negative であり、記録 gate として最も危険な形である。
+
+`-Execute` は receipt に `INSTALL-STATE-UNDETERMINED` を critical で記録し、
+「回答できない状態は不在の証拠ではない」と明記し、operator の対処を示し、
+**どの phase にも触れる前に exit 2** する。ゲートは意図的に pre-existing-target 判定の
+**前**に置いた。そうでなければその判定は、何も拒否されないまま到達してしまう。
+
+**これは W2 を可能にしたのではなく、machine の実条件を、根拠のない「クリーンな
+ベースライン」として報告していた問題を直しただけである。**
+
+## 3. 実機状態の記録（訂正を含む。前回の私の誤りを撤回する）
+
+確実に言えること:
+
+- `Installer.Products` 列挙に KanaAI が**2件**。`{307FE767-…}`（旧 x86 ビルド）と
+  `{FBDCE95B-…}`（新候補 `{c729da4…}` 版）。
+- 新候補は cached MSI `32193a0.msi`（18,427,904 bytes）を持つ。`ProductInfo.InstallDate = 20260926`（本日）。
+- `C:\Program Files\KanaAI` は**存在しない**。`C:\Program Files (x86)\KanaAI` のみ 12 ファイル。
+- Uninstall レジストリにも 2 件（`WindowsInstaller=1`）。
+
+**撤回**: 前回「両 products とも installState=5 (installed)」と報告したが、これは
+MsiQueryProductState の P/Invoke シグネチャを間違えた**私の誤り**だった。正しくは
+`UINT MsiQueryProductState(LPCWSTR szProduct, INSTALLSTATE *pInstallState)` で、
+戻り値はエラーコード、状態は out パラメータである。誤った形で読むと `5` は
+`ERROR_ACCESS_DENIED` と `INSTALLSTATE_DEFAULT` という**同じ数字の2つの意味**を取り違える。
+ST-69 がこの署名を固定し、**source 内に swap 形が存在しない**ことを検査する。
+
+**未確定（断定しない）**: 新候補のファイルが何故無いのか。registration のみ／rollback 不完全／
+手動削除 の判別は、`MsiGetComponentState` も rc=6 を返し、かつ `Installer\Components`
+キーが存在しないため**この machine では取得できない**。したがって §2 の blocker が解けるまで
+「partial registration」と断定せず、記録された document として扱う。
+
+## 4. git の分岐を解消（`940ddd3`）
+
+main が 9 ahead / 1 behind で分岐し、**両側が STATE.md を編集**していた。origin/main の
+`3bf40f2` は 2026-09-25 17:30 の、当時の 523 行 STATE.md への文書整合コミット。
+merge は改名済みの archive 区画に落地し、source ファイルは両側とも変更なし（STATE.md のみ）。
+解決後は **0 behind / 10 ahead**。**未 push**。
+
+## 5. 回帰テスト
+
+`Invoke-KanaAiLifecycleValidationSelfTest.ps1`: **73 cases / 73 passed / 0 failed**、exit 0。
+PowerShell 5.1 parser: 3 ファイルすべて 0 errors。
+`-PlanOnly` は実候補に対して exit 0、machine interaction counter は全 0 のまま。
+
+今回追加した regression（すべて非空虚であることを別途証明した）:
+
+- **ST-67** `Products` は method ではなく property として束縛され、null 要素のフィルタがあること
+- **ST-68** `ProductInfo` を `InvokeMember` で叩かず、`UpgradeCode` は cached MSI から読むこと
+- **ST-69** `MsiQueryProductState` は out 引数形のみ・swap 形が存在しない・非 0 rc は状態を返さないこと
+- **ST-70** 状態語彙の変換（機械 非接触）と、entry point が**生の名前**で判定し続けること
+- **ST-71** **どの case も他の case body にネストしていないこと**／id が一意であること
+- **ST-72** 回答不能時は phase に進まず拒否すること（**位置**も entry point 上で検査）
+
+**非空虚性の証明**（実 source には触れず、`.local` の scratch copy で欠陥を再導入し、実際に落ちること）:
+
+- `Products` を `InvokeMethod` に戻し、`ProductInfo` を `InvokeMember` に戻し、
+  シグネチャを 1 引数形に戻す → **72 cases / 3 failed（ST-67, ST-68, ST-69）/ exit 1**
+- 拒否ゲートを `if ($false)` にする → **73 cases / 1 failed（ST-72）/ exit 1**
+- 各回とも実 source が未変更であることを併せて確認した。
+
+**前回の session 由来の構造的欠陥も修正**: ST-63〜ST-66 が ST-62 の body に、ST-66 が
+ST-65 の body にネストしていた。3 連続で修正が body を閉じずに追記した結果である。file は
+parse され全て `ok` に見えたが、**外側の case は独立に失敗できず、「ST-62 ok」は ST-62 に
+ついて何も言っていなかった**。ST-71 で構造的に再発防止する。
+
+## 6. 固定コミット上の clean-source ベータ候補（`.local/installer-beta-final`、**未変更**）
+
+再ハッシュして STATE の旧記載と一致することを確認した。
 
 | 項目 | 実測値 |
 |---|---|
-| source HEAD | `c729da4dc8fc0df163cd449eef5c90950cfa0c81`（git HEAD と一致） |
-| `sourceIdentity.status` | `verified`（`verified-dirty` ではない） |
-| `repositoryDirty` | `false` / statusLines 0 |
-| Mozc commit / patch | `13c98988247aa711d99db9e348ec2a597d14b5cd` / 6 |
-| MSI SHA-256 | `A9619B7BFCB72C6E554B3BAF700D8EA30657DEC50296D1E999CD644B06F4DF49` |
-| Setup SHA-256 | `B37CBC20CFD2D9E5A7349D7B45CB64E27AB09111EED04F47D28817B653E0854A` |
-| サイズ | MSI 18,427,904 / Setup 18,433,024 bytes（AI同梱版 1,124,446,208 の約1/61） |
-| ProductCode | `{FBDCE95B-46CA-4959-8D36-26ABEE793117}` |
-| UpgradeCode | `{381B4CC9-ABAA-4AB2-9DC8-FCA54CE3B964}`（**旧候補と同一 → MajorUpgrade 有効**） |
-| その他 | ProductVersion `0.1.0` / `ALLUSERS=1` / Template `x64;1041` / `KanaAI Project` |
-| Setup 埋め込み | OLE magic offset **1204**、sizeDelta **5,120**、先頭1MB **バイト一致** |
+| MSI SHA-256 | `A9619B7BFCB72C6E554B3BAF700D8EA30657DEC50296D1E999CD644B06F4DF49`（18,427,904 bytes） |
+| Setup SHA-256 | `B37CBC20CFD2D9E5A7349D7B45CB64E27AB09111EED04F47D28817B653E0854A`（18,433,024 bytes） |
 | 署名 | MSI/Setup とも `NotSigned`（D-3 で許容、開示義務は残る） |
-| AI payload | **0件**。File table に `kanai-broker.exe` も `ai\` 配下も無し、`localAiIncluded=false` |
-| manifest の正直さ | `verified=false` / `status=unverified-installer-candidate` / `aiOperationVerified=false` |
-
-MSI の File table は12行すべて Mozc / VC redist / README / LICENSE 系で、旧候補 B1 と差分ゼロ。
-
-## 5. 回帰テスト（変更に関係するテストのみ実施）
-
-`Test-InstallerBuildScript.ps1`: **PASS**。`Status=PASS` / `OfflineStage=PASS` / RuntimeFiles 12 /
-StagedPatchCount 6 / SourceCommit `c729da4…`（HEAD と一致）/ MozcCommit `13c9898…` /
-tamper reject 12項目すべて True（BadMagic, TruncatedHeaders, WrongMachine, OptionalMagic,
-DllExeMismatch, MissingExport, PayloadMutation, HelperMutation, SourceMutation, PatchMutation,
-OverlayMutation, ManifestSelfHash）/ ReparseRoot rejected / AI negative cases 42 / FAIL 0件。
-**正直な限定**: tree が clean のため `CleanGuardRejected=False` で、dirty-tree guard の分岐は
-**今回スキップされた**（テスト自身が dirty を作らない設計）。dirty guard は別途 dirty 状態で要再検証。
-`cargo fmt --all --check` は exit 0（今回再実行したのはこれのみ。`check/test/clippy` は
-直近記録を参照し、理由なく繰り返していない）。
+| ProductCode / UpgradeCode | `{FBDCE95B-46CA-4959-8D36-26ABEE793117}` / `{381B4CC9-…}`（旧候補と同一） |
+| AI payload | **0 件**。`localAiIncluded=false`、manifest は `verified=false` を正直に記録 |
 
 ## 未解決・未検証（隠さない）
 
-- **W1（実アプリ入力）未実施**。desktop validation は一度も実行しておらず、D-2 の運用により
-  **実行前にユーザーへ事前連絡が必要**。
-- **W2（導入/削除/再導入/rollback）未実施**。特に旧 `C:\Program Files (x86)\KanaAI` から新 x64
-  `C:\Program Files\KanaAI` への移行が未検証（UpgradeCode 同一で MajorUpgrade は効く設計だが、
-  別ディレクトリ移行の実測が必須）。UAC 承認が必要。
-- AI経路の CRITICAL C-1 / A2-08 は残る（Mozc-only ベータ公開には直接影響しない）。
+- **W2（install / uninstall / reinstall / rollback）は、依然として 1 phase も未観測。**
+  今回判明した installer 非回答のため、**この machine では W2 を成立させられない**。
+- **W1（実アプリ入力）未実施**。desktop validation は新候補で一度も走っていない。
+  旧試行は登録・ファイル・プロファイルは PASS したが共有 desktop 上の SendInput が全滅した。
+  人が別途、文字入力・変換・かな切替成功を報告（user report のみ）。D-2 の事前連絡が必要。
+- AI 経路の CRITICAL C-1 / A2-08 は残る。**実装机で AI は一度も起動しない**。
 - 独立 verifier の GOAL 全条件判定は未実施。`.goal-complete` は作らない。
+
+## 解決を待つ判断（ユーザー）
+
+実機 §2/§3 の扱い。**どれを選ぶ場合も W2 の証跡は、その machine で取ってから公開する**。
+
+1. **この machine の installer 登録を修復する** — `Installer\Components` 欠落の原因を特定し、
+   既存 KanaAI 2件を正しい状態で再登録してから W2 を正式に開始する。
+   原因不明のまま「修復」すると evidence の前提が壊れるため、まず**原因の特定**が先。
+2. **回答する machine（クリーンな Windows 10/11 VM を含む）に移して W2 を取る** — W2 の
+   gate としてこちらが正当である。開発機のこの状態は legitimate な証跡ではないため、
+   記録に留める。
+3. **W2/W1 とも未観測のまま公開を先行させる** — `docs/PRODUCT_RELEASE_CONTRACT.md` の
+   「未検証のインストーラーを公開する許可ではない」に反する。**非推奨**。
 
 ## 次の具体的作業
 
-1. W1 をユーザーへ事前連絡 → 承認後に desktop validation を実行。
-2. W2 を事前連絡 → UAC 承認を得て install / uninstall / reinstall / rollback、特に x86→x64
-   ディレクトリ移行を machine lock 内で実測。
-3. 結果を STATE / `docs/PROGRESS.md` / `docs/WORK_QUEUE.md` に反映。
-4. `gh release create --prerelease` で公開。Release body に未署名・SmartScreen 警告・上表の
-   SHA-256・対応ソース `c729da4…`・ライセンス・既知制限を明記（`gh` は aruiki 認証済み。
-   D-5 により公表面は README と Release body のみ）。
+1. 上記 1〜3 の判断をユーザーと確定する。
+2. 決定後、`-Execute` を machine lock 専有・UAC 承認のもとで実行する。
+3. W1 は D-2 の事前連絡 → 承認後に desktop validation。
+4. 結果を STATE / `docs/PROGRESS.md` / `docs/WORK_QUEUE.md` に反映する。
+5. push（main は 0 behind / 10 ahead、**未 push**）。
+6. `gh release create --prerelease`。AI 非同梱・未署名・SHA-256・既知制限を Release body に明記。
+   D-5 により公表面は README と Release body のみ。
 
 ---
 
@@ -925,8 +999,10 @@ human-onlyの署名/CLSID/Windows operator権限を取得できない項目は�
 ## Directory inspection — current iteration
 
 - `VERIFICATION.md` remains `FAIL — NOT COMPLETE`; `.goal-complete` is absent.
-- The worktree is clean; the current broker/Mozc/TSF implementation is
-  committed and published at `2e0630c23ce7242d020a3c571724c7c67b336216`.
+- The worktree is clean; the broker/Mozc/TSF implementation was committed and
+  published at `2e0630c23ce7242d020a3c571724c7c67b336216`, and ten further local
+  commits sit on top of it (see the handoff at the top of this file). Nothing
+  after `2e0630c` has been pushed yet.
 - Fresh Rust debug/release tests, workspace Clippy, Windows-target compile/lint,
   bridge replay/build, portable TSF CTest, and isolated staged Bazel tests pass.
 - Windows x64 TIP/server source build、PE/load/export validation、native
