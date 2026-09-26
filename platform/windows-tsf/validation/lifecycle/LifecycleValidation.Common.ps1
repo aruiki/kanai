@@ -1336,7 +1336,26 @@ function Get-KanaAiLifecycleExitCodeForStatus {
 
 function Resolve-KanaAiLifecycleOverallStatus {
     param([AllowNull()]$Results, [Parameter(Mandatory = $true)][string]$Mode)
-    $list = @($Results)
+    # The caller passes the execute path's List[object] phase results, and on this
+    # Windows PowerShell build @($listObject) throws "Argument types do not match".
+    # Convert any enumerable without the array subexpression, as the desktop
+    # harness's ConvertTo-KanaAiValidationArray does.  Each branch assigns $list
+    # directly: an if-expression would unroll a one-element array into a scalar
+    # and then .Count would not resolve under strict mode (measured: ST-50).
+    if ($null -eq $Results) {
+        $list = @()
+    }
+    elseif ($Results -is [System.Array]) {
+        $list = $Results
+    }
+    elseif ($Results -is [System.Collections.IEnumerable]) {
+        $copy = New-Object System.Collections.ArrayList
+        foreach ($item in $Results) { [void]$copy.Add($item) }
+        $list = $copy.ToArray()
+    }
+    else {
+        $list = @($Results)
+    }
     if ($Mode -eq 'plan-only') { return 'plan_only' }
     $failed = @($list | Where-Object { [string](Get-KanaAiLifecycleOptionalProperty -Object $_ -Name 'outcome' -Default '') -eq 'fail' })
     $refused = @($list | Where-Object { [string](Get-KanaAiLifecycleOptionalProperty -Object $_ -Name 'outcome' -Default '') -eq 'refused' })
