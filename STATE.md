@@ -147,7 +147,52 @@ parse され全て `ok` に見えたが、**外側の case は独立に失敗で
 | ProductCode / UpgradeCode | `{FBDCE95B-46CA-4959-8D36-26ABEE793117}` / `{381B4CC9-…}`（旧候補と同一） |
 | AI payload | **0 件**。`localAiIncluded=false`、manifest は `verified=false` を正直に記録 |
 
+## 7. 修復の試行と結果（2026-09-26 17:28 実測）— **MSI product 修復の経路は使えない**
+
+installation 登録の修復を 1 製品だけに試した。対象は files が実在する旧 x86 KanaAI
+`{307FE767-…}`、control として PowerToys `{FEC7CE70-…}` は触らない設計。
+
+mutation 前に、machine が quiescent であることを確認したうえで、**他の自律 agent を全て
+停止した**: `cline-app` と `code-sidecar` ×2（`AppData\Local\Cline`）、`CodexSandboxService
+.OpenAI.Codex`。`ollama` は local model server なので残した。worktree `cline/16435` は
+branch が `185174c` で main と差分ゼロのためそのまま残した。
+
+結果（**`msiexec` は exit 0 = successだった**）:
+
+| 観測 | 修復前 | 修復後 |
+|---|---|---|
+| target `MsiQueryProductState` | `rc=5 ERROR_ACCESS_DENIED`（state 未書き） | **同じ** |
+| control `MsiQueryProductState` | `rc=5 ERROR_ACCESS_DENIED` | **同じ** |
+| orphan `MsiQueryProductState` | `rc=5 ERROR_ACCESS_DENIED` | **同じ** |
+| `Installer\Components` | 不在 | **不在のまま** |
+| x86 ディレクトリ | 12 files | 12 files（再コピーされた） |
+
+**成功した forced reinstall が component 登録を書き戻さない**。これが決定的で、
+`/fvomus` を各製品に回す案は打ち切った。
+
+因果仮説は強くなった: `MsiEnumComponents` は成功して実 component GUID を返すが
+`MsiGetComponentState`（`ERROR_INVALID_HANDLE`）と `MsiQueryProductState`
+（`ERROR_ACCESS_DENIED`）が全件失敗する。component 登録が読めない therefore
+product state を判定できない、という整合である。ただし **key 不在が原因であることは
+未証明**であり、この因果を断定しない。
+
+さらに淘汰した前提:
+
+- ACL は正常。`Installer` key の owner は SYSTEM、`Administrators` と `SYSTEM` は FullControl。
+  書き込みを妨げる権限問題ではない。
+- **この project の tooling は無実。** W1 の cleanup は Notepad の tab と window を閉じた
+  だけで registry を触らない。desktop harness に registry 削除は無い。唯一の
+  `DeleteSubKeyTree` は `Remove-TsfRegistryOperation` で、`Assert-TsfRegistryKey` が
+  `CLSID\{KanaAI}` と `CTF\TIP\{KanaAI}` のみに限定している。
+- 記録された異常は `Components`（不在）に加えて `Installer\Folders` と `Installer\Secure` が
+  **0 件**。一方 `UpgradeCodes` 179、`UserData` 2、`Classes\Installer\Products` 171 は
+  populated。**catalog 側は生きていて、install-location/component 側だけが空**という形。
+
+**原因が未特定であり、repair の選択肢は実質的に尽きた。** 同じ仮説の反復はしない。
+
 ## 未解決・未検証（隠さない）
+
+
 
 - **W2（install / uninstall / reinstall / rollback）は、1 phase も receipt として観測されていない。**
   ただし「何も起きなかった」ではない。**event 1033 により install は 15:29:07 に成功している**
