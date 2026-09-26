@@ -1,4 +1,101 @@
-# 最新の引き継ぎ — 2026-09-26 coordinator再開 / 引き継ぎRust treeの defective 发现と修正
+# 最新の引き継ぎ — 2026-09-26 clean-source ベータ候補の完成（単独実行・実測）
+
+Status: NOT COMPLETE / public beta NOT RELEASED / `.goal-complete` 未作成
+
+基準HEAD: `c729da4dc8fc0df163cd449eef5c90950cfa0c81`（**tree clean**、下記候補と一致）。
+D-1〜D-5 の決定はそのまま有効（下の履歴区切りを参照）。
+
+## 1. clean tree でビルドが不可能だった実バグを修正（CRITICAL・新規発見）
+
+`scripts/stage-tsf-runtime.ps1` と `scripts/build-windows-installer.ps1` の
+`Get-SourceIdentity` が git status を
+`$statusLines = if ([string]::IsNullOrWhiteSpace($statusText)) { @() } else { @(...) }`
+で代入していた。**clean tree では git が何も出力しないため `if` が返す空配列が
+パイプラインで `$null` にアンロールされ**、`Set-StrictMode -Version Latest` 下の後続
+`$statusLines.Count` が `PropertyNotFoundStrict` で例外になった。
+実測: stage は tree が clean 化した瞬間に497行で停止（dirty tree では通る）。
+公開候補は `-RequireCleanSource` 必須なので、**clean-source 候補が構造的に作れなかった**。
+修正: 空配列を式から返さず直接代入し、`@($statusLines).Count` で二重に防御。
+非空虚性の証明（StrictMode Latest 実測）: `NEW_count=0`/`NEW_dirty=False`（clean で空配列を維持）、
+`OLD_FAILS_AS_EXPECTED=...Count...`（旧形は実際に例外）、`DIRTY_count=1`（dirty の既存挙動は不変）。
+PowerShell 5.1 parser 両スクリプト 0 errors。コミット `dcf27c2977c603bf3c6461fe3be2fbe561dcdeb2`。
+
+## 2. インストーラーテストが non-interactive でハングする実バグを修正
+
+`platform/windows-tsf/installer/package/tests/Test-InstallerBuildScript.ps1` の
+`Remove-TestJunction` が junction に `Remove-Item -Force`（`-Recurse` なし）を呼び、
+PowerShell 5.1 が「項目には子があり…」の確認プロンプトを出して**実行が永久停止**した。
+`-ErrorAction Stop` は確認を抑制しない（抑制するのは `-Confirm` のみ）ため、catch 内の正しい
+`[IO.Directory]::Delete($Path,$false)` に到達しなかった。実測: finally cleanup の
+`runtime-junction` で停止し、result もログも生成されず。reparse point を
+`Directory::Delete(path,$false)` で削除すると junction だけが消え、**リンク先
+`.local/tsf-runtime` の12ファイルは無傷**だった。修正: reparse point を検出して直接削除、
+残りの `Remove-Item` に `-Confirm:$false`。コミット `c729da4dc8fc0df163cd449eef5c90950cfa0c81`。
+
+## 3. 22時間残っていた build lock を実保持者特定して回収
+
+`Resource 'build' is in use` で stage/build/test が全て停止した。Restart Manager API
+（rstrtmgr）で実保持者を特定 → **PID 30636（このセッションの VS Code シェル、CPU 25.8秒）**が
+上記2のハングしたテスト実行のままハンドルを保持。他セッションの所有物でないと確認してから
+`Stop-Process` し、`NO_OWNER` と実ハンドル取得（4回 ACQUIRED）で解放を確認した。
+特定用実装は `.local/lockowner.cs`（`.local` は `.gitignore:8` で無視済み）。
+
+## 4. 固定コミット上の clean-source ベータ候補（`.local/installer-beta-final`）
+
+| 項目 | 実測値 |
+|---|---|
+| source HEAD | `c729da4dc8fc0df163cd449eef5c90950cfa0c81`（git HEAD と一致） |
+| `sourceIdentity.status` | `verified`（`verified-dirty` ではない） |
+| `repositoryDirty` | `false` / statusLines 0 |
+| Mozc commit / patch | `13c98988247aa711d99db9e348ec2a597d14b5cd` / 6 |
+| MSI SHA-256 | `A9619B7BFCB72C6E554B3BAF700D8EA30657DEC50296D1E999CD644B06F4DF49` |
+| Setup SHA-256 | `B37CBC20CFD2D9E5A7349D7B45CB64E27AB09111EED04F47D28817B653E0854A` |
+| サイズ | MSI 18,427,904 / Setup 18,433,024 bytes（AI同梱版 1,124,446,208 の約1/61） |
+| ProductCode | `{FBDCE95B-46CA-4959-8D36-26ABEE793117}` |
+| UpgradeCode | `{381B4CC9-ABAA-4AB2-9DC8-FCA54CE3B964}`（**旧候補と同一 → MajorUpgrade 有効**） |
+| その他 | ProductVersion `0.1.0` / `ALLUSERS=1` / Template `x64;1041` / `KanaAI Project` |
+| Setup 埋め込み | OLE magic offset **1204**、sizeDelta **5,120**、先頭1MB **バイト一致** |
+| 署名 | MSI/Setup とも `NotSigned`（D-3 で許容、開示義務は残る） |
+| AI payload | **0件**。File table に `kanai-broker.exe` も `ai\` 配下も無し、`localAiIncluded=false` |
+| manifest の正直さ | `verified=false` / `status=unverified-installer-candidate` / `aiOperationVerified=false` |
+
+MSI の File table は12行すべて Mozc / VC redist / README / LICENSE 系で、旧候補 B1 と差分ゼロ。
+
+## 5. 回帰テスト（変更に関係するテストのみ実施）
+
+`Test-InstallerBuildScript.ps1`: **PASS**。`Status=PASS` / `OfflineStage=PASS` / RuntimeFiles 12 /
+StagedPatchCount 6 / SourceCommit `c729da4…`（HEAD と一致）/ MozcCommit `13c9898…` /
+tamper reject 12項目すべて True（BadMagic, TruncatedHeaders, WrongMachine, OptionalMagic,
+DllExeMismatch, MissingExport, PayloadMutation, HelperMutation, SourceMutation, PatchMutation,
+OverlayMutation, ManifestSelfHash）/ ReparseRoot rejected / AI negative cases 42 / FAIL 0件。
+**正直な限定**: tree が clean のため `CleanGuardRejected=False` で、dirty-tree guard の分岐は
+**今回スキップされた**（テスト自身が dirty を作らない設計）。dirty guard は別途 dirty 状態で要再検証。
+`cargo fmt --all --check` は exit 0（今回再実行したのはこれのみ。`check/test/clippy` は
+直近記録を参照し、理由なく繰り返していない）。
+
+## 未解決・未検証（隠さない）
+
+- **W1（実アプリ入力）未実施**。desktop validation は一度も実行しておらず、D-2 の運用により
+  **実行前にユーザーへ事前連絡が必要**。
+- **W2（導入/削除/再導入/rollback）未実施**。特に旧 `C:\Program Files (x86)\KanaAI` から新 x64
+  `C:\Program Files\KanaAI` への移行が未検証（UpgradeCode 同一で MajorUpgrade は効く設計だが、
+  別ディレクトリ移行の実測が必須）。UAC 承認が必要。
+- AI経路の CRITICAL C-1 / A2-08 は残る（Mozc-only ベータ公開には直接影響しない）。
+- 独立 verifier の GOAL 全条件判定は未実施。`.goal-complete` は作らない。
+
+## 次の具体的作業
+
+1. W1 をユーザーへ事前連絡 → 承認後に desktop validation を実行。
+2. W2 を事前連絡 → UAC 承認を得て install / uninstall / reinstall / rollback、特に x86→x64
+   ディレクトリ移行を machine lock 内で実測。
+3. 結果を STATE / `docs/PROGRESS.md` / `docs/WORK_QUEUE.md` に反映。
+4. `gh release create --prerelease` で公開。Release body に未署名・SmartScreen 警告・上表の
+   SHA-256・対応ソース `c729da4…`・ライセンス・既知制限を明記（`gh` は aruiki 認証済み。
+   D-5 により公表面は README と Release body のみ）。
+
+---
+
+# 履歴（2026-09-26 前半区切り）— coordinator再開 / 引き継ぎRust treeの defective 发现と修正
 
 Status: NOT COMPLETE / public beta NOT RELEASED / `.goal-complete` 未作成
 
