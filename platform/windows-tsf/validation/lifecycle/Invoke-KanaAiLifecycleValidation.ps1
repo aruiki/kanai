@@ -599,6 +599,37 @@ Add-RunFinding -Id 'CANDIDATE-ACCEPTED' -Severity 'info' -Message ("Candidate ac
 # --- what is already on this machine ---------------------------------------
 $existingProducts = Find-KanaAiLifecycleInstalledProducts -Ledger $script:Ledger -UpgradeCode $identity.UpgradeCode
 $targetState = Get-KanaAiLifecycleProductState -Ledger $script:Ledger -ProductCode $identity.ProductCode
+# The harness may only reason about a machine whose installer answers.  Both
+# Installer.ProductInfo('InstallState') and MsiQueryProductState refuse on a
+# machine whose per-machine component registration is missing, and 'unknown'
+# is not evidence of absence: it is the absence of evidence.  Measured on the
+# development machine, the query returned ERROR_ACCESS_DENIED for every valid
+# product code, elevated and unelevated and across three P/Invoke variants,
+# while an invalid product name returned -1 and an empty GUID returned -2, so
+# the call dispatched correctly and the installer declined to answer.  If that
+# state were carried on, the target check below would not fire, the
+# ^(DEFAULT|LOCAL)$ filter in the later phases would match nothing, and every
+# phase would report an installed product as absent.  Refusing is the only
+# honest outcome, and it is the same rule the helper's own contract states:
+# unknown is never treated as absent.
+$undeterminedState = @($existingProducts.found | Where-Object { [string]::IsNullOrWhiteSpace([string]$_.installState) })
+if ($targetState -eq 'unknown' -or $undeterminedState.Count -gt 0) {
+    $failure = ("The Windows Installer did not report an install state on this machine: candidate state '{0}', {1} product(s) sharing the pinned UpgradeCode returned no state. An unanswered state is not an absent state, so the clean-install baseline cannot be established and no phase may run. Repair the machine's per-machine installer registration, or run this gate on a machine whose installer answers." -f $targetState, $undeterminedState.Count)
+    Write-Host ('  REFUSED: ' + $failure)
+    Add-RunFinding -Id 'INSTALL-STATE-UNDETERMINED' -Severity 'critical' -Message $failure -Evidence $existingProducts.found
+    $baseReceipt.overall = 'refused'
+    $baseReceipt.exitCode = Get-KanaAiLifecycleExitCodeForStatus -Status 'refused'
+    $baseReceipt.completedAtUtc = Get-KanaAiLifecycleUtcNow
+    $baseReceipt.findings = @($script:Findings.ToArray())
+    $baseReceipt.baseline = [ordered]@{
+        existingKanaAiProducts = $existingProducts
+        targetProductState     = $targetState
+        undeterminedStates     = @($undeterminedState | ForEach-Object { [string]$_.productCode })
+        note                   = 'No install, uninstall, reinstall or rollback was attempted. The observation could not be completed, so nothing was changed.'
+    }
+    [void](Write-KanaAiLifecycleJson -Path $receiptPath -Value $baseReceipt)
+    exit 2
+}
 $unexpectedPresent = @($existingProducts.found | Where-Object { $_ -ne $identity.ProductCode })
 if ($existingProducts.count -gt 0 -and -not $AllowUnexpectedExistingInstall -and $unexpectedPresent.Count -gt 0) {
     $failure = ("{0} product(s) sharing the pinned KanaAI UpgradeCode are already installed on this machine and -AllowUnexpectedExistingInstall was not passed. This harness will not uninstall or overwrite machine state it did not create." -f $unexpectedPresent.Count)

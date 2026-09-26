@@ -1009,6 +1009,39 @@ Invoke-Test -Id 'ST-71' -Name 'no case is nested inside another case body' -Body
     Assert-Equal 0 $duplicates.Count ('every case id must be unique, duplicated: ' + ($duplicates -join ', '))
 }
 
+Invoke-Test -Id 'ST-72' -Name 'an unanswered install state refuses the run instead of reading as absent' -Body {
+    # Measured defect, and the most dangerous one found in this harness.
+    # Get-KanaAiLifecycleProductState documents that 'unknown' "is never
+    # treated as absent", but the entry point only refused when the state was
+    # 'installed'.  On a machine whose installer declines to answer - measured
+    # here: MsiQueryProductState returned ERROR_ACCESS_DENIED for every valid
+    # product code, and Installer\ProductInfo raised for InstallState - the
+    # state came back 'unknown', the pre-existing-target check did not fire,
+    # the ^(DEFAULT|LOCAL)$ filter in the later phases matched nothing, and
+    # every phase would have reported an installed product as absent.  A
+    # release gate that answers "nothing is installed" on a machine with two
+    # registered KanaAI products is worse than one that crashes.
+    $run = [System.IO.File]::ReadAllText($runPath)
+    Assert-True ($run.Contains('INSTALL-STATE-UNDETERMINED')) 'the refusal must be recorded as a named critical finding'
+    Assert-True ($run.Contains("`$targetState -eq 'unknown'")) 'an unknown state must be part of the refusal condition'
+    Assert-True ($run.Contains('$undeterminedState')) 'a matched product with no state must also refuse'
+    # Position matters as much as presence: the gate has to run before the
+    # pre-existing-target check, or that check is reached with nothing refused,
+    # and before any phase can install anything.
+    $gateAt = $run.IndexOf('INSTALL-STATE-UNDETERMINED')
+    $preexistingAt = $run.IndexOf('PREEXISTING-TARGET-INSTALL')
+    Assert-True ($gateAt -gt 0) 'the refusal must exist in the entry point'
+    Assert-True ($preexistingAt -gt 0) 'the pre-existing-target check must exist in the entry point'
+    Assert-True ($gateAt -lt $preexistingAt) 'the undetermined-state refusal must come before the pre-existing-target check'
+    Assert-True ($run.Contains('An unanswered state is not an absent state')) 'the receipt must state why the run stopped, in the words an operator needs'
+    # And the refusal must be terminal, not a warning: it has to write the
+    # receipt and exit non-zero, so an unanswered machine is never mistaken
+    # for a completed run.
+    $afterGate = $run.Substring($gateAt)
+    Assert-True ($afterGate.Contains('exit 2')) 'the refusal must exit non-zero'
+    Assert-True ($run.Contains('Repair the machine')) 'the refusal must say what the operator has to do'
+}
+
 # ---------------------------------------------------------------------------
 # report
 # ---------------------------------------------------------------------------
