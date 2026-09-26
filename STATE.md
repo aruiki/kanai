@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# 最新の引き継ぎ — 2026-09-27 未明 **W1 ハーネスは端から端まで走るようになった。次の gate は「画面に_candidate_ が出る」**
-=======
 # 最新の引き継ぎ — 2026-09-27 未明 **ベータを GitHub prerelease として公開した（W1 の機械検証は未取得のまま、逸脱を明記）**
 
 Status: NOT COMPLETE / `.goal-complete` 未作成 / 公開 = GitHub prerelease **`v0.1.0-beta.1`**
@@ -93,7 +90,6 @@ Setup 35,818,512 bytes」「`patchSetSha256 a814c8b8…`」は**誤り**。
 # 履歴（2026-09-26 夜） — **W2 は実機で VERIFIED になった。次の gate は W1（実アプリ日本語入力）**
 
 > 以下は履歴です。最新の引き継ぎは本ファイル冒頭の節を読んでください。
->>>>>>> origin/main
 
 Status: NOT COMPLETE / public beta NOT RELEASED / `.goal-complete` 未作成
 W2: **VERIFIED**（候補 MSI `2B2C3B3D…` / Setup `B0BCD073…`、この machine 1台のみ）
