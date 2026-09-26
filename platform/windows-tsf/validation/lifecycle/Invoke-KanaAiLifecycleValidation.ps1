@@ -704,6 +704,12 @@ $state = @{
     installDate        = ''
     newerIsNewer       = 'false'
     olderIsOlder       = 'false'
+    # Declared here, not only inside the -CandidateMsiNewer block below, so the
+    # key always exists: a from-newer-msi expectation on a run with no newer MSI
+    # has to resolve to nothing and be reported unconfirmed, not read a key that
+    # was never set.
+    newerProductCode   = ''
+    newerVersion       = ''
 }
 if (-not [string]::IsNullOrWhiteSpace($newerMsiPath)) {
     try {
@@ -797,6 +803,10 @@ $registration = $null
 $directoryObservation = $null
 $processObservation = $null
 $lastInstalledProductCode = ''
+# What is installed right now, before this phase's command can change it.  A
+# from-current-msi expectation is exactly this value, so it is captured before
+# the command is started and never recomputed from the after-picture.
+$productCodeInstalledBeforeCommand = ''
 
 foreach ($action in @($resumePlan.Actions)) {
     $phaseName = [string]$action.phase
@@ -876,6 +886,11 @@ foreach ($action in @($resumePlan.Actions)) {
     $logPath = Get-PhaseLogPath -Phase $phase -OutputRoot $script:CurrentOutputDirectory
     $productCodeForCommand = if ([string]::IsNullOrWhiteSpace($lastInstalledProductCode)) { $state.installedProductCode } else { $lastInstalledProductCode }
     if ([string]::IsNullOrWhiteSpace($productCodeForCommand)) { $productCodeForCommand = $identity.ProductCode }
+    # Taken here, from the carried-forward state, so it is the product code that
+    # was installed immediately before this phase's command runs.  It is not
+    # recomputed from the after-picture further down, which is what made the
+    # refusal-inert phases compare themselves against the wrong product.
+    $productCodeInstalledBeforeCommand = $productCodeForCommand
     $values = @{
         msiPath      = $msiPath
         setupPath    = $setupPath
@@ -945,14 +960,25 @@ foreach ($action in @($resumePlan.Actions)) {
     if ($inventoryBeforeCommand.Count -gt 0 -or $commandRecord -ne $null) {
         $inventoryDelta = Compare-KanaAiLifecycleInventories -Before $inventoryBeforeCommand -After @($directoryObservation.files)
     }
-    $expectedProductCodeForPhase = $identity.ProductCode
-    if ($phaseName -eq 'upgrade-forward' -and $state.ContainsKey('newerProductCode')) { $expectedProductCodeForPhase = [string]$state.newerProductCode }
+    # The expected product code comes from the plan's own product-code
+    # instruction for this phase, resolved against the phase it belongs to.
+    # Keying it off the phase name is what left downgrade-refused comparing
+    # itself against the candidate MSI's code after upgrade-forward had already
+    # replaced the installed product with the newer fixture's.
+    $productCodeExpectation = Resolve-KanaAiLifecycleProductCodeExpectation -Phase $phase `
+        -CandidateProductCode ([string]$identity.ProductCode) `
+        -NewerProductCode ([string]$state.newerProductCode) `
+        -InstalledBeforeCommand $productCodeInstalledBeforeCommand
+    $expectedProductCodeForPhase = [string]$productCodeExpectation.productCode
 
     $observation = [ordered]@{
         command                 = $commandRecord
         productState            = $installedState
         installedProductCode    = $installedCode
         expectedProductCode     = $expectedProductCodeForPhase
+        expectedProductCodeSource = [string]$productCodeExpectation.source
+        expectedProductCodeInstruction = [string]$productCodeExpectation.instruction
+        productCodeBeforeCommand = $productCodeInstalledBeforeCommand
         installDate             = $installDateNow
         installDateBefore       = $installDateBeforeCommand
         registration            = $registration
@@ -985,6 +1011,12 @@ foreach ($action in @($resumePlan.Actions)) {
     }
     elseif ($phaseName -eq 'reinstall-same' -or $phaseName -eq 'downgrade-refused') {
         # Keep the before-picture from the install that is currently in place.
+        # The before-picture product code is captured into
+        # $productCodeInstalledBeforeCommand before this phase's command runs, so
+        # it is this branch's product code that a from-current-msi expectation is
+        # compared against.  Keeping the picture and then comparing against some
+        # other product is what made the refusal-inert phases report a
+        # contradiction.
     }
     $record.endedAtUtc = Get-KanaAiLifecycleUtcNow
 }
@@ -1041,11 +1073,21 @@ foreach ($name in @('absent-final', 'cleanup')) {
     $finalDirectory = if ($finalLocal.Count -eq 1 -and -not [string]::IsNullOrWhiteSpace([string]$finalLocal[0].installLocation)) { [string]$finalLocal[0].installLocation } else { $expectedInstallPath }
     $finalRegistration = Get-KanaAiLifecycleRegistrationObservation -Ledger $script:Ledger -Registration $registrationIdentity -InstallDirectory $finalDirectory
     $finalDirectoryObservation = Get-KanaAiLifecycleInstallDirectoryObservation -Ledger $script:Ledger -Path $finalDirectory
+    # Resolved the same way every other phase is, so the two post-cleanup phases
+    # cannot carry a product-code expectation that belongs to a different phase.
+    $phase = Get-KanaAiLifecyclePhase -Plan $planObject -Name $name
+    $finalProductCodeExpectation = Resolve-KanaAiLifecycleProductCodeExpectation -Phase $phase `
+        -CandidateProductCode ([string]$identity.ProductCode) `
+        -NewerProductCode ([string]$state.newerProductCode) `
+        -InstalledBeforeCommand $productCodeInstalledBeforeCommand
     $finalObservation = [ordered]@{
         command              = $record.command
         productState         = $finalState
         installedProductCode = $finalCode
-        expectedProductCode  = $identity.ProductCode
+        expectedProductCode  = [string]$finalProductCodeExpectation.productCode
+        expectedProductCodeSource = [string]$finalProductCodeExpectation.source
+        expectedProductCodeInstruction = [string]$finalProductCodeExpectation.instruction
+        productCodeBeforeCommand = $productCodeInstalledBeforeCommand
         installDate          = ''
         installDateBefore    = ''
         registration         = $finalRegistration
@@ -1057,7 +1099,6 @@ foreach ($name in @('absent-final', 'cleanup')) {
         observedKanaAiProducts = $finalInstalled
         note                 = 'Post-cleanup observation, taken after both harness-owned cleanup passes.'
     }
-    $phase = Get-KanaAiLifecyclePhase -Plan $planObject -Name $name
     $outcome = Resolve-KanaAiLifecyclePhaseOutcome -Phase $phase -Context ([ordered]@{ observation = $finalObservation })
     $record.observation = $finalObservation
     $record.checks = $outcome.checks

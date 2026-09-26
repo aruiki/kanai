@@ -78,7 +78,7 @@ of the two paths was observed.
 | --- | --- | --- |
 | `Invoke-KanaAiLifecycleValidation.ps1` | 1104 | Entry point. Modes `-PlanOnly`, `-SelfTest`, `-Execute`. Gates, phase loop, receipt. |
 | `LifecycleValidation.Common.ps1` | 2406 | Shared helpers, split into a pure half (plan validation, comparison engine, verdict engine, resume planner, receipt assembler, privacy scan) and an observation half that every function routes through one action gate. |
-| `Invoke-KanaAiLifecycleValidationSelfTest.ps1` | 832 | 61 self-test cases, synthetic data only, no machine interaction. |
+| `Invoke-KanaAiLifecycleValidationSelfTest.ps1` | 1411 | 82 self-test cases, synthetic data only, no machine interaction. |
 | `lifecycle-validation-plan.json` | 11 phases | The plan: pinned identity, registration identity, phase order, per-phase assertions, per-phase `proves` / `cannotProve`, safety gates, privacy policy, non-goals. |
 | `README.md` | this file | What each phase proves, what it cannot, how to read the receipt, the elevation and UAC expectation. |
 
@@ -104,7 +104,7 @@ machine-touching helper throws `LIFECYCLE-GATE-SEALED` if it is called anyway
 powershell -NoProfile -ExecutionPolicy Bypass -File platform\windows-tsf\validation\lifecycle\Invoke-KanaAiLifecycleValidationSelfTest.ps1
 ```
 
-Exit code 0 when all 61 cases pass, 1 otherwise. Or through the entry point with
+Exit code 0 when all 82 cases pass, 1 otherwise. Or through the entry point with
 `-SelfTest`.
 
 ### A real lifecycle run (NOT performed; requires an elevated 64-bit shell)
@@ -200,6 +200,39 @@ that have nothing to do with the command's own return value:
 - **verbose log** — classified only when it carries a decisive marker. An
   unclassifiable or ambiguous log is `unconfirmed`.
 
+### The `product-code` expectation is an instruction, never a value
+
+`ProductCode` is derived by WiX from the version, so the plan cannot state one.
+Every `product-code` assertion therefore carries a short **instruction** that
+says where the expected code has to come from, and the harness resolves that
+instruction to a real product code before it compares anything. The instruction
+is never itself compared to a product code.
+
+| Instruction | Resolves to | Phases | If it cannot be resolved |
+| --- | --- | --- | --- |
+| `from-candidate-msi` | the candidate MSI's own `ProductCode`, read from that package's `Property` table | `install-setup`, `install-msi`, `reinstall-same` | `unconfirmed` |
+| `from-newer-msi` | the newer fixture MSI's own `ProductCode`, read from that package's `Property` table | `upgrade-forward` | `unconfirmed` (e.g. no `-CandidateMsiNewer`) |
+| `from-current-msi` | the product code that was installed **immediately before this phase's command ran** | `downgrade-refused` | `unconfirmed` |
+| anything else | nothing | none | `unconfirmed`, with the instruction named |
+
+`from-current-msi` is the one that is not about a package. After a refused
+downgrade the installed product code must still be the one that was there
+before the command ran — by then the newer fixture's, because `upgrade-forward`
+replaced the candidate. A downgrade that quietly replaced the product is a
+policy failure; the *candidate's* product code is not what this phase is
+asserting.
+
+The expectation is resolved from the phase's own instruction, never from the
+phase's name, and the receipt records all four facts so a reader can audit the
+wiring without trusting it: `expectedProductCode` (the resolved value),
+`expectedProductCodeSource` (`candidate-msi`, `newer-msi`,
+`installed-before-this-phase`, `not-asserted` or `unknown-instruction`),
+`expectedProductCodeInstruction` (the plan's own text) and
+`productCodeBeforeCommand` (what was installed before the command started).
+If the recorded source is not the one the instruction permits, the check is
+`unconfirmed`: two equal codes reached the wrong way round are a coincidence,
+not evidence.
+
 The rule that ties it together is enforced at the plan level, not by convention:
 `Test-KanaAiLifecyclePlan` **rejects** any phase that runs a command and whose
 only required assertion is `command-exit-code`, and it rejects any destructive
@@ -286,6 +319,50 @@ collects; the exclusion and the excluded text's digest are both recorded.
   `WHATIF: would run -> ...` line and recorded with the command before it starts,
   and `-WhatIf` renders everything without starting anything.
 
+## Known prohibitions, and the self-test case that enforces each
+
+These are the mistakes this harness has already made once, or has been built to
+be unable to make. Each one is a rule, and each rule is enforced by a named
+self-test case rather than by convention — which is the only thing that makes it
+stick, because ST-69 is the record of a case that pinned the wrong P/Invoke
+prototype and passed the bug it was written to catch.
+
+- **Never compare a resolved product code against a raw plan expectation.** A
+  `product-code` expectation is a resolution instruction. Comparing a GUID with
+  the instruction text is always false, so the check could only ever fail, and a
+  correct forward upgrade was failed with the self-contradictory line "the
+  installed product code is `'{B89B09D1-…}'`, expected `'{B89B09D1-…}'`". Enforced
+  by ST-77 (all three instructions, each driven with two equal codes, each must
+  pass and none may quote the instruction in its verdict) and ST-81 (`$installed
+  -eq $expect` may not exist in the shared helpers at all).
+- **Never let an unresolvable or mis-wired expectation become a verdict.** An
+  instruction this harness does not implement, a blank expected code, a missing
+  before-picture, and a provenance that does not match the instruction are all
+  `unconfirmed` with the reason named — never a pass, and never a `fail` either,
+  because a failure accuses the machine of a comparison that was never made.
+  Enforced by ST-78.
+- **Never emit a failure whose two codes are equal.** A disagreement states two
+  different codes. Enforced by ST-79, which drives every failure path and
+  compares the two codes the detail names.
+- **Never key a phase's expectation off the phase's name.** One phase name
+  having a phase-correct expectation left every other phase silently inheriting
+  the candidate MSI's product code, so `downgrade-refused` compared itself
+  against `{CD242B2B-…}` after `upgrade-forward` had already replaced the
+  installed product with `{B89B09D1-…}`. The expectation comes from the phase's
+  own instruction, and the before-picture is captured *before* the command
+  starts. Enforced by ST-80 (the shipped plan's own phases, driven through the
+  resolver) and ST-81 (the call site, the arguments and the ordering).
+- **Never decide a phase from a command exit code alone**, and never let a
+  registry key with no real file behind it count as a registration. Enforced by
+  ST-10, ST-12, ST-13, ST-28, ST-29 and ST-30.
+- **Never nest one self-test case inside another case's body.** ST-63 to ST-66
+  once ended up inside ST-62: the file still parsed and every case still
+  reported ok, but the outer cases could no longer fail on their own. Enforced
+  structurally by ST-71, over the AST of this very file.
+- **Never write a case that guards a mistake instead of the fix.** Every case
+  above is driven with the *old* failing shape as well as the new one wherever
+  that is possible without machine access.
+
 ## Elevation and the UAC expectation
 
 `KanaAI.wxs` is `Scope="perMachine"`, so a real run needs an **elevated 64-bit
@@ -325,6 +402,13 @@ Everything below is unverified, and this harness has not begun to change that:
 - The upgrade-forward and downgrade-refused phases have not been run. The
   `1638` expectation comes from `KanaAI.wxs:5` and the Windows Installer
   documentation, not from an observation on this machine.
+- The `product-code` expectations of `upgrade-forward` and `downgrade-refused`
+  have never been exercised by a real run. Their logic is fixed and proven by
+  ST-77 to ST-81 against synthetic data, but only a W2 receipt can turn them
+  into an observation. In the W2 receipt at
+  `.local/w2-execute-20260926-202806/w2/receipt.json` these two phases failed for
+  a second, independent reason as well: the downgrade command returned **1603**,
+  not **1638**. That is a separate finding which nothing on this page resolves.
 - Whether the pinned `INSTALLFOLDER` really resolves to `Program Files\KanaAI` on
   a 64-bit package is unmeasured here; the harness records what it observes.
 - The registration identity is still `identityApproved: false` in

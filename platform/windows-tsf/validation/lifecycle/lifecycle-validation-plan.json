@@ -282,7 +282,7 @@
       "asserts": [
         { "check": "command-exit-code", "expect": "0,3010,1641,3011", "required": true },
         { "check": "product-state", "expect": "installed", "required": true },
-        { "check": "product-code", "expect": "from-newer-msi", "required": true, "note": "after a MajorUpgrade the installed product code is the new package's, and the old product code is no longer installed; the receipt records the before and after product codes" },
+        { "check": "product-code", "expect": "from-newer-msi", "required": true, "note": "from-newer-msi is a resolution instruction, never a value: it resolves to the newer fixture MSI's own ProductCode, read from that package's own Property table. After a MajorUpgrade the installed product code must be exactly that one and the old product code is no longer installed. If the newer MSI was not supplied the expectation resolves to nothing and the check is unconfirmed, not a pass. The receipt records the instruction, the resolved value, where it came from, and the product code that was installed before this phase's command ran." },
         { "check": "expected-files", "expect": "all-present", "required": true, "note": "compared against the newer package's own declared file set" },
         { "check": "registration-present", "expect": "true", "required": true },
         { "check": "msi-log-classification", "expect": "any", "required": false, "note": "recorded for a human verifier. A MajorUpgrade run legitimately shows both a removal and an install sequence, so the harness does not force a classification." }
@@ -317,7 +317,7 @@
       "asserts": [
         { "check": "command-exit-code", "expect": "1638", "required": true, "note": "1638 is the Windows Installer's 'another version of this product is already installed'. KanaAI.wxs sets MajorUpgrade DowngradeErrorMessage, so a downgrade must be refused, not performed." },
         { "check": "product-state", "expect": "installed", "required": true, "note": "the refusal must leave the newer product installed" },
-        { "check": "product-code", "expect": "from-current-msi", "required": true, "note": "the installed product code must still be the newer one; a downgrade that quietly replaced the product would be a policy failure" },
+        { "check": "product-code", "expect": "from-current-msi", "required": true, "note": "from-current-msi is a resolution instruction, never a value: it resolves to the product code that was installed immediately before this phase's command ran, which by this point is the newer fixture's, not the candidate's. The installed product code must still be that one; a downgrade that quietly replaced the product would be a policy failure. It is not the candidate MSI's code, and a before-picture that was never taken is unconfirmed rather than a pass." },
         { "check": "file-inventory-unchanged", "expect": "true", "required": true, "note": "a refused downgrade must not have touched the installed files" },
         { "check": "registration-present", "expect": "true", "required": true },
         { "check": "msi-log-classification", "expect": "downgrade-refused", "required": true }

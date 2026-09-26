@@ -811,6 +811,91 @@ function New-KanaAiLifecycleCheckResult {
     }
 }
 
+function Get-KanaAiLifecycleProductCodeExpectationSource {
+    <#
+        The plan's `expect` value for the `product-code` check is a resolution
+        instruction, never a value.  This is the one place that decides which
+        provenance an instruction may be satisfied from:
+
+          from-candidate-msi  the candidate MSI's own ProductCode, read out of
+                              that package's own Property table
+          from-newer-msi      the newer fixture MSI's own ProductCode, read out
+                              of that package's own Property table
+          from-current-msi    the product code that was installed immediately
+                              before this phase's command ran
+
+        A resolved product code is NEVER compared with the instruction text.  An
+        instruction with no entry here is unknown to this harness, and the caller
+        reports it as `unconfirmed` with the instruction named: never a pass, and
+        never a silent fail either, because a fail would accuse the machine of
+        something the harness never actually compared.
+    #>
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Expect)
+    switch ($Expect) {
+        'from-candidate-msi' { return 'candidate-msi' }
+        'from-newer-msi'     { return 'newer-msi' }
+        'from-current-msi'   { return 'installed-before-this-phase' }
+        default              { return '' }
+    }
+}
+
+function Resolve-KanaAiLifecycleProductCodeExpectation {
+    <#
+        Resolves the plan's product-code instruction for one phase into the value
+        the check has to compare against, and names where that value came from.
+
+        The instruction is never a value.  Each instruction resolves to exactly
+        one provenance:
+
+          from-candidate-msi  the candidate MSI's own ProductCode
+          from-newer-msi      the newer fixture MSI's own ProductCode
+          from-current-msi    the product code that was installed immediately
+                              before this phase's command ran
+
+        This is driven by the plan's own instruction, never by the phase's name.
+        Keying the expectation off the phase name is what left
+        downgrade-refused comparing itself against the candidate MSI's product
+        code after upgrade-forward had already replaced the installed product
+        with the newer fixture's: one phase name had a phase-correct
+        expectation and every other phase silently inherited the candidate's.
+
+        A value that is not a product code resolves to the empty string, and the
+        check then reports unconfirmed.  Nothing is defaulted, carried over from a
+        neighbouring phase, or invented.
+
+        Pure: it reads the phase and the three supplied product codes and touches
+        nothing else, which is why the self test can drive it with the shipped
+        plan and synthetic codes.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]$Phase,
+        [AllowEmptyString()][string]$CandidateProductCode = '',
+        [AllowEmptyString()][string]$NewerProductCode = '',
+        [AllowEmptyString()][string]$InstalledBeforeCommand = ''
+    )
+    $instruction = ''
+    foreach ($assert in @(Get-KanaAiLifecycleOptionalProperty -Object $Phase -Name 'asserts' -Default @())) {
+        if ([string](Get-KanaAiLifecycleOptionalProperty -Object $assert -Name 'check' -Context 'assert') -eq 'product-code') {
+            $instruction = [string](Get-KanaAiLifecycleOptionalProperty -Object $assert -Name 'expect' -Context 'assert')
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($instruction)) {
+        return [ordered]@{ instruction = ''; productCode = ''; source = 'not-asserted' }
+    }
+    $source = Get-KanaAiLifecycleProductCodeExpectationSource -Expect $instruction
+    if ([string]::IsNullOrWhiteSpace($source)) {
+        return [ordered]@{ instruction = $instruction; productCode = ''; source = 'unknown-instruction' }
+    }
+    $value = switch ($source) {
+        'candidate-msi'               { $CandidateProductCode }
+        'newer-msi'                   { $NewerProductCode }
+        'installed-before-this-phase' { $InstalledBeforeCommand }
+    }
+    $resolved = ''
+    if (Test-KanaAiLifecycleGuid -Value ([string]$value)) { $resolved = ConvertTo-KanaAiLifecycleGuid -Value ([string]$value) }
+    return [ordered]@{ instruction = $instruction; productCode = $resolved; source = $source }
+}
+
 function Resolve-KanaAiLifecyclePhaseChecks {
     <#
         The single decision point of the whole harness.  It reads only the
@@ -825,6 +910,11 @@ function Resolve-KanaAiLifecyclePhaseChecks {
           observation.productState       'installed' | 'absent' | 'advertised' | 'unknown'
           observation.installedProductCode
           observation.expectedProductCode
+          observation.expectedProductCodeSource       'candidate-msi' | 'newer-msi' |
+                                                     'installed-before-this-phase' |
+                                                     'not-asserted' | 'unknown-instruction'
+          observation.expectedProductCodeInstruction  the plan's own expect text
+          observation.productCodeBeforeCommand        installed before this phase's command
           observation.installDate
           observation.registration       @{ readable; tipKey; profileKey; comKey;
                                             inProcServer32; inProcTargetExists;
@@ -896,27 +986,49 @@ function Resolve-KanaAiLifecyclePhaseChecks {
             }
 
             'product-code' {
+                # The plan's expect text for this check is a resolution
+                # instruction, never a value.  A resolved product code is
+                # therefore never compared with that text.  Comparing the two
+                # anyway is what produced the impossible W2 line "the installed
+                # product code is '{A}', expected '{A}'": a GUID was tested for
+                # equality with a word, so the check could only ever fail, and it
+                # failed a correct upgrade while saying the two codes differed.
+                # The instruction is resolved to one provenance first, the two
+                # codes are compared only with each other, and the recorded
+                # provenance has to agree with the instruction or the answer is
+                # unconfirmed rather than a verdict about the machine.
                 $installed = ConvertTo-KanaAiLifecycleGuid -Value ([string](Get-KanaAiLifecycleOptionalProperty -Object $observation -Name 'installedProductCode' -Default ''))
                 $expected = ConvertTo-KanaAiLifecycleGuid -Value ([string](Get-KanaAiLifecycleOptionalProperty -Object $observation -Name 'expectedProductCode' -Default ''))
-                if ([string]::IsNullOrWhiteSpace($installed) -or [string]::IsNullOrWhiteSpace($expected)) {
-                    [void]$results.Add((New-KanaAiLifecycleCheckResult -Check $check -Outcome 'unconfirmed' -Required $required -Detail 'either the installed or the expected product code is unknown' -Evidence ('installed=' + $installed + '; expected=' + $expected)))
+                $source = [string](Get-KanaAiLifecycleOptionalProperty -Object $observation -Name 'expectedProductCodeSource' -Default '')
+                $requiredSource = Get-KanaAiLifecycleProductCodeExpectationSource -Expect $expect
+                $evidence = ('installed=' + $installed + '; expected=' + $expected + '; source=' + $source)
+                if ([string]::IsNullOrWhiteSpace($requiredSource)) {
+                    [void]$results.Add((New-KanaAiLifecycleCheckResult -Check $check -Outcome 'unconfirmed' -Required $required -Detail ("the plan's product-code expectation '{0}' is not a resolution instruction this harness implements, so no expected product code can be resolved from it" -f $expect) -Evidence $evidence))
                 }
-                elseif ($expect -eq 'from-candidate-msi') {
-                    # The plan cannot know the ProductCode in advance: WiX derives
-                    # it from the version.  The expectation is therefore "exactly
-                    # the product code this run read out of the candidate MSI".
-                    if ($installed -eq $expected) {
-                        [void]$results.Add((New-KanaAiLifecycleCheckResult -Check $check -Outcome 'pass' -Required $required -Detail ("the installed product is the candidate MSI's own product code {0}" -f $installed) -Evidence $installed))
-                    }
-                    else {
-                        [void]$results.Add((New-KanaAiLifecycleCheckResult -Check $check -Outcome 'fail' -Required $required -Detail ("the installed product code is '{0}', but the candidate MSI declares '{1}'; a different product is installed" -f $installed, $expected) -Evidence $installed))
-                    }
+                elseif ([string]::IsNullOrWhiteSpace($installed) -or [string]::IsNullOrWhiteSpace($expected)) {
+                    [void]$results.Add((New-KanaAiLifecycleCheckResult -Check $check -Outcome 'unconfirmed' -Required $required -Detail 'either the installed product code or the resolved expected product code is unknown' -Evidence $evidence))
                 }
-                elseif ($installed -eq $expected -and $installed -eq $expect) {
-                    [void]$results.Add((New-KanaAiLifecycleCheckResult -Check $check -Outcome 'pass' -Required $required -Detail ("the installed product code is {0}" -f $installed) -Evidence $installed))
+                elseif ($source -ne $requiredSource) {
+                    [void]$results.Add((New-KanaAiLifecycleCheckResult -Check $check -Outcome 'unconfirmed' -Required $required -Detail ("the expected product code was resolved from '{0}', but the plan's expectation '{1}' may only be satisfied by '{2}'; the expectation is wired to the wrong product, so this check decides nothing" -f $source, $expect, $requiredSource) -Evidence $evidence))
+                }
+                elseif ($installed -eq $expected) {
+                    $passDetail = switch ($requiredSource) {
+                        'candidate-msi' { "the installed product is the candidate MSI's own product code {0}" -f $installed }
+                        'newer-msi'     { "the installed product is the newer fixture MSI's own product code {0}" -f $installed }
+                        default         { "the installed product code is still {0}, which is the product code that was installed before this phase's command ran" -f $installed }
+                    }
+                    [void]$results.Add((New-KanaAiLifecycleCheckResult -Check $check -Outcome 'pass' -Required $required -Detail $passDetail -Evidence $evidence))
                 }
                 else {
-                    [void]$results.Add((New-KanaAiLifecycleCheckResult -Check $check -Outcome 'fail' -Required $required -Detail ("the installed product code is '{0}', expected '{1}'" -f $installed, $expected) -Evidence $installed))
+                    # The two codes are known and differ, so this is a real
+                    # disagreement between the machine and the expectation.  It
+                    # can no longer be the case that the printed codes are equal.
+                    $failDetail = switch ($requiredSource) {
+                        'candidate-msi' { "the installed product code is '{0}', but the candidate MSI declares '{1}'; a different product is installed" -f $installed, $expected }
+                        'newer-msi'     { "the installed product code is '{0}', but the newer fixture MSI declares '{1}'; the forward upgrade did not leave the newer product installed" -f $installed, $expected }
+                        default         { "the installed product code is '{0}', but the product code installed before this phase's command ran was '{1}'; the command replaced the installed product" -f $installed, $expected }
+                    }
+                    [void]$results.Add((New-KanaAiLifecycleCheckResult -Check $check -Outcome 'fail' -Required $required -Detail $failDetail -Evidence $evidence))
                 }
             }
 
@@ -1534,7 +1646,9 @@ function New-KanaAiLifecycleSyntheticObservation {
         [string]$LogClassification = 'first-install',
         [bool]$LogConfident = $true,
         [string]$InstalledProductCode = '{11111111-1111-4111-8111-111111111111}',
-        [string]$ExpectedProductCode = '{11111111-1111-4111-8111-111111111111}'
+        [string]$ExpectedProductCode = '{11111111-1111-4111-8111-111111111111}',
+        [string]$ExpectedProductCodeSource = 'candidate-msi',
+        [string]$ProductCodeBeforeCommand = '{11111111-1111-4111-8111-111111111111}'
     )
     $files = @('KanaAI.TsfTip.dll', 'mozc_tip64.dll', 'mozc_server.exe', 'ai/model/weights.gguf')
     $expected = @($files)
@@ -1555,6 +1669,12 @@ function New-KanaAiLifecycleSyntheticObservation {
         productState         = $ProductState
         installedProductCode = $InstalledProductCode
         expectedProductCode  = $ExpectedProductCode
+        # The provenance is part of the shape, not an optional extra: the
+        # product-code check refuses to decide anything when the recorded source
+        # does not agree with the plan's instruction.
+        expectedProductCodeSource = $ExpectedProductCodeSource
+        expectedProductCodeInstruction = 'from-candidate-msi'
+        productCodeBeforeCommand = $ProductCodeBeforeCommand
         installDate          = '20260926 00:00:00'
         installDateBefore    = '20260926 00:00:00'
         registration         = $registration

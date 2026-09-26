@@ -1184,6 +1184,217 @@ Invoke-Test -Id 'ST-76' -Name 'List[object] phase results enumerate without an a
     Assert-Equal 'IS-01' ([string]$phasesByName['install-setup'].id) 'the indexed record must keep its id'
 }
 
+# ---------------------------------------------------------------------------
+# 11. the product-code expectation.  The plan's expect text is a resolution
+#     instruction, never a value.
+# ---------------------------------------------------------------------------
+# The three product codes the W2 receipt at
+# .local\w2-execute-20260926-202806\w2\receipt.json actually carried.  They are
+# recorded here so these cases are driven by the measured values rather than by
+# convenient ones; no machine is read to obtain them.
+$script:CandidateCodeFromReceipt = '{CD242B2B-5E48-492F-B683-A071E2CC4515}'
+$script:NewerCodeFromReceipt = '{B89B09D1-1FB2-42D2-AA31-2CD52DB113C7}'
+# A third product code, so a "these two must disagree" case is really a
+# disagreement and not a coincidence.
+$script:ForeignCode = '{0F0F0F0F-1111-4222-8333-444444444444}'
+
+function New-ProductCodePhase {
+    param([Parameter(Mandatory = $true)][string]$Expect)
+    return [pscustomobject]@{
+        id      = 'SY-PC'
+        name    = 'product-code-only'
+        asserts = @([pscustomobject]@{ check = 'product-code'; expect = $Expect; required = $true })
+    }
+}
+
+function Get-ProductCodeCheck {
+    param([Parameter(Mandatory = $true)]$Outcome)
+    return @(@($Outcome.checks) | Where-Object { [string]$_.check -eq 'product-code' })[0]
+}
+
+Invoke-Test -Id 'ST-77' -Name 'a resolved product code is never compared with the plan instruction' -Body {
+    # Measured defect, and the W2 receipt's first line is its proof:
+    #   UF-01 product-code fail "the installed product code is
+    #   '{B89B09D1-...}', expected '{B89B09D1-...}'"
+    # Two identical strings, reported as a disagreement.  The cause was that only
+    # from-candidate-msi had a branch; every other instruction fell through to
+    # `$installed -eq $expect`, which compares a GUID with a word and is always
+    # false.  So the correct forward upgrade failed, and the harness could not
+    # report a pass for a correct machine at all.
+    #
+    # All three documented instructions are driven here with an installed code
+    # that EQUALS the resolved expectation.  Each must pass, which is impossible
+    # for the old shape.  The verdict text is checked as well: an instruction
+    # that reached a comparison would have to appear in the detail.
+    $cases = @(
+        [pscustomobject]@{ instruction = 'from-candidate-msi'; source = 'candidate-msi'; code = $script:CandidateCodeFromReceipt },
+        [pscustomobject]@{ instruction = 'from-newer-msi'; source = 'newer-msi'; code = $script:NewerCodeFromReceipt },
+        [pscustomobject]@{ instruction = 'from-current-msi'; source = 'installed-before-this-phase'; code = $script:NewerCodeFromReceipt }
+    )
+    foreach ($case in $cases) {
+        $observation = New-KanaAiLifecycleSyntheticObservation -InstalledProductCode $case.code -ExpectedProductCode $case.code -ExpectedProductCodeSource $case.source
+        $outcome = Resolve-KanaAiLifecyclePhaseOutcome -Phase (New-ProductCodePhase -Expect $case.instruction) -Context ([ordered]@{ observation = $observation })
+        $check = Get-ProductCodeCheck -Outcome $outcome
+        Assert-Equal 'pass' ([string]$check.outcome) ("the installed and the expected code are both {0}, so the {1} phase must pass" -f $case.code, $case.instruction)
+        Assert-True (([string]$check.detail) -notmatch 'from-(candidate|newer|current)-msi') ("a resolved comparison must not quote the instruction in its verdict: " + [string]$check.detail)
+    }
+    # The instruction list is closed.  A word that resolves to nothing can never
+    # become a value, which is what keeps a new instruction from silently
+    # becoming a fail.
+    Assert-Equal 'candidate-msi' (Get-KanaAiLifecycleProductCodeExpectationSource -Expect 'from-candidate-msi') 'from-candidate-msi resolves to the candidate MSI'
+    Assert-Equal 'newer-msi' (Get-KanaAiLifecycleProductCodeExpectationSource -Expect 'from-newer-msi') 'from-newer-msi resolves to the newer fixture MSI'
+    Assert-Equal 'installed-before-this-phase' (Get-KanaAiLifecycleProductCodeExpectationSource -Expect 'from-current-msi') 'from-current-msi resolves to the before-picture'
+    Assert-Equal '' (Get-KanaAiLifecycleProductCodeExpectationSource -Expect 'from-whatever-msi') 'an unknown instruction resolves to nothing at all'
+    Assert-Equal '' (Get-KanaAiLifecycleProductCodeExpectationSource -Expect '') 'no instruction at all resolves to nothing at all'
+}
+
+Invoke-Test -Id 'ST-78' -Name 'an unresolvable or mis-wired product-code expectation is unconfirmed, never a verdict' -Body {
+    # The old shape had exactly two answers for a non-candidate instruction: fail
+    # when the GUIDs happened to differ and fail when they did not, because the
+    # comparison was against a word.  A failure is an accusation: it says the
+    # machine disagrees with the plan.  When the harness could not resolve what
+    # to compare, that accusation was unfounded, so the honest answer is
+    # unconfirmed, and the same is true when the resolved value came from the
+    # wrong product entirely.
+    $unknown = Resolve-KanaAiLifecyclePhaseOutcome -Phase (New-ProductCodePhase -Expect 'from-candidate-maybe') -Context ([ordered]@{ observation = (New-KanaAiLifecycleSyntheticObservation) })
+    $unknownCheck = Get-ProductCodeCheck -Outcome $unknown
+    Assert-Equal 'unconfirmed' ([string]$unknownCheck.outcome) 'an instruction this harness does not implement must be unconfirmed'
+    Assert-True ($unknownCheck.outcome -ne 'pass') 'an unknown instruction must never pass'
+    Assert-True ($unknownCheck.outcome -ne 'fail') 'an unknown instruction must not fail the machine for a comparison that was never made'
+    Assert-True (([string]$unknownCheck.detail) -match 'from-candidate-maybe') 'the refusal has to name the instruction it could not resolve'
+
+    # from-newer-msi with no newer MSI supplied: nothing to resolve, so nothing
+    # is claimed.  This is the refusal the fix requires rather than a fail.
+    $noNewer = Resolve-KanaAiLifecyclePhaseOutcome -Phase (New-ProductCodePhase -Expect 'from-newer-msi') -Context ([ordered]@{ observation = (New-KanaAiLifecycleSyntheticObservation -InstalledProductCode $script:NewerCodeFromReceipt -ExpectedProductCode '' -ExpectedProductCodeSource 'newer-msi') })
+    Assert-Equal 'unconfirmed' ([string](Get-ProductCodeCheck -Outcome $noNewer).outcome) 'a blank expected code must be unconfirmed, not a pass'
+
+    # A before-picture that was never taken is the same situation.
+    $noBefore = Resolve-KanaAiLifecyclePhaseOutcome -Phase (New-ProductCodePhase -Expect 'from-current-msi') -Context ([ordered]@{ observation = (New-KanaAiLifecycleSyntheticObservation -InstalledProductCode $script:NewerCodeFromReceipt -ExpectedProductCode '' -ExpectedProductCodeSource 'installed-before-this-phase') })
+    Assert-Equal 'unconfirmed' ([string](Get-ProductCodeCheck -Outcome $noBefore).outcome) 'a missing before-picture product code must be unconfirmed, not a pass'
+
+    # Nothing installed, nothing to compare.
+    $nothingInstalled = Resolve-KanaAiLifecyclePhaseOutcome -Phase (New-ProductCodePhase -Expect 'from-candidate-msi') -Context ([ordered]@{ observation = (New-KanaAiLifecycleSyntheticObservation -InstalledProductCode '' -ExpectedProductCode $script:CandidateCodeFromReceipt) })
+    Assert-Equal 'unconfirmed' ([string](Get-ProductCodeCheck -Outcome $nothingInstalled).outcome) 'an unreadable installed product code must be unconfirmed'
+
+    # The provenance is part of the claim.  An expectation that was resolved from
+    # the wrong product decides nothing, even when the two codes happen to be
+    # equal: that equality is a coincidence, not evidence.
+    $misWired = Resolve-KanaAiLifecyclePhaseOutcome -Phase (New-ProductCodePhase -Expect 'from-current-msi') -Context ([ordered]@{ observation = (New-KanaAiLifecycleSyntheticObservation -InstalledProductCode $script:NewerCodeFromReceipt -ExpectedProductCode $script:NewerCodeFromReceipt -ExpectedProductCodeSource 'candidate-msi') })
+    $misWiredCheck = Get-ProductCodeCheck -Outcome $misWired
+    Assert-Equal 'unconfirmed' ([string]$misWiredCheck.outcome) 'an expectation taken from the wrong product must be unconfirmed'
+    Assert-True (([string]$misWiredCheck.detail) -match 'installed-before-this-phase') 'the refusal has to name the provenance the instruction requires'
+    Assert-True (([string]$misWiredCheck.detail) -match 'candidate-msi') 'the refusal has to name the provenance that was actually used'
+}
+
+Invoke-Test -Id 'ST-79' -Name 'a product-code failure always names two different codes' -Body {
+    # The W2 line this harness must never produce again read "the installed
+    # product code is 'X', expected 'X'": a failure whose two codes are equal is
+    # not a disagreement, it is a self-contradiction.  Every failure path is
+    # driven here with a deliberately different expected code, and the two codes
+    # the detail names are compared with each other.
+    foreach ($case in @(
+            [pscustomobject]@{ instruction = 'from-candidate-msi'; source = 'candidate-msi'; installed = $script:CandidateCodeFromReceipt },
+            [pscustomobject]@{ instruction = 'from-newer-msi'; source = 'newer-msi'; installed = $script:NewerCodeFromReceipt },
+            [pscustomobject]@{ instruction = 'from-current-msi'; source = 'installed-before-this-phase'; installed = $script:NewerCodeFromReceipt }
+        )) {
+        # A third code, so the expected value is wrong for every case and not
+        # only for two of them.
+        $observation = New-KanaAiLifecycleSyntheticObservation -InstalledProductCode $case.installed -ExpectedProductCode $script:ForeignCode -ExpectedProductCodeSource $case.source
+        $outcome = Resolve-KanaAiLifecyclePhaseOutcome -Phase (New-ProductCodePhase -Expect $case.instruction) -Context ([ordered]@{ observation = $observation })
+        $check = Get-ProductCodeCheck -Outcome $outcome
+        Assert-Equal 'fail' ([string]$check.outcome) ("a real disagreement must fail the {0} phase" -f $case.instruction)
+        $detail = [string]$check.detail
+        $found = @([System.Text.RegularExpressions.Regex]::Matches($detail, '\{[0-9A-Fa-f-]{36}\}') | ForEach-Object { $_.Value.ToUpperInvariant() } | Select-Object -Unique)
+        Assert-Equal 2 $found.Count ("the failure detail must name both codes exactly once each: " + $detail)
+        Assert-True ($found[0] -ne $found[1]) ('a failure detail must never name the same code twice: ' + $detail)
+        Assert-True (([string]$check.evidence) -match 'source=' + $case.source) 'the evidence must record where the expectation came from'
+    }
+}
+
+Invoke-Test -Id 'ST-80' -Name 'each shipped phase resolves its own product-code expectation' -Body {
+    # Measured defect: only upgrade-forward had a phase-correct expectation.
+    # Everything else inherited the candidate MSI's product code, so
+    # downgrade-refused, whose plan instruction is from-current-msi, compared
+    # itself against {CD242B2B-...} after upgrade-forward had already replaced
+    # the installed product with {B89B09D1-...}.  The receipt line
+    #   DR-01 product-code fail "the installed product code is
+    #   '{B89B09D1-...}', expected '{CD242B2B-...}'"
+    # is not a machine that disagreed with the plan; it is a phase pointed at
+    # the wrong product.
+    #
+    # The resolver is pure and reads the shipped plan, so this case is driven
+    # with the exact codes the W2 receipt carried and needs no machine at all.
+    $plan = Read-KanaAiLifecycleJson -Path $planPath
+    $dr = Get-KanaAiLifecyclePhase -Plan $plan -Name 'downgrade-refused'
+    $uf = Get-KanaAiLifecyclePhase -Plan $plan -Name 'upgrade-forward'
+    Assert-Equal 'from-current-msi' ([string](@(Get-KanaAiLifecycleOptionalProperty -Object $dr -Name 'asserts' -Default @()) | Where-Object { [string]$_.check -eq 'product-code' })[0].expect) 'DR-01 must still declare the before-picture instruction'
+
+    $drResolved = Resolve-KanaAiLifecycleProductCodeExpectation -Phase $dr -CandidateProductCode $script:CandidateCodeFromReceipt -NewerProductCode $script:NewerCodeFromReceipt -InstalledBeforeCommand $script:NewerCodeFromReceipt
+    Assert-Equal 'installed-before-this-phase' ([string]$drResolved.source) 'DR-01 must expect the product installed before its own command'
+    Assert-Equal $script:NewerCodeFromReceipt ([string]$drResolved.productCode) 'DR-01 must expect the newer product code UF-01 left installed'
+    Assert-True ([string]$drResolved.productCode -ne $script:CandidateCodeFromReceipt) 'DR-01 must not inherit the candidate MSI product code'
+
+    $ufResolved = Resolve-KanaAiLifecycleProductCodeExpectation -Phase $uf -CandidateProductCode $script:CandidateCodeFromReceipt -NewerProductCode $script:NewerCodeFromReceipt -InstalledBeforeCommand $script:CandidateCodeFromReceipt
+    Assert-Equal 'newer-msi' ([string]$ufResolved.source) 'UF-01 must expect the newer fixture MSI own product code'
+    Assert-Equal $script:NewerCodeFromReceipt ([string]$ufResolved.productCode) 'UF-01 must compare against the newer fixture MSI own product code'
+
+    # Every product-code instruction in the shipped plan has to be one this
+    # harness implements, or the phase can only ever report unconfirmed.
+    $instructions = @()
+    foreach ($phase in @($plan.phases)) {
+        foreach ($assert in @(Get-KanaAiLifecycleOptionalProperty -Object $phase -Name 'asserts' -Default @())) {
+            if ([string](Get-KanaAiLifecycleOptionalProperty -Object $assert -Name 'check' -Default '') -eq 'product-code') {
+                $instructions += [string](Get-KanaAiLifecycleOptionalProperty -Object $assert -Name 'expect' -Default '')
+            }
+        }
+    }
+    Assert-True ($instructions.Count -ge 4) ('the shipped plan must still carry its product-code assertions, found ' + $instructions.Count)
+    foreach ($instruction in $instructions) {
+        Assert-True (-not [string]::IsNullOrWhiteSpace((Get-KanaAiLifecycleProductCodeExpectationSource -Expect $instruction))) ("the shipped plan uses the product-code instruction '" + $instruction + "', which this harness cannot resolve")
+    }
+
+    # And the resolved DR-01 expectation turns the W2 observation into a pass
+    # rather than a contradiction.
+    $observation = New-KanaAiLifecycleSyntheticObservation -InstalledProductCode $script:NewerCodeFromReceipt -ExpectedProductCode ([string]$drResolved.productCode) -ExpectedProductCodeSource ([string]$drResolved.source)
+    $outcome = Resolve-KanaAiLifecyclePhaseOutcome -Phase $dr -Context ([ordered]@{ observation = $observation })
+    $check = Get-ProductCodeCheck -Outcome $outcome
+    Assert-Equal 'pass' ([string]$check.outcome) 'a refused downgrade that left the newer product installed must pass its product-code check'
+    Assert-True (([string]$check.detail) -match 'before this phase') 'the pass detail must say the comparison was against the before-picture'
+}
+
+Invoke-Test -Id 'ST-81' -Name 'the entry point wires the expectation through the resolver, not off a phase name' -Body {
+    # The resolver is pure and the entry point is not (dot-sourcing it would
+    # demand a mode and exit), so the wiring itself is asserted from the call
+    # site the way ST-62, ST-72 and ST-74 assert theirs.  What has to hold:
+    #   * the phase's own instruction decides the expectation, never the name
+    #   * the before-picture is captured before the command can start
+    #   * the observation records where the expectation came from
+    $run = [System.IO.File]::ReadAllText($runPath)
+    Assert-True ($run.Contains('Resolve-KanaAiLifecycleProductCodeExpectation -Phase $phase')) 'every phase must resolve its expectation from its own plan instruction'
+    Assert-True ($run.Contains('-InstalledBeforeCommand $productCodeInstalledBeforeCommand')) 'the before-picture must be the value handed to the resolver'
+    Assert-True ($run.Contains('-NewerProductCode ([string]$state.newerProductCode)')) 'the newer fixture own product code must be the value handed to the resolver'
+    # The old line: one phase name got the right expectation and every other
+    # phase silently inherited the candidate's product code.
+    Assert-True (-not ($run.Contains("if (`$phaseName -eq 'upgrade-forward' and `$state.ContainsKey('newerProductCode'))"))) 'the expectation must not be keyed off the phase name'
+    # The receipt has to be able to show where the expectation came from.
+    Assert-True ($run.Contains('expectedProductCodeSource = [string]$productCodeExpectation.source')) 'the observation must record the provenance of the expectation'
+    Assert-True ($run.Contains('expectedProductCodeInstruction = [string]$productCodeExpectation.instruction')) 'the observation must record the instruction it resolved'
+    Assert-True ($run.Contains('productCodeBeforeCommand = $productCodeInstalledBeforeCommand')) 'the observation must record what was installed before the command ran'
+    # Position is the substance of the fix: a before-picture captured after the
+    # command ran is the after-picture, which is exactly the old mistake.
+    $captureAt = $run.IndexOf('$productCodeInstalledBeforeCommand = $productCodeForCommand')
+    $startAt = $run.IndexOf('Invoke-KanaAiLifecycleCommand -Ledger')
+    Assert-True ($captureAt -gt 0) 'the before-picture capture must exist in the entry point'
+    Assert-True ($startAt -gt 0) 'the command launch must exist in the entry point'
+    Assert-True ($captureAt -lt $startAt) 'the before-picture must be captured before the command is started'
+    # The observation shape and the check have to agree on the field names, or
+    # the provenance check reads an absent field and refuses every real run.
+    $text = [System.IO.File]::ReadAllText($commonPath)
+    Assert-True ($text.Contains("-Name 'expectedProductCodeSource'")) 'the check must read the recorded provenance'
+    Assert-True ($text.Contains('elseif ($installed -eq $expected)')) 'the verdict must compare the two resolved product codes with each other'
+    Assert-True (-not ($text -match '\$installed -eq \$expect(?!ed)')) 'a resolved product code must never be compared with the plan instruction itself'
+}
+
 
 # ---------------------------------------------------------------------------
 # report
