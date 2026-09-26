@@ -26,7 +26,8 @@ $root = $PSScriptRoot
 $commonPath = Join-Path $root 'DesktopValidation.Common.ps1'
 $nativePath = Join-Path $root 'DesktopValidation.Native.cs'
 $planPath = Join-Path $root 'desktop-validation-plan.json'
-foreach ($required in @($commonPath, $nativePath, $planPath, (Join-Path $root 'Invoke-KanaAIDesktopValidation.ps1'))) {
+$runPath = Join-Path $root 'Invoke-KanaAIDesktopValidation.ps1'
+foreach ($required in @($commonPath, $nativePath, $planPath, $runPath)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "self-test cannot run: missing $required" }
 }
 . $commonPath
@@ -672,12 +673,49 @@ Invoke-Test -Id 'ST-51' -Name 'this self test loaded no native code and touched 
 
 # ---------------------------------------------------------------------------
 try {
+    Invoke-Test -Id 'ST-54' -Name 'the property accessor accepts every -Default its call sites pass' -Body {
+    # Measured: the desktop harness refused to start at all.  A real run died
+    # with ParameterBindingException "a parameter that matches 'Default'
+    # cannot be found", before a single step executed, because
+    # Get-KanaAiValidationProperty is called with -Default in seven places and
+    # defines no such parameter.  -PlanOnly and -SelfTest never reached those
+    # call sites, so both reported green while the product could not be run.
+    # Every distinct default the call sites pass is driven here, and the
+    # absence of a default still returns $null so "absent" stays non-fatal.
+    $obj = [ordered]@{ present = 'yes' }
+    Assert-Equal 'yes' (Get-KanaAiValidationProperty -Object $obj -Name 'present') 'a present field is read'
+    Assert-True ($null -eq (Get-KanaAiValidationProperty -Object $obj -Name 'absent')) 'an absent field is $null by default, not an error'
+    Assert-True ($null -eq (Get-KanaAiValidationProperty -Object $obj -Name 'absent' -Default $null)) 'an explicit $null default is honored'
+    Assert-Equal 'assert' (Get-KanaAiValidationProperty -Object $obj -Name 'absent' -Default 'assert') "the string default 'assert' is honored"
+    Assert-Equal 'any' (Get-KanaAiValidationProperty -Object $obj -Name 'absent' -Default 'any') "the string default 'any' is honored"
+    Assert-Equal $false ([bool](Get-KanaAiValidationProperty -Object $obj -Name 'absent' -Default $false)) 'a boolean default is honored'
+    Assert-Equal $true ([bool](Get-KanaAiValidationProperty -Object $obj -Name 'absent' -Default $true)) 'a boolean true default is honored'
+    # A present field wins over the default, so a default can never overwrite
+    # real plan data.
+    Assert-Equal 'yes' (Get-KanaAiValidationProperty -Object $obj -Name 'present' -Default 'assert') 'a present field takes precedence over the default'
+    # And the call sites in the entry point really do pass -Default, so the
+    # signature and the call sites cannot drift apart again.
+    $common = [System.IO.File]::ReadAllText($commonPath)
+    $run = [System.IO.File]::ReadAllText($runPath)
+    $defined = [regex]::Match($common, 'function Get-KanaAiValidationProperty \{[\s\S]*?\n\}').Value
+    Assert-True ($defined -match '\$Default = \$null') 'the accessor declares a -Default parameter'
+    Assert-True ($common -match [regex]::Escape("-Name 'assertion' -Default 'assert'")) 'a call site passes a string default'
+    Assert-True ($common -match [regex]::Escape("-Name 'direction' -Default 'any'")) 'a call site passes a different string default'
+    Assert-True ($common -match [regex]::Escape('-Default $false')) 'a call site passes a boolean default'
+}
+
+    # The summary is computed after every case has run.  It used to be computed
+    # before the last case, so a case that ran after it could never appear in
+    # the summary, and - worse - a failure in it would still exit 0, because
+    # $failed had already been snapshotted.  A self test that can report a
+    # failing case as a pass is not a self test.
     $failed = @($script:TestResults.ToArray() | Where-Object { -not $_.ok })
     Write-Host ('self test: {0} case(s), {1} passed, {2} failed' -f $script:TestResults.Count, ($script:TestResults.Count - $failed.Count), $failed.Count)
     foreach ($result in $script:TestResults.ToArray()) {
         if (-not $result.ok) { Write-Host ('  FAIL {0} {1}: {2}' -f $result.id, $result.name, $result.detail) }
     }
-    $reportPath = Join-Path $root 'runs\self-test-last.json'
+
+$reportPath = Join-Path $root 'runs\self-test-last.json'
     [void](Write-KanaAiValidationJson -Path $reportPath -Value ([ordered]@{
             schemaVersion  = Get-KanaAiValidationSchemaVersion
             completedAtUtc = Get-KanaAiValidationUtcNow

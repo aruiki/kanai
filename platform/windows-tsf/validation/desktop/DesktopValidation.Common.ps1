@@ -222,9 +222,16 @@ function Get-KanaAiValidationProperty {
     #>
     param(
         $Object,
-        [Parameter(Mandatory = $true)][string]$Name
+        [Parameter(Mandatory = $true)][string]$Name,
+        # Callers pass -Default 'assert', -Default 'any' and -Default $false, so
+        # this has to accept any type.  It used to be called with -Default in
+        # seven places while defining no such parameter, which is a
+        # ParameterBindingException on the first one and refused every real
+        # desktop run before a single step executed.  -PlanOnly and -SelfTest
+        # never reached those call sites, which is how the bug shipped.
+        $Default = $null
     )
-    if ($null -eq $Object) { return $null }
+    if ($null -eq $Object) { return $Default }
     if ($Object -is [System.Collections.IDictionary]) {
         if ($Object.Contains($Name)) { return $Object[$Name] }
         # hashtables in PowerShell are case-insensitive by default, but an
@@ -232,10 +239,10 @@ function Get-KanaAiValidationProperty {
         foreach ($key in $Object.Keys) {
             if (([string]$key) -eq $Name) { return $Object[$key] }
         }
-        return $null
+        return $Default
     }
     $prop = $Object.PSObject.Properties[$Name]
-    if ($null -eq $prop) { return $null }
+    if ($null -eq $prop) { return $Default }
     return $prop.Value
 }
 
