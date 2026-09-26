@@ -1,6 +1,58 @@
 # KanaAI installer lifecycle verification (verification stage W2)
 
-## Status: THREE `-Execute` RUNS HAVE HAPPENED. W2 IS **NOT** VERIFIED.
+## Status: W2 **IS VERIFIED** FOR ONE FIXED-HASH CANDIDATE ON ONE MACHINE
+
+One `-Execute` receipt now reads `overall=passed`, `exitCode=0`, with all eleven
+phases passing and no check in any other outcome:
+
+- receipt: `.local/w2-execute-20260926-233320/receipt.json`
+- run: `20260926-143321-1b2e1a30`, `mode=execute`
+- candidate: `KanaAI-0.1.0-x64.msi`
+  `2B2C3B3DBA5B6B74C76FDCFA9B14D435989EFE74E873B2ACA60D0ABC09FCBAF7`
+  / `KanaAI-0.1.0-Setup.exe`
+  `B0BCD073F9890731C0ABAAA97C79C42ACC1B0EA984FA7170EF7E312157065FCD`
+- ProductCode `{40602E6E-FFE7-47F5-BFF4-06072CEBC759}`, UpgradeCode
+  `{381B4CC9-ABAA-4AB2-9DC8-FCA54CE3B964}`, `ALLUSERS=1`, x64, **unsigned**
+- build commit `2dda3d9`, `-RequireCleanSource`, `sourceTreeDirty=false`
+
+What it established, and what it did not, is stated in [What is still
+unverified](#what-is-still-unverified) rather than left to a reader of the JSON.
+W2 is still not verified for the **current** `main`: the receipt is bound to the
+commit above, and no receipt exists for a candidate built from a later one.
+
+The earlier version of this heading said three runs had happened and W2 was not
+verified. Both halves were true at the time and the second half is no longer
+true. The reason the second half held for so long is recorded here rather than
+deleted, because it is the list of things that made a run *look* complete while
+the receipt could not pass:
+
+1. the `product-code` expectation was compared against the plan's instruction
+   text and keyed off the phase name, so it reported two equal codes as a
+   disagreement and pointed `downgrade-refused` at the wrong product;
+2. the verbose log classifier was a bag of mutually exclusive markers whose
+   patterns could never match a real log, so it could not decide four of the
+   phases that assert it;
+3. the plan expected `1638` for a refused downgrade when this package's
+   `LaunchCondition` returns `1603` under `/qn`;
+4. `any` was compared like a classification name, so it could only ever fail;
+5. the harness source was not ASCII-only, and on a machine with ANSI code page
+   932 a `.ps1` without a byte order mark is read as Shift-JIS, so every Japanese
+   log pattern matched nothing;
+6. the receipt carried the operator's home directory 111 times, in the *middle* of
+   each recorded command line, where the existing leading-prefix scrub could not
+   reach it, and the privacy scan correctly failed a run whose eleven phases had
+   all passed;
+7. the first receipt to reach `overall=passed` still carried no digest for any of
+   the six verbose logs the verdicts rest on, reported its own plan copy as empty,
+   and stated "no lifecycle run has been performed" next to
+   `lifecycleRunCount: 1`.
+
+Each is fixed and pinned by a named self-test case, and each was found by reading a
+receipt rather than a console line. See `STATE.md` section 0.
+
+---
+
+## Previous status note, kept because it explains the gap
 
 This section used to say that no lifecycle run had ever happened. That was
 false. `-Execute` has been run three times on this machine and the receipts
@@ -110,7 +162,7 @@ observed.
 | --- | --- | --- |
 | `Invoke-KanaAiLifecycleValidation.ps1` | 1191 | Entry point. Modes `-PlanOnly`, `-SelfTest`, `-Execute`. Gates, phase loop, receipt. |
 | `LifecycleValidation.Common.ps1` | 3010 | Shared helpers, split into a pure half (plan validation, comparison engine, verdict engine, log classifier, resume planner, receipt assembler, privacy scan) and an observation half that every function routes through one action gate. |
-| `Invoke-KanaAiLifecycleValidationSelfTest.ps1` | 1638 | 88 self-test cases. No machine interaction. Synthetic inputs, plus the decisive msiexec lines of the five classified logs of one real measured run, reduced to the tokens that are evidence. |
+| `Invoke-KanaAiLifecycleValidationSelfTest.ps1` | 1814 | 91 self-test cases. No machine interaction. Synthetic inputs, plus the decisive msiexec lines of the five classified logs of one real measured run, reduced to the tokens that are evidence. |
 | `lifecycle-validation-plan.json` | 11 phases | The plan: pinned identity, registration identity, phase order, per-phase assertions, per-phase `proves` / `cannotProve`, safety gates, privacy policy, non-goals. |
 | `README.md` | this file | What each phase proves, what it cannot, how to read the receipt, the elevation and UAC expectation. |
 
@@ -136,7 +188,7 @@ machine-touching helper throws `LIFECYCLE-GATE-SEALED` if it is called anyway
 powershell -NoProfile -ExecutionPolicy Bypass -File platform\windows-tsf\validation\lifecycle\Invoke-KanaAiLifecycleValidationSelfTest.ps1
 ```
 
-Exit code 0 when all 88 cases pass, 1 otherwise. Or through the entry point with
+Exit code 0 when all 91 cases pass, 1 otherwise. Or through the entry point with
 `-SelfTest`.
 
 ### A real lifecycle run (NOT performed; requires an elevated 64-bit shell)

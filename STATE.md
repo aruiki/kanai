@@ -1,3 +1,190 @@
+# 最新の引き継ぎ — 2026-09-26 夜 **W2 は実機で VERIFIED になった。次の gate は W1（実アプリ日本語入力）**
+
+Status: NOT COMPLETE / public beta NOT RELEASED / `.goal-complete` 未作成
+W2: **VERIFIED**（候補 MSI `2B2C3B3D…` / Setup `B0BCD073…`、この machine 1台のみ）
+W1: **未着手**。desktop validation harness は一度も実走していない。
+
+基準 HEAD: `d7e3b1e`（tree clean、origin/main より 12 ahead・未 push）。
+
+---
+
+## 0. この区切りの結論
+
+**W2（installer lifecycle）が初めて全 11 phase を通った。** そしてそれは
+「たまたま通った」のではなく、通るために harness 側の実測欠陥を 7 件直した
+結果である。どの欠陥も、**過去の W2 実行が「ほぼ通っていた」に見えていた理由**である。
+
+| # | 実測した欠陥 | 発見のきっかけ | 直し方 | 再現防止 |
+|---|---|---|---|---|
+| 1 | `product-code` の期待値が plan の**命令語**と比較され、phase 名で分岐していた | receipt の `installed='{B}', expected='{B}'` という自己矛盾行 | 命令語を provenance へ解決してから 2 つの GUID 同士を比較 | ST-77..ST-81 |
+| 2 | verbose log classifier が 4 個の**互いに排他的な marker** の袋で、実 log 6 本のうち 1 本しか分類できない。全て `^` anchor 済みで verbose log の行頭 prefix に阻まれ**実 log に永久に一致しない** | 6 本の実 log に classifier を当てた | fact 読み取り + 順序付き導出。`^` anchor を全廃 | ST-07, ST-82, ST-83 |
+| 3 | plan が downgrade 拒否に `1638` を期待。実 package は **1603**（WiX の `DowngradeErrorMessage` は LaunchCondition になり、`/qn` 下の LaunchCondition 失敗は 1603） | DR-01 の実 exit code | `{1603,1638}` のみ許可。拒否の証明は log と state check に委ねる | ST-86 |
+| 4 | `any` が classification 名として**字面比較**されていた（必ず fail になる） | 欠陥 2 の書き換え中に発見 | `any` を命令として実装。unclassifiable は救済しない | ST-85 |
+| 5 | `LifecycleValidation.Common.ps1` の「This file is ASCII-only」は**偽**。日本語 literal があり、コードページ 932 の 5.1 host では Shift-JIS として読まれ**一切一致しない**（probe で実測） | 5.1 host 経由の probe | 日本語 alternative を削除。4 ファイルすべて 0 non-ASCII byte | ST-83, ST-87 |
+| 6 | receipt が**operator の home directory を 111 箇所**に含み、privacy scan が run を失敗させた（`exit=1`）。path は**コマンド行の中央**にあり、先頭 prefix 置換では届かなかった | **全 11 phase が pass したのに exit=1** だったため | 全出現を token 化。単一の pure 関数と 1 箇所の適用点。監査価値（実行ファイル名・flag・artifact 名・log 名・exit code・SHA-256）は保持 | ST-88 |
+| 7 | **最初の passing receipt** を読んだ結果、さらに 3 件。(a) verbose log の digest が 1 本も無い（`[string]` cast で `logFile` 読みが常に空だった）、(b) plan copy を**書く前に**測って 0 bytes、(c) receipt が `planStatus=UNVERIFIED`「No lifecycle run has been performed」と `lifecycleRunCount=1` を**同じ object に**書いていた | passing receipt をコンソール行ではなく JSON で読んだ | それぞれ修正。plan の古い主張は `planStatusDeclaredByPlan` に別名で保存 | ST-88(拡張), ST-89, ST-90 |
+
+**教訓（今回 bot が 2 度踏んだ）**: 「exit code 1」と「全 phase pass」を同時に見たら、
+どちらを信じるかでなく、**判定式が 2 つも矛盾している**という状況だった。
+receipt を**コンソール行ではなく**読んで初めて欠陥 6 と 7 が見えた。
+過去の記録が「ほぼ通っていた」と書いた回数も、同じ読み方だった。
+
+## 1. W2 の実測結果（独立に再検証済み）
+
+実行: `.local/w2-execute-20260926-233320/receipt.json`
+`runId=20260926-143321-1b2e1a30` / `mode=execute` / `overall=passed` / `exitCode=0`
+**11 phase すべて pass**。pass 以外の check は 1 件も存在しない。
+
+候補（固定 hash、`-RequireCleanSource`、`sourceTreeDirty=false`）:
+
+| ファイル | bytes | SHA-256 |
+|---|---|---|
+| `KanaAI-0.1.0-x64.msi` | 18,403,328 | `2B2C3B3DBA5B6B74C76FDCFA9B14D435989EFE74E873B2ACA60D0ABC09FCBAF7` |
+| `KanaAI-0.1.0-Setup.exe` | 18,408,448 | `B0BCD073F9890731C0ABAAA97C79C42ACC1B0EA984FA7170EF7E312157065FCD` |
+
+ProductCode `{40602E6E-FFE7-47F5-BFF4-06072CEBC759}` / UpgradeCode
+`{381B4CC9-ABAA-4AB2-9DC8-FCA54CE3B964}` / `ALLUSERS=1` / x64 / **未署名**。
+build manifest は commit `2dda3d9`、Mozc gitlink と submodule HEAD はともに
+`13c98988247aa711d99db9e348ec2a597d14b5cd`、6 patch の SHA-256 がすべて一致、
+overlay fingerprint 検証済み、`localAiIncluded=false`。
+
+fixture（**32-bit wxs 由来のため作り直し済み**。これが UF-01 と DR-01 の
+`expected-files` 失敗の真因だった）:
+
+| fixture | ProductCode | 解決先 |
+|---|---|---|
+| 0.1.1 | `{E14A0727-12F7-48C4-8244-FC9FF540B437}` | `INSTALLFOLDER` の親が `ProgramFiles64Folder` |
+| 0.0.9 | `{9D0C6D2E-C144-42AC-A9B7-1DF01E388164}` | 同上 |
+
+3 つの MSI の `Directory` テーブルを Windows Installer COM で直接読んだ結果、
+**3 本とも `INSTALLFOLDER` の親が `ProgramFiles64Folder`**。旧 fixture は
+`ProgramFilesFolder`（32-bit）由来で `C:\Program Files (x86)` に入っていた。
+**「x64 build だから `ProgramFilesFolder` は 64-bit」は誤り**であり、実測で確定した。
+
+実測された phase の内容:
+
+- `IS-01` Setup.exe: exit 0、product-code 一致、registration 3 key 揃い、期待 12 files。
+  Setup.exe の modal box は operator が OK を押した（harness は閉じられない）。
+- `IM-01` MSI: `C:\Program Files\KanaAI` に 12 files、登録 DLL は
+  `mozc_tip64.dll`、log は `first-install`。
+- `RS-01` reinstall: `install-date-unchanged` と `file-inventory-unchanged` が pass、
+  log は `reinstall`（`ProductState=5` かつ product removal なし）。
+  REINSTALL property は**無い**。この phase は意図的に REINSTALL を渡していないので
+  当然であり、旧 README の「log は REINSTALL property を示す」は**測定で反証**された
+  ので訂正済み。
+- `UF-01` upgrade 0.1.0 → 0.1.1: exit 0、product-code が新 fixture のもの、12 files、
+  log は `upgrade`（`WIX_UPGRADE_DETECTED`）。
+- `DR-01` downgrade 0.1.1 → 0.0.9: **exit 1603**、`WIX_DOWNGRADE_DETECTED` により
+  `LaunchConditions` が return 3。新版製品 の product code・files・registration は
+  **無傷**。log は `downgrade-refused`。
+- `UC-01` / `UC-02` / `OB-01` / `CL-01`: clean uninstall 2 回、absent 確認、
+  orphan process ゼロ、harness cleanup 後に `C:\Program Files\KanaAI` も
+  `C:\Program Files (x86)\KanaAI` も不在。
+
+receipt 自身の完全性（harness コードを一切使わずに `.local/verify-w2-receipt.ps1` で再計算）:
+
+- artifacts は 9 件、うち 8 件が digest 付き。**未記録の 1 件は `install-setup.log`**。
+  これは正しい。Setup.exe が自分の msiexec を `/l*v` なしで起動するため、このファイルは
+  存在しない。捏造 digest は無い。
+- plan copy は 78,817 bytes で digest あり。
+- receipt 全体に home directory 参照 **0 箇所**、`privacy.sanity.ok=true`、
+  `pathProtection` は token 6 個と prefixCount を記録し、prefix の**値**は記録して
+  いない（prefix 値とは home directory そのものだから）。
+- `w2.planStatus=VERIFIED-BY-RECEIPT`。plan の古い主張は
+  `planStatusDeclaredByPlan` に別名で保持している。
+- 独立再検証は 15 項目すべて PASS（`.local/verify-w2-receipt.ps1`、exit 0）。
+  ただしその中の「KanaAI product が未登録」は**非昇格 shell からの観測**であり、
+  この machine では `Installer.Products` が 0 件を返すため**弱い証拠**である。
+  昇格 run 内の `OB-01` と `CL-01` が同じことを読んでいて pass している。
+
+## 2. このセッションで実行した machine 操作（すべてユーザー承認後）
+
+- `cline-app`（PID 21060）と `code-sidecar` x2 を 23 時台に**停止**。自律 agent が
+  15:25-15:29 に未記録 install を行った実績があり、**記録に現れない machine mutation**を
+  避けるため。`ollama` は local model server なので残した。
+- W2 `-Execute` を **3 回**走らせた（各回 UAC 承認）:
+  - `w2-execute-20260926-231336`: 11 phase pass だが privacy scan で `exit=1`。
+  - `w2-execute-20260926-232656`: **`overall=passed` / `exit=0`**。ただし receipt の
+    欠陥 6 と 7 が未修正。
+  - `w2-execute-20260926-233320`: **これが W2 の証跡**。欠陥 1 から 7 すべて修正後。
+- `machine` development lock を各 run で取得・解放した
+  （`scripts/with-development-lock.ps1` と同じ lock file）。
+- machine は baseline に戻っている（KanaAI 未導入、directory 不在、orphan なし）。
+
+## 3. 検証コマンドと結果（すべて実測）
+
+| コマンド | 結果 |
+|---|---|
+| `Invoke-KanaAiLifecycleValidationSelfTest.ps1` | **91 case / 91 passed / 0 failed**、exit 0 |
+| 5.1 parser、3 ファイル | parse error 0 |
+| non-ASCII byte 数、4 ファイル | すべて 0 |
+| `-PlanOnly`（候補 + fixture 2 本） | exit 0、`privacy.sanity.ok=True`、machine interaction counter は全 0 |
+| `.local/verify-w2-receipt.ps1`（harness コード不使用） | **15 項目 PASS**、exit 0 |
+| `cargo fmt` / `check` / `clippy` / `test` | **この区切りでは未実行**。Rust tree は触っていない |
+
+非空虚性の実証は毎回 `.local` の scratch copy で行い、実 source は未変更であることを
+毎回確認した。内訳は各 commit message に記載している。
+
+## 4. 未解決・未検証（隠さない）
+
+- **W1 は未着手**。desktop validation harness
+  (`platform/windows-tsf/validation/desktop/`) は**一度も実行されていない**。
+  前回の自動試験（2026-09-25）は SendInput の key と mouse の delivery が共有 desktop
+  で全滅し、T-01 から T-07 は NOT OBSERVED。人が別途成功を報告しただけ（user report）。
+  **W2 が通っても IME が日本語入力できることの証拠にはならない。**
+  D-2 により実行前のユーザー事前連絡が必須。
+- **W1 の前提**: W1 は「導入済みの候補」に対して実行する。W2 の run は machine を
+  baseline に戻してしまうので、**W1 の前に一度インストールが必要**。これは W2 の
+  install phase と同じ操作であり、`-SkipHarnessOwnedCleanup` を付けた W2 run を使うか、
+  W1 harness 自身が導入する形になる。**要決定**（推奨は 5 の 1 に記載）。
+- **A2-08（AI 経路）は未着手**。`docs/A2-08-SUPPLY-PATH.md` がユーザー決定 D-7
+  （起動 plan をビルド時に embed）の費用構造を実読で確定させているが、実装は 0 行。
+  公開範囲は D-1 により Mozc-only のままなので W1 と W2 の妨げにはならないが、
+  GOAL の local AI 要件は未達。
+- A2-08 の残件: F1 の残余 TOCTOU、H-2（`%TEMP%` が日本語アカウントで非 ASCII）、
+  H-3（既定 deadline 250ms に対し実測 1.46s）、`#[ignore]` 2 件。
+- `opencode.jsonc` の `"default_agent": "coordinator"` は、その agent を定義する
+  `.opencode/agents/*.md`（OpenCode が読まない複数形のディレクトリ）を削除した
+  `2dda3d9` 以降、**参照先が存在しない**。削除は commit 済みだが、この設定は
+  直していない（他の session が読んでいる可能性のため）。STATE に記録。
+- 署名なし。D-3 により署名は不要だが、SmartScreen や publisher の警告、
+  および「SmartScreen 等を無効化しないこと」の開示義務は残る。
+- 独立 verifier による GOAL 全条件判定は未実施。`.goal-complete` は作らない。
+
+## 5. 次の具体的作業（この順）
+
+1. **W1 の実行形態を決める**（要ユーザー判断）。選択肢は (a) W1 harness 自身が候補を
+   導入する、(b) `-SkipHarnessOwnedCleanup` を付けた W2 run で導入状態を残す。
+   **推奨は (a)**。理由は、W2 の証跡は独立して取れており、導入状態を W1 のために
+   汚す必要がないため。
+2. **W1 を実行**（ユーザー事前連絡 → 承認 → 実行 → 結果の独立 readback）。
+   W2 で UAC を一度通ったので、同じ手順で W1 も回せる。
+3. W1 が通れば、**その hash に対して** README と Release body を実ハッシュで更新する。
+4. source を clean にしたまま最終候補を再ビルドする。`2dda3d9` 以降の commit は
+   validation harness だけなので MSI の中身は同じだが、**build manifest の commit を
+   最終 commit に合わせる**ために再ビルドが必要。→ その hash で W2 を再実行。
+5. `gh release create --prerelease`。AI 非同梱、未署名、SHA-256、対応 commit、
+   ライセンス、既知制限を Release body に明記。D-5 により公表 surface は README と
+   Release body のみ。push には GitHub 認証が必要。
+6. Rust 側に戻ったら `cargo fmt --all -- --check` / `check --workspace --all-targets
+   --locked` / `clippy --workspace --all-targets --locked -- -D warnings` /
+   `test --workspace --locked` を再実測する。この区切りで未実行なので、
+   旧区切りの 181 passed という数値を**そのまま引用してはいけない**。
+
+## 6. この区切りで**しなかった**こと（理由付き）
+
+- **Rust の test を実行しなかった**: 対象 source を変更しておらず、優先順位が W2
+  だったため。5 の 6 番に明示した。
+- **`.goal-complete` を作らなかった**: build agent には作れない（AGENTS.md）。
+  かつ GOAL 全条件は W1、AI 経路、署名、独立 verifier が未達。
+- **候補を最終 commit で再ビルドしなかった**: W1 の実行形態が決まってから一括で行う
+  方が、build と W1/W2 のやり直しを減らす。
+- **`site-assets/` を触らなかった**: D-5 により公開しないため。
+- **署名証明書を取得していない**: D-3 により不要。ただし SmartScreen 等の扱いの
+  開示義務は残る。
+
+---
+
 # 最新の引き継ぎ — 2026-09-26 【重要】前回の「実機は install state を回答しない」は coordinator 自身の P/Invoke 宣言ミスだった。撤回済み
 
 Status: NOT COMPLETE / public beta NOT RELEASED / `.goal-complete` 未作成
