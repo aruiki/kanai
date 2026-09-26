@@ -22,7 +22,7 @@ Status: NOT COMPLETE / public beta NOT RELEASED / `.goal-complete` 未作成
 > 取り違えたのは 2 度目ではなく 3 度目。** そのため ST-69 が宣言を両方向から固定し、
 > ST-73 が文書化された INSTALLSTATE の集合だけを状態名にマップすることを要求する。
 
-基準HEAD: `a6a1a48` 時点（origin/main と同期、**tree clean**）。
+基準HEAD: `90fcd58`（A2-08 prototype 修正と撤回記録。この handoff 追記 commit がその上に載る）。origin/main と同期、**tree clean**。
 D-1〜D-5 の決定はそのまま有効（下の履歴区切りを参照）。
 ベータ候補 `.local/installer-beta-final` は §6 のとおり内容・SHA-256 とも未変。
 
@@ -319,6 +319,69 @@ rebuild で直る bug ではない。** 供給側が payload を明示的に禁�
 検証する**回帰テストが存在しない**。だから A2-08 は CRITICAL のまま気付けずに残っていた。
 同じ欠陥が再び放入されても、テストは黙って green を返す。
 
+## 9. 引き継ぎ補足（この会話で出た分析のうち、_STATE.md に残していなかったもの）
+
+### A2-08 の推奨する supply 経路（決定ではない。決定はユーザー）
+
+`local_runtime.rs` の `PINNED_*` 定数群は**既にバイナリにコンパイル済み**である。
+実測で確認した定数:
+
+- `PINNED_MANIFEST_SCHEMA` / `PINNED_MANIFEST_STATUS` / `PINNED_MANIFEST_SHA256`
+- `PINNED_MODEL_ID` / `PINNED_REPOSITORY` / `PINNED_REVISION` / `PINNED_MODEL_FILE` /
+  `PINNED_MODEL_BYTES` / `PINNED_MODEL_SHA256` / `PINNED_MODEL_FILE_COMMIT` / `PINNED_MODEL_ROLE`
+- `PINNED_RUNTIME_ID` / `PINNED_RUNTIME_RELEASE` / `PINNED_RUNTIME_REVISION` /
+  `PINNED_RUNTIME_LICENSE` / `PINNED_RUNTIME_ASSET` / `PINNED_RUNTIME_BYTES`
+
+つまり「何を起動するか」の**正本はすでにコード側にある**。欠けているのはそれを runtime に
+届ける経路だけであり、A2-08 は「セキュリティモデルの全面再設計」ではなく**有界な変更**で
+解ける可能性が高い。
+
+**推奨案**: manifest / receipt は payload に**載せない**まま現行方針
+（`build-windows-installer.ps1:1368` の "the sanitized local AI package manifest must
+never become an MSI payload file"）を維持し、launch plan を `PINNED_*` 定数から組む。
+起動時に manifest が存在すれば照合し、**無ければ照合を skip して計画を組む**。
+これなら现行方針を壊さずに AI を製品として成立させられる。
+
+**この案を実装する前にコードで必ず確認すること**（会話では未検証のまま提案した）:
+
+1. `start_pinned_ai_runtime(manifest_json, receipt_json, …)`（`ai_runtime.rs:1112`）が
+   plan の**どの項目**を JSON から取り、どの項目を `PINNED_*` から取っているのか。
+   JSON 由来の項目が 1 つでもあれば「定数だけで組む」は成立しない。
+2. `local_runtime.rs:422` の「combined `{ "manifest": …, "receipt": … }` から plan を
+   組む」という関数が、検証と plan 生成のどちらの責務を持つか。
+3. `PINNED_MANIFEST_SHA256` が manifest **実体**の digest を照合しているなら、
+   manifest を payload に載せない選択肢では**その照合自体が成立しない**。
+   その場合「照合を任意化する」のではなく、digest の**実体照合だけ**を残す設計になる。
+
+**この 3 点が未確認であることに注意。** 提案を実装済みと書かないこと。
+
+### このセッションの coordinator 実績（正直に）
+
+2026-09-26 の coordinator 岗位上、次の誤りを犯した。**引き継ぎ側が同じ形で
+繰り返さないために、記録する。**
+
+- **P/Invoke の戻り値取り違え 3 度目**。`MsiQueryProductStateW` に out パラメータが
+  無いと気づかず、戻り値を Windows エラーコードと読んで「実機が壊れている」という
+  **偽の CRITICAL blocker** を主張した。2 度目・3 度目は自己訂正せず、§2 で撤回するまで
+  3 commit が誤った前提の上に積まれた。
+- その偽 blocker の根拠で**不要な修復**（`msiexec /fvomus`）を実行した。
+- 誤った前提の上に**正常 machine を全て拒否する拒否ゲート**を commit した
+  （`INSTALL-STATE-UNDETERMINED`、ゲート自体は §2 の理由で正当なので残置）。
+- **誤りを「固定」していたテストがあった**（ST-69）。テストが誤りを守った。
+  実装者が間違えると、テストはその誤りを合格させた。
+- STATE.md の見出しを 1 つ削除、indexing ミスで 900 行超を一度消失させかけた。
+- この会話で日本語の生成物混入を 15 回以上訂正した（`因此是`、`那个`、`回报`、`必须`
+  等の混入）。**編集は生成物を疑い、逐次 char 走査で 1 文字ずつ確認すべき。**
+
+### 引き継ぎ側の進め方（推奨）
+
+- 実装は**排他 file 割当で子に任せ、coordinator は差分とテスト結果だけを見る**。
+  理由: 上記のとおり coordinator の自己検証は本日 3 回失敗しており、
+  独立した cross-check のほうが信頼性が高い。
+- 既存テストは**信用するな**。既に誤りを守った前例がある。修正時は必ず
+  「その欠陥を再導入 → テストが失敗するか」を `.local` の scratch copy で実証する。
+- 値の読み取り（`MsiQueryProductState` のような out パラメータ無しの API、
+  `ProductInfo` の例外）を Windows エラーコードと取り違えないこと。
 ## 未解決・未検証（隠さない）
 
 - **W2（install / uninstall / reinstall / rollback）は、1 phase も receipt として観測されていない。**
