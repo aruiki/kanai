@@ -283,7 +283,19 @@ function Restore-FileBytes([string]$Path, [byte[]]$Bytes) { [IO.File]::WriteAllB
 function Remove-TestJunction([string]$Path) {
     $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
     if ($null -eq $item) { return }
-    try { Remove-Item -LiteralPath $Path -Force -ErrorAction Stop }
+    # A junction is a reparse point, not a real directory. On PowerShell 5.1
+    # Remove-Item without -Recurse reports "the item at ... has children" and
+    # raises a confirmation prompt. -ErrorAction does NOT suppress that prompt
+    # (only -Confirm does), so a non-interactive run blocks forever and the
+    # catch fallback below is never reached. Adding -Recurse instead is worse:
+    # it can walk into the link target and delete the real runtime files.
+    # Measured this session: the run hung on runtime-junction, and deleting the
+    # reparse point with Directory::Delete(path, $false) removed the junction
+    # while leaving the target's 12 files intact.
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq [IO.FileAttributes]::ReparsePoint) {
+        try { [IO.Directory]::Delete($Path, $false); return } catch { }
+    }
+    try { Remove-Item -LiteralPath $Path -Force -Recurse -Confirm:$false -ErrorAction Stop }
     catch {
         try { [IO.Directory]::Delete($Path, $false) } catch { }
     }
@@ -964,7 +976,9 @@ finally {
         $resolvedManaged = [IO.Path]::GetFullPath($managed)
         if ($resolvedManaged.StartsWith($localRoot, [StringComparison]::OrdinalIgnoreCase) -and
             ((Split-Path -Leaf $resolvedManaged) -like 'installer-build-*' -or (Split-Path -Leaf $resolvedManaged) -like 'airuntime-staging-*')) {
-            Remove-Item -LiteralPath $resolvedManaged -Recurse -Force -ErrorAction SilentlyContinue
+            # -Confirm:$false keeps the sweep non-interactive; a leftover link
+            # would otherwise raise a confirmation prompt and hang the run.
+            Remove-Item -LiteralPath $resolvedManaged -Recurse -Force -Confirm:$false -ErrorAction SilentlyContinue
         }
     }
 }
