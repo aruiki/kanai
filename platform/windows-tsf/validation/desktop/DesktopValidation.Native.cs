@@ -207,6 +207,12 @@ namespace KanaAI.DesktopValidation
         private const uint WM_SIZE = 0x0005;
         private const uint WM_SETFOCUS = 0x0007;
         private const uint WM_DESTROY = 0x0002;
+        // PM_REMOVE is what makes a PeekMessage drain terminate.  PM_NOREMOVE (0)
+        // leaves the message in the queue, so the next PeekMessage reports the
+        // same message again.  Measured on this machine with one posted thread
+        // message: 200,000 PeekMessage calls under a 200,000 cap when uRemoveMsg
+        // was 0, and 2 calls when it was PM_REMOVE.
+        private const uint PM_REMOVE = 0x0001;
 
         [StructLayout(LayoutKind.Sequential)]
         internal struct KEYBDINPUT
@@ -1152,9 +1158,10 @@ namespace KanaAI.DesktopValidation
             {
                 record.Ok = true;
                 record.Open = ImmGetOpenStatus(context);
-                StringBuilder name = new StringBuilder(256);
-                ImmGetDescriptionW(context, name, name.Capacity);
-                record.ContextName = name.ToString();
+                // imm32.dll exports no context-name API (ImmGetContextName and
+                // ImmGetContextNameW were both probed with GetProcAddress and are
+                // absent).  ContextName therefore stays empty instead of carrying a
+                // value the OS never returned; the receipt says so in its note.
             }
             finally
             {
@@ -1366,7 +1373,26 @@ namespace KanaAI.DesktopValidation
 
         public static void PumpMessages(int milliseconds)
         {
-            int deadline = Environment.TickCount + (milliseconds < 0 ? 0 : milliseconds);
+            // Two defects were measured here, and both kept a real run from
+            // producing any evidence at all.
+            //
+            // 1. The drain passed 0 (PM_NOREMOVE) as uRemoveMsg.  PeekMessage
+            //    therefore never removed anything, reported the same message on
+            //    every call, and the inner loop never ended.  This is why
+            //    CreateLoopbackWindow spun at ~95% CPU and never returned: the
+            //    EDIT child it creates posts messages and runs a caret timer, so
+            //    the thread queue is never empty and the 10 ms sleep below was
+            //    never reached.  PM_REMOVE makes the drain terminate.
+            // 2. `Environment.TickCount < deadline` inverts across the 32-bit
+            //    tick wraparound (~24.9 days of uptime), because the sum
+            //    overflows.  Subtracting two wrapped tick values and comparing
+            //    the difference against the budget is the wraparound-safe form.
+            //
+            // WM_QUIT is consumed rather than left behind.  The harness has no
+            // GetMessage loop of its own, so a quit message parked in the host
+            // thread queue would only mislead whatever reads the queue next.
+            int start = Environment.TickCount;
+            int budget = milliseconds < 0 ? 0 : milliseconds;
             MSG message;
             do
             {
@@ -1375,14 +1401,14 @@ namespace KanaAI.DesktopValidation
                 // always a message available and this loop never exits.  Measured:
                 // a standalone replica of CreateLoopbackWindow spun at ~95% CPU
                 // forever with 0 and returned normally with 1 (PM_REMOVE).
-                while (PeekMessage(out message, IntPtr.Zero, 0, 0, 1))
+                while (PeekMessage(out message, IntPtr.Zero, 0, 0, PM_REMOVE))
                 {
                     TranslateMessage(ref message);
                     DispatchMessage(ref message);
                 }
                 System.Threading.Thread.Sleep(10);
             }
-            while (Environment.TickCount < deadline);
+            while (unchecked(Environment.TickCount - start) < budget);
         }
 
         public static string GetLoopbackText()

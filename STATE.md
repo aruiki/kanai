@@ -1,4 +1,99 @@
+<<<<<<< HEAD
 # 最新の引き継ぎ — 2026-09-27 未明 **W1 ハーネスは端から端まで走るようになった。次の gate は「画面に_candidate_ が出る」**
+=======
+# 最新の引き継ぎ — 2026-09-27 未明 **ベータを GitHub prerelease として公開した（W1 の機械検証は未取得のまま、逸脱を明記）**
+
+Status: NOT COMPLETE / `.goal-complete` 未作成 / 公開 = GitHub prerelease **`v0.1.0-beta.1`**
+W2: **VERIFIED**（機械検証 receipt / 11 phase pass / MSI `2B2C3B3D…` / Setup `B0BCD073…` / 1 台のみ）
+W1: **機械検証 receipt 未取得**。オペレータ実機確認のみ（「問題ありません。IMEとしては機能しています」）。
+
+基準 HEAD: `95a4ff5`（tree clean、`origin/main` と同一）。tag `v0.1.0-beta.1` → `2dda3d9`（成果物のビルド元、`repositoryDirty=false`）。
+
+---
+
+## 0. この区切りの結論
+
+**公開した。ただし W1 は「機械検証済み」ではない。** 製品欠陥の証拠は出ず、
+逆に **W1 ハーネスの観測側が壊れている**ことが実測で確定した。
+
+- W1 は 4 回とも同一の失敗（critical finding `TIP-DLL-NOT-LOADED`）。
+- ところが実機を直接調べると **`mozc_tip64.dll` は 8 プロセスにロード済み**
+  （`explorer`, `chrome`, `WindowsTerminal`, `SearchHost`, `SystemSettings`,
+  `ApplicationFrameHost`, `msedgewebview2`, probe host 自身）。
+  → `TIP-DLL-NOT-LOADED` は**誤検出**。
+- receipt を読むと原因は 2 つ:
+  1. `targetModules.enumerationError = "error 87"` / `moduleCount = 1`
+     → **モジュール列挙自体が失敗**していて `tipDllLoaded=false` を書いていた。
+  2. **全 step の `observed` が空**。`CAL-04`/`CAL-08` は expected `""` と observed `""` が
+     一致して pass しただけの**空振り pass**。`CAL-07` は `kanaai`(6字) を打って観測長 1。
+     → `imeCalibration.determined=false`（"the second direction also did not commit
+     the ASCII canary"）。
+- 解釈: **IME が ON（ひらがな）だと打鍵は preedit に入り、EDIT の確定テキストは空のまま。**
+  ハーネスは確定テキストしか読まず、較正で commit(Enter) を送らない。
+  `INJ-00`（injector 自身の loopback window 検査）すら同じ理由で落ちる。
+  → 残る失敗は**製品の欠陥ではなく、ハーネスが composition を観測できないこと**。
+
+**公開判断**: 製品所有者（ユーザー）が「実機で手動確認 → 逸脱を明記して即公開」を選択。
+契約 `docs/PRODUCT_RELEASE_CONTRACT.md` の beta exit gates 3・4 は未達であることを
+Release body / README に明記した（隠していない）。
+
+## 1. 公開したもの（実測で確認）
+
+- push: `git push origin cline/ad640:main` → `origin/main` = `95a4ff5`（fast-forward 成功、`git ls-remote` で確認）
+- tag: `v0.1.0-beta.1` → `2dda3d9`（成果物のビルド元。`build-manifest.json` の
+  `sourceIdentity.repositoryHead` と一致）
+- GitHub prerelease: `v0.1.0-beta.1`、assets = `KanaAI-0.1.0-Setup.exe` / `KanaAI-0.1.0-x64.msi`
+- Release body: `.local/release-body-beta.md`（§5 に検証済み/未検証を分離記載）
+- 配布ハッシュ（**再計算して receipt・manifest と一致を確認**）:
+
+| ファイル | bytes | SHA-256 |
+|---|---:|---|
+| `KanaAI-0.1.0-Setup.exe` | 18,408,448 | `B0BCD073F9890731C0ABAAA97C79C42ACC1B0EA984FA7170EF7E312157065FCD` |
+| `KanaAI-0.1.0-x64.msi` | 18,403,328 | `2B2C3B3DBA5B6B74C76FDCFA9B14D435989EFE74E873B2ACA60D0ABC09FCBAF7` |
+
+成果物の実体は **この worktree ではなく** メイン worktree 側
+（`…/Documents/プログラム/プログラム/AI-NihongoIME/.local/installer-beta-final/`）にある。
+`out/install-staging/…` は ad640 worktree に存在しない（`Test-Path` = False）。
+
+**注意（過去の引き継ぎの誤り）**: 以前の記録にあった「MSI 35,799,040 bytes /
+Setup 35,818,512 bytes」「`patchSetSha256 a814c8b8…`」は**誤り**。
+実値は上表と `patchSetSha256 853C00E6…`。公開前に再計算して訂正した。
+
+## 2. 未解決（次の担当がやること）
+
+1. **W1 ハーネスの観測を直す**（これが唯一の gate blocker）:
+   - 対象プロセスのモジュール列挙 `error 87` を直す（`EnumProcessModulesEx` の
+     `cb`/配列サイズか x64 target に対する呼び方）。列挙できないなら
+     **finding を出さず `unavailable` として記録**する（現在は失敗を「未ロード」と断定している）。
+   - **preedit を観測する**か、較正で **commit(Enter) を送ってから読む**。
+     現状は確定テキストのみ → IME ON 時は必ず空。
+   - `expected=""` の check が空振り pass しないようにする（observed が
+     「取得できた空文字」か「取得失敗」かを区別する）。
+2. 実機変更の復元: 検証のため **既定の入力方式 override を KeyNako → KanaAI に変更した**
+   （`Set-WinDefaultInputMethodOverride`）。可逆。戻すなら
+   `Set-WinDefaultInputMethodOverride -InputTip '0411:{7C1B2A5E-…}'`（旧値は STATE 履歴参照）。
+   ※ユーザーは KanaAI を使用中のため、指示があるまで戻していない。
+3. 検証で起動した `KanaAIValidationProbeHost` の残プロセス確認。
+4. `VERIFICATION.md` は **2026-09-25 の独立検証（FAIL / NOT COMPLETE）のまま変更していない**。
+   開発側が PASS へ書き換えない（規約）。
+
+## 3. 次にやる具体的な作業
+
+- W1: preedit 観測 + commit 送信 + module 列挙修正 → `.local/w1-run-*` で再実行 →
+  pass したら receipt を Release に追記（`gh release edit v0.1.0-beta.1`）して
+  「operator-confirmed only」の記載を機械検証済みに更新する。
+- gate 4/5（secure field, UIA, high-DPI, app-container, AI fallback）と
+  privacy/性能の実測は未着手。
+
+
+
+---
+
+
+# 履歴（2026-09-26 夜） — **W2 は実機で VERIFIED になった。次の gate は W1（実アプリ日本語入力）**
+
+> 以下は履歴です。最新の引き継ぎは本ファイル冒頭の節を読んでください。
+>>>>>>> origin/main
 
 Status: NOT COMPLETE / public beta NOT RELEASED / `.goal-complete` 未作成
 W2: **VERIFIED**（候補 MSI `2B2C3B3D…` / Setup `B0BCD073…`、この machine 1台のみ）
