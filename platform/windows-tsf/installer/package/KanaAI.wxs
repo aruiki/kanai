@@ -7,7 +7,7 @@
     <Launch Condition="VersionNT64" Message="64bit版Windowsが必要です。" />
     <Property Id="ARPNOMODIFY" Value="1" />
     <Property Id="ARPURLINFOABOUT" Value="https://github.com/aruiki/kanai" />
-    <StandardDirectory Id="ProgramFilesFolder">
+    <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="KanaAI" />
     </StandardDirectory>
     <Feature Id="Core" Title="KanaAI" Level="1">

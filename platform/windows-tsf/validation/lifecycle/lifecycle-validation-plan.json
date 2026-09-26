@@ -37,10 +37,10 @@
     "installFolder": {
       "directoryId": "INSTALLFOLDER",
       "name": "KanaAI",
-      "parentDirectoryId": "ProgramFilesFolder",
+      "parentDirectoryId": "ProgramFiles64Folder",
       "leaf": "KanaAI",
       "assertionPolicy": "leaf-only-before-install, full-observed-path-after-install",
-      "note": "The plan asserts only the directory leaf before the install. The absolute root is read back from the Windows Installer after the install (ProductInfo InstallLocation) and is compared with the path the candidate's own Directory table declares. The package is built per-machine with 'wix build -arch x64', for which ProgramFilesFolder is the 64-bit Program Files, but this harness records the observed path and never asserts a hand-written guess about it."
+      "note": "The plan asserts only the directory leaf before the install. The absolute root is read back from the Windows Installer after the install (ProductInfo InstallLocation) and is compared with the path the candidate's own Directory table declares. The package is built per-machine with 'wix build -arch x64', and declares ProgramFiles64Folder, which is the 64-bit Program Files. (ProgramFilesFolder is the 32-bit Program Files even in an x64 package; the candidate was corrected to ProgramFiles64Folder.) This harness records the observed path and never asserts a hand-written guess about it."
     }
   },
   "registrationIdentity": {

@@ -138,8 +138,21 @@ function Add-RunFinding {
 }
 
 function Get-PhaseLogPath {
+    <#
+        '' is the answer for a phase that runs no command, and that is a normal
+        phase, not an error: PF-01, PF-02, OB-01 and CL-01 only observe, so they
+        declare no command and have no log file.
+
+        The nested optional-property read used to hand the inner $null default
+        straight to the outer call's Mandatory -Object parameter, which threw and
+        stopped the run on PF-01, the first phase, before anything had been
+        observed.  The two reads are split apart here so the no-command case is
+        stated explicitly instead of depending on a parameter binding rule.
+    #>
     param([Parameter(Mandatory = $true)]$Phase, [Parameter(Mandatory = $true)][string]$OutputRoot)
-    $logName = [string](Get-KanaAiLifecycleOptionalProperty -Object (Get-KanaAiLifecycleOptionalProperty -Object $Phase -Name 'command' -Default $null) -Name 'logFile' -Default '')
+    $command = Get-KanaAiLifecycleOptionalProperty -Object $Phase -Name 'command' -Default $null
+    if ($null -eq $command) { return '' }
+    $logName = [string](Get-KanaAiLifecycleOptionalProperty -Object $command -Name 'logFile' -Default '')
     if ([string]::IsNullOrWhiteSpace($logName)) { return '' }
     return (Join-Path $OutputRoot $logName)
 }
@@ -1014,7 +1027,7 @@ $baseReceipt.cleanupPasses = @($cleanupPass)
 # the plan's cleanup and absent-final phases are decided on post-cleanup state.
 # They are re-evaluated here from the same engine rather than by hand.
 $phasesByName = @{}
-foreach ($record in @($phaseResults)) { $phasesByName[[string]$record.phase] = $record }
+foreach ($record in $phaseResults) { $phasesByName[[string]$record.phase] = $record }
 foreach ($name in @('absent-final', 'cleanup')) {
     if (-not $phasesByName.ContainsKey($name)) { continue }
     $record = $phasesByName[$name]
@@ -1085,7 +1098,7 @@ if ($baseReceipt.overall -ne 'passed') {
 $artifacts = @()
 $artifacts += New-KanaAiLifecycleArtifactEntry -Path $planCopyPath -Root $script:CurrentOutputDirectory -Role 'validated-plan-copy'
 $artifacts += New-KanaAiLifecycleArtifactEntry -Path $planPath -Root $script:CurrentOutputDirectory -Role 'source-plan'
-foreach ($phase in @($phaseResults)) {
+foreach ($phase in $phaseResults) {
     $logName = [string](Get-KanaAiLifecycleOptionalProperty -Object (Get-KanaAiLifecyclePhase -Plan $planObject -Name ([string]$phase.phase)) -Name 'command' -Default $null)
     if ($null -eq $logName) { continue }
     $logFile = [string](Get-KanaAiLifecycleOptionalProperty -Object $logName -Name 'logFile' -Default '')
@@ -1129,7 +1142,7 @@ if (-not $sanity.ok) {
 [void](Write-KanaAiLifecycleJson -Path $receiptPath -Value $baseReceipt)
 
 Write-Host ('run {0}: mode={1} overall={2} exit={3}' -f $runId, [string]$baseReceipt.mode, [string]$baseReceipt.overall, [int]$baseReceipt.exitCode)
-foreach ($record in @($phaseResults)) { Write-Host ('  {0,-8} {1,-20} {2,-12} {3}' -f [string]$record.id, [string]$record.phase, [string]$record.outcome, [string]$record.reason) }
+foreach ($record in $phaseResults) { Write-Host ('  {0,-8} {1,-20} {2,-12} {3}' -f [string]$record.id, [string]$record.phase, [string]$record.outcome, [string]$record.reason) }
 foreach ($finding in @($baseReceipt.findings)) {
     if ([string]$finding.severity -ne 'info') { Write-Host ('  finding [{0}] {1}: {2}' -f [string]$finding.severity, [string]$finding.id, [string]$finding.message) }
 }

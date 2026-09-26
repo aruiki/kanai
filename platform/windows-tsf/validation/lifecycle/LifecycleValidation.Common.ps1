@@ -112,8 +112,24 @@ function Get-KanaAiLifecycleProperty {
 }
 
 function Get-KanaAiLifecycleOptionalProperty {
+    <#
+        $Object is Mandatory and AllowNull at the same time, and that pairing is
+        deliberate.  Mandatory keeps a caller from forgetting the argument.
+        AllowNull lets an explicit $null reach the guard on the first line of the
+        body, which is what an optional property read has to do: no object, no
+        property, return the default.
+
+        Without AllowNull the binder threw "Cannot bind argument to parameter
+        'Object' because it is null" before the body ran, so that guard was
+        unreachable dead code and any caller that nested two of these calls -
+        reading a property of an optional property - crashed instead of returning
+        the default.  Measured on the -Execute run: Get-PhaseLogPath reads
+        'logFile' off the result of reading 'command', the four phases that run no
+        command at all (PF-01, PF-02, OB-01, CL-01) yielded $null, and the first
+        of them stopped the run before a single phase had been observed.
+    #>
     param(
-        [Parameter(Mandatory = $true)]$Object,
+        [Parameter(Mandatory = $true)][AllowNull()]$Object,
         [Parameter(Mandatory = $true)][string]$Name,
         $Default = $null,
         [string]$Context = 'object'
@@ -1190,7 +1206,9 @@ function Resolve-KanaAiLifecycleResumePlan {
             and is reported as not_run, never as a pass;
           * a destructive phase whose prior result is not 'pass' is 'refused'
             unless the operator passed -AllowDestructiveRerun, so a retry can
-            never silently repeat a destructive step the operator did not see;
+            never silently repeat a destructive step the operator did not see.
+            This applies only when a prior run exists at all.  On a first run
+            there is nothing to repeat, so every destructive phase runs;
           * a destructive phase that -ResumeFrom points at, and that already
             passed, is also 'refused' without -AllowDestructiveRerun.
     #>
@@ -1212,6 +1230,20 @@ function Resolve-KanaAiLifecycleResumePlan {
         $outcome = [string](Get-KanaAiLifecycleOptionalProperty -Object $result -Name 'outcome' -Default 'not_run')
         if ($name -ne '') { $prior[$name] = $outcome }
     }
+
+    # Whether a prior run exists at all, which is not the same question as what
+    # one phase's prior outcome was.  A first run and a resume that never reached
+    # a phase both leave that phase at 'not_run', and only this flag tells them
+    # apart.
+    #
+    # Measured defect: without it, a first -Execute on a clean machine refused
+    # every destructive phase, and the destructive phases are every phase that
+    # installs, uninstalls, upgrades or downgrades.  W2 could not run a single
+    # destructive step, so it could never produce any evidence at all.  The
+    # acknowledgement is for a RE-run and a first run is not one, which is also
+    # what this function's own default reason - 'first execution of this phase' -
+    # already assumed.
+    $hasPriorRun = @(@($PriorResults) | Where-Object { $null -ne $_ }).Count -gt 0
 
     $startIndex = 0
     if (-not [string]::IsNullOrWhiteSpace($ResumeFrom)) {
@@ -1242,7 +1274,7 @@ function Resolve-KanaAiLifecycleResumePlan {
             $decision = 'refused'
             $reason = 'this phase already completed destructively; re-running it requires -AllowDestructiveRerun'
         }
-        elseif ($destructive -and $priorOutcome -ne 'pass' -and -not $AllowDestructiveRerun) {
+        elseif ($destructive -and $hasPriorRun -and $priorOutcome -ne 'pass' -and -not $AllowDestructiveRerun) {
             $decision = 'refused'
             $reason = ("this phase is destructive and did not complete in a prior run (prior outcome '{0}'); re-running it requires -AllowDestructiveRerun" -f $priorOutcome)
         }
@@ -1992,6 +2024,31 @@ function Initialize-KanaAiLifecycleMsiNative {
         zero GUID returns INSTALLSTATE_UNKNOWN, which is what the documentation
         says a correct call does.
 
+        A third error followed the prototype fix, and it was the same error in a
+        new disguise.  INSTALLSTATE_UNKNOWN was read as "the installer did not
+        answer" and routed to no state at all, so a never-installed product code
+        produced 'unknown' and the INSTALL-STATE-UNDETERMINED gate refused the
+        run.  That gate is unsatisfiable by construction: a clean-install
+        baseline is exactly a product that is not installed, and the documented
+        answer for that is INSTALLSTATE_UNKNOWN, so no healthy machine could ever
+        reach a single phase.
+
+        Microsoft Learn states the return values verbatim:
+
+            INSTALLSTATE_ABSENT      the product is installed for a different user
+            INSTALLSTATE_ADVERTISED  the product is advertised but not installed
+            INSTALLSTATE_DEFAULT     the product is installed for the current user
+            INSTALLSTATE_INVALIDARG  an invalid parameter was passed
+            INSTALLSTATE_UNKNOWN     the product is neither advertised or installed
+
+        UNKNOWN is therefore an answer, and it is the answer that means absent.
+        Measured on this machine with the corrected one-argument prototype, with
+        both controls: the never-installed candidate product code returned -1,
+        the zero GUID and a random never-installed GUID returned -1, five real
+        installed products returned 5, and 'not-a-guid' and the empty string
+        returned -2.  So -2 is the value that means the call was given something
+        unusable and did not answer, and -1 is the value that means not present.
+
         ST-73 pins the one-argument form so the third occurrence cannot be
         mistaken for a machine fault again.
 
@@ -2013,8 +2070,21 @@ function ConvertTo-KanaAiLifecycleProductState {
         The Windows Installer state vocabulary to the harness vocabulary, with
         no machine access at all, so the mapping is unit-testable.
 
-        'unknown' is returned for anything the installer did not answer with a
-        documented state, and it is never treated as absent.
+        'unknown' is returned only for a state the installer did not answer with,
+        and it is never treated as absent.  INSTALLSTATE_UNKNOWN is not that case:
+        Microsoft Learn documents it as "the product is neither advertised or
+        installed", which is an answer, and it is the answer that means absent.
+        Routing it to 'unknown' instead made the clean-install baseline
+        unreachable on every healthy machine, because a product that has never
+        been installed always returns it.
+
+        'ABSENT' keeps its existing mapping.  Microsoft Learn words the value as
+        "installed for a different user", which is not the same claim as absent,
+        and the deviation is recorded here rather than hidden: it is unreachable
+        for this per-machine package, and it was measured directly - both
+        uninstalls in the pre-clean left the products at -1, never at 2 - so
+        changing it now would alter an unexercised path with no evidence to
+        justify the new behaviour.
     #>
     param([string]$Raw)
     if ([string]::IsNullOrWhiteSpace($Raw)) { return 'unknown' }
@@ -2023,6 +2093,7 @@ function ConvertTo-KanaAiLifecycleProductState {
         'LOCAL' { return 'installed' }
         'ADVERTISED' { return 'advertised' }
         'SOURCE' { return 'staged' }
+        'UNKNOWN' { return 'absent' }
         'ABSENT' { return 'absent' }
         'REMOVED' { return 'absent' }
         default { return 'unknown' }
@@ -2048,6 +2119,21 @@ function Get-KanaAiLifecycleProductInstallStateName {
         # The return value IS the INSTALLSTATE.  There is no out parameter and no
         # separate error code, so there is nothing to test for zero here: zero is
         # not a documented return, and every value below is an INSTALLSTATE.
+        #
+        # -1 is INSTALLSTATE_UNKNOWN, "the product is neither advertised or
+        # installed".  It is an answer and it means not present, so it becomes a
+        # state name.  It used to fall through to the empty string, which turned
+        # every never-installed product into an unanswered state and made the
+        # clean-install gate refuse every healthy machine.
+        #
+        # -2 is INSTALLSTATE_INVALIDARG, the value a correct call returns when it
+        # was handed something unusable.  That one is genuinely no answer, and it
+        # falls through to the empty string together with every undocumented
+        # value, so 'unknown' stays honest.
+        #
+        # The old 7 branch is gone: 7 is not an INSTALLSTATE.  REMOVED shares the
+        # value 1 with ADVERTISED, and NOTUSED is -7, so the branch could never
+        # fire and only invented a state that the API does not report.
         $state = [KanaAiLifecycleMsiNative]::MsiQueryProductStateW($ProductCode)
         switch ($state) {
             5 { return 'DEFAULT' }
@@ -2055,7 +2141,7 @@ function Get-KanaAiLifecycleProductInstallStateName {
             1 { return 'ADVERTISED' }
             4 { return 'SOURCE' }
             2 { return 'ABSENT' }
-            7 { return 'REMOVED' }
+            -1 { return 'UNKNOWN' }
             default { return '' }
         }
     }

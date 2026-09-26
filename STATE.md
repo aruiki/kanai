@@ -26,6 +26,21 @@ Status: NOT COMPLETE / public beta NOT RELEASED / `.goal-complete` 未作成
 D-1〜D-5 の決定はそのまま有効（下の履歴区切りを参照）。
 ベータ候補 `.local/installer-beta-final` は §6 のとおり内容・SHA-256 とも未変。
 
+## 0. 2026-09-26 夜セッション: W2 クラッシュ修正と Setup.exe 失敗の切り分け
+
+**完了（実測根拠つき）:**
+- **W2 実行クラッシュ修正**: entry point 1030 行 `@($phaseResults)` が、Windows PowerShell 5.1 で `List[object]` への array subexpression が "引数の型が一致しません" を投げる既知ホスト不具合を踏んでいた（デスクトップ側 README が `@($list)` 禁止・foreach 必須・ST-52 として文書化済み）。`foreach ($record in $phaseResults)` に修正（1030/1101/1145）。ライフサイクル側に ST-76 を追加。**自己テスト 77/77 pass**。
+- **Setup.exe 失敗の切り分け**: Setup.exe は C# ランチャー（`Setup.cs`）で、MSI を temp に抽出し `msiexec /i "<temp>\KanaAI.msi" /qb! /norestart` を実行。W2 の IS-01 でトランザクション開始・終了が同一秒（event 1040/1042）で**何も導入されず失敗**（導入先・ARP・TIP・製品登録すべて無し）。一方 IM-01 は同一 MSI を `/qn` で成功（product-state/product-code/registration は pass）。
+- **install-directory / expected-files 失敗の真因**: `KanaAI.wxs:10` が `StandardDirectory Id="ProgramFilesFolder"`。Windows Installer では `ProgramFilesFolder` = **32-bit**（`C:\Program Files (x86)`）。実測（install-msi.log）で `INSTALLFOLDER = C:\Program Files (x86)\KanaAI\`。README/STATE の「x64 + ProgramFilesFolder = 64-bit」前提は**誤り**。**wxs を `ProgramFiles64Folder` に修正**（ハーネス `Resolve-KanaAiLifecycleStandardDirectory` は `ProgramFiles64Folder`→`ProgramW6432` を既に処理済み）。plan の `parentDirectoryId` と note も修正。
+
+**未解決（→ 確定）:**
+- **Setup.exe（ワンクリック）失敗の直接原因を確定**: エラー **1619**（`ERROR_INSTALL_PACKAGE_OPEN_FAILED` = パッケージを開けない）。`Setup.cs` が MSI を `FileAccess.ReadWrite` で**開いたまま** `msiexec` を起動しており、開いた write ハンドルが msiexec の share mode（FILE_SHARE_READ）と衝突して 1619 になる。昇格再現（UseShellExecute=false + CreateNoWindow=true + ファイル保持）で再現し、ログ `MainEngineThread is returning 1619` を確認。**`Setup.cs` を修正**（msiexec 起動前に FileStream を閉じる。`FileAccess.ReadWrite`→`Write`、`FileShare.Read`→`None`、`Process.Start` を using ブロック外へ）。
+
+**次の作業:**
+1. wxs（ProgramFiles64Folder）+ Setup.cs（1619修正）で再ビルド → 新 MSI/Setup.exe（ProductCode は自動で新規）。**restage → build の一続きが必要**（`build-windows-installer.ps1 -RequireCleanSource` は source identity を検証し、その間に source へ書くと失敗する）。
+2. W2 再実行（IS-01 はオペレータが OK をクリックする必要あり）。
+
+
 ## 1. W2 ハーネスの Windows Installer 呼び出しを「実際に答える束」だけで直す（`d98771a`）
 
 前セッションは `ProductInfo` を直接呼び出す修正を**未コミットのまま停止**していた。

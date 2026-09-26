@@ -979,6 +979,11 @@ Invoke-Test -Id 'ST-70' -Name 'the install state vocabulary maps to the harness 
     Assert-Equal 'staged' (ConvertTo-KanaAiLifecycleProductState -Raw 'SOURCE') 'SOURCE is staged'
     Assert-Equal 'absent' (ConvertTo-KanaAiLifecycleProductState -Raw 'ABSENT') 'ABSENT is absent'
     Assert-Equal 'absent' (ConvertTo-KanaAiLifecycleProductState -Raw 'REMOVED') 'REMOVED is absent'
+    # INSTALLSTATE_UNKNOWN is documented as "the product is neither advertised or
+    # installed".  It is an answer, and it is the answer a product that has never
+    # been installed always gives, so it has to read as absent and not as an
+    # unanswered state.
+    Assert-Equal 'absent' (ConvertTo-KanaAiLifecycleProductState -Raw 'UNKNOWN') 'UNKNOWN is neither advertised nor installed, so it is absent'
     Assert-Equal 'unknown' (ConvertTo-KanaAiLifecycleProductState -Raw '') 'an unanswered state is unknown'
     Assert-Equal 'unknown' (ConvertTo-KanaAiLifecycleProductState -Raw 'SOMETHING-ELSE') 'an undocumented state is unknown'
     Assert-Equal 'unknown' (ConvertTo-KanaAiLifecycleProductState -Raw $null) 'a null state is unknown'
@@ -1058,29 +1063,127 @@ Invoke-Test -Id 'ST-72' -Name 'an unanswered install state refuses the run inste
 }
 
 Invoke-Test -Id 'ST-73' -Name 'the INSTALLSTATE switch covers exactly the documented states' -Body {
-    # MsiQueryProductState is documented to return INSTALLSTATE_ABSENT(2),
-    # ADVERTISED(1), DEFAULT(5), INVALIDARG(-2) or UNKNOWN(-1), and the wider
-    # enum also defines LOCAL(3), SOURCE(4), REMOVED(7), BROKEN(6) and
-    # ADVERTISEDSHORT(-7). Only the real states may become a state name, and
-    # anything else - notably the two negative values a correct call returns for
-    # a bad product code - must become no state at all, so the caller's 'unknown'
-    # is honest instead of a guess. Kept machine-free so the self test stays
-    # deterministic; ST-69 pins the prototype and this pins the mapping.
+    # This case pinned the wrong mapping once, and that wrong mapping is why the
+    # harness could never run.  It asserted INSTALLSTATE_UNKNOWN must not become a
+    # state name, on the reading that -1 means "the installer did not answer".
+    # Microsoft Learn documents -1 as "the product is neither advertised or
+    # installed": an answer, and the answer that means not present.  A product
+    # that has never been installed always returns it, so routing it to no state
+    # made the candidate read as 'unknown', fired INSTALL-STATE-UNDETERMINED, and
+    # made the clean-install baseline the gate exists to confirm unconfirmable on
+    # every healthy machine.
+    #
+    # Measured on this machine with the one-argument prototype ST-69 pins, with
+    # both controls: the never-installed candidate returned -1, the zero GUID and
+    # a random never-installed GUID returned -1, five real installed products
+    # returned 5, and 'not-a-guid' and the empty string returned -2.  So -1 is the
+    # answer that means absent and -2 is the value that means no answer.
+    #
+    # Kept machine-free so the self test stays deterministic; the measurements are
+    # recorded in the comments of the function this case pins.
     $text = [System.IO.File]::ReadAllText($commonPath)
-    foreach ($pair in @(@('5', 'DEFAULT'), @('3', 'LOCAL'), @('1', 'ADVERTISED'), @('4', 'SOURCE'), @('2', 'ABSENT'), @('7', 'REMOVED'))) {
+    foreach ($pair in @(@('5', 'DEFAULT'), @('3', 'LOCAL'), @('1', 'ADVERTISED'), @('4', 'SOURCE'), @('2', 'ABSENT'), @('-1', 'UNKNOWN'))) {
         Assert-True ($text.Contains($pair[0] + " { return '" + $pair[1] + "' }")) ("INSTALLSTATE " + $pair[0] + " must map to " + $pair[1])
     }
-    # The two values a correct call returns for an unusable product code must
-    # never be turned into a state name.
-    Assert-True (-not ($text -match '(?m)^\s*-1 \{ return ')) 'INSTALLSTATE_UNKNOWN must not map to a state name'
+    # INSTALLSTATE_INVALIDARG is what a correct call returns when it was handed an
+    # unusable product code.  That one is genuinely no answer.
     Assert-True (-not ($text -match '(?m)^\s*-2 \{ return ')) 'INSTALLSTATE_INVALIDARG must not map to a state name'
     Assert-True (-not ($text -match '(?m)^\s*6 \{ return ')) 'INSTALLSTATE_BROKEN is not a state the harness reports as installed or absent'
+    # No INSTALLSTATE has the value 7: REMOVED shares 1 with ADVERTISED and
+    # NOTUSED is -7, so a 7 branch can only invent a state the API never reports.
+    Assert-True (-not ($text -match '(?m)^\s*7 \{ return ')) 'no INSTALLSTATE has the value 7, so it must not be mapped'
     # Everything not explicitly mapped has to fall through to the empty string.
     Assert-True ($text.Contains("default { return '' }")) 'any undocumented return must yield no state, so unknown is honest'
-    # And the vocabulary conversion keeps unknown distinct from absent.
+    # An unanswered state stays distinct from absent, while the documented UNKNOWN
+    # is treated as the absent answer it is.
     Assert-Equal 'unknown' (ConvertTo-KanaAiLifecycleProductState -Raw '') 'an unanswered state stays unknown'
+    Assert-Equal 'unknown' (ConvertTo-KanaAiLifecycleProductState -Raw 'SOMETHING-ELSE') 'an undocumented state stays unknown'
+    Assert-Equal 'absent' (ConvertTo-KanaAiLifecycleProductState -Raw 'UNKNOWN') 'the documented UNKNOWN is neither advertised nor installed, so it is absent'
     Assert-Equal 'absent' (ConvertTo-KanaAiLifecycleProductState -Raw 'ABSENT') 'a real absent state is still absent'
 }
+
+Invoke-Test -Id 'ST-74' -Name 'a phase that runs no command resolves no log path instead of throwing' -Body {
+    # Measured on the first real -Execute run, and it stopped that run on its
+    # first phase.  Get-PhaseLogPath nested two optional-property reads: the inner
+    # read of 'command' returned its $null default for a phase that declares no
+    # command, and that $null went straight into the outer read's Mandatory -Object
+    # parameter.  The binder threw "Cannot bind argument to parameter 'Object'
+    # because it is null", PF-01 never finished, no phase was observed and no
+    # receipt could decide anything.  Four of the eleven phases in the shipped plan
+    # run no command at all: PF-01, PF-02, OB-01 and CL-01.
+    #
+    # The root cause is one level down and is pinned here too:
+    # Get-KanaAiLifecycleOptionalProperty guards $null in its own body, but a
+    # Mandatory parameter without AllowNull throws during binding, so that guard
+    # was unreachable dead code and could never do the job it was written for.
+    $text = [System.IO.File]::ReadAllText($commonPath)
+    Assert-True ($text.Contains('[Parameter(Mandatory = $true)][AllowNull()]$Object')) 'the optional-property reader must accept an explicit null so its own guard is reachable'
+    Assert-Equal 'fallback' (Get-KanaAiLifecycleOptionalProperty -Object $null -Name 'anything' -Default 'fallback') 'a null object returns the default instead of throwing'
+    Assert-Equal '' (Get-KanaAiLifecycleOptionalProperty -Object (Get-KanaAiLifecycleOptionalProperty -Object ([ordered]@{ id = 'PF-01' }) -Name 'command' -Default $null) -Name 'logFile' -Default '') 'a nested read through a missing property returns the default'
+
+    # The entry point is only read as text here: dot-sourcing it would demand a
+    # mode and exit, so Get-PhaseLogPath is pinned the way ST-69 and ST-73 pin
+    # their functions.
+    $run = [System.IO.File]::ReadAllText($runPath)
+    Assert-True (-not ($run.Contains('-Object (Get-KanaAiLifecycleOptionalProperty'))) 'the log path must not nest one optional-property read inside another'
+    Assert-True ($run.Contains('$command = Get-KanaAiLifecycleOptionalProperty -Object $Phase -Name ''command'' -Default $null')) 'the command has to be read on its own line'
+    Assert-True ($run.Contains('if ($null -eq $command) { return '''' }')) 'a phase with no command resolves no log path'
+
+    # The condition has to stay real.  If the shipped plan ever gave every phase a
+    # command, this case would be pinning a situation that cannot occur.
+    $plan = Read-KanaAiLifecycleJson -Path $planPath
+    $commandless = @(@($plan.phases) | Where-Object { $null -eq (Get-KanaAiLifecycleOptionalProperty -Object $_ -Name 'command' -Default $null) })
+    Assert-True ($commandless.Count -gt 0) 'the shipped plan must still contain a phase that runs no command'
+}
+
+Invoke-Test -Id 'ST-75' -Name 'a first run executes its destructive phases instead of refusing them' -Body {
+    # Measured on the first real -Execute run against a clean machine: every
+    # destructive phase came back 'refused', and the destructive phases are every
+    # phase that installs, uninstalls, upgrades or downgrades.  W2 ran its two
+    # observation phases, decided nothing, and could never have produced evidence.
+    #
+    # The planner could not tell a first run from a retry.  Both leave a phase's
+    # prior outcome at 'not_run' and the refusal branch tested only that value, so
+    # a first execution was treated as a re-run of a step that had failed.  ST-44
+    # pins the retry case and still holds, because it passes a prior receipt.  What
+    # was missing is the case with no prior run at all, where there is nothing to
+    # repeat and an acknowledgement for a RE-run cannot mean anything.
+    $plan = New-SyntheticPlan
+    $first = Resolve-KanaAiLifecycleResumePlan -Plan $plan -PriorResults $null -ResumeFrom '' -AllowDestructiveRerun $false
+    Assert-True ([bool]$first.Ok) 'a first run must be planned without error'
+    foreach ($action in @($first.Actions)) {
+        Assert-Equal 'run' ([string]$action.decision) ('phase ' + [string]$action.phase + ' must run on a first execution')
+    }
+    Assert-Equal 0 (@($first.RefusedPhases).Count) 'no phase may be refused on a first run'
+
+    # An empty prior-result list is the same situation as no prior receipt.
+    $empty = Resolve-KanaAiLifecycleResumePlan -Plan $plan -PriorResults @() -ResumeFrom '' -AllowDestructiveRerun $false
+    foreach ($action in @($empty.Actions)) {
+        Assert-Equal 'run' ([string]$action.decision) ('phase ' + [string]$action.phase + ' must run when the prior results are empty')
+    }
+
+    # The retry case is untouched: once a prior run exists, a destructive phase
+    # that never completed is still refused without the acknowledgement.
+    $retry = Resolve-KanaAiLifecycleResumePlan -Plan $plan -PriorResults @([pscustomobject]@{ phase = 'install'; outcome = 'pass' }) -ResumeFrom 'install' -AllowDestructiveRerun $false
+    $uninstall = @(@($retry.Actions) | Where-Object { $_.phase -eq 'uninstall' })[0]
+    Assert-Equal 'refused' ([string]$uninstall.decision) 'a destructive phase that never completed is still refused once a prior run exists'
+}
+
+Invoke-Test -Id 'ST-76' -Name 'List[object] phase results enumerate without an array subexpression' -Body {
+    # On this Windows PowerShell build `@($listObject)` throws "Argument types do
+    # not match" when the element type is object.  The -Execute path stores its
+    # phase results in a List[object] and re-indexes them in the final-observation
+    # re-evaluation, so that loop must use foreach, never @().
+    $list = New-Object System.Collections.Generic.List[object]
+    [void]$list.Add([ordered]@{ phase = 'install-setup'; id = 'IS-01' })
+    [void]$list.Add([ordered]@{ phase = 'absent-final';  id = 'OB-01' })
+    $phasesByName = @{}
+    foreach ($record in $list) { $phasesByName[[string]$record.phase] = $record }
+    Assert-True $phasesByName.ContainsKey('install-setup') 'the first phase must be indexed by name'
+    Assert-True $phasesByName.ContainsKey('absent-final') 'the second phase must be indexed by name'
+    Assert-Equal 'IS-01' ([string]$phasesByName['install-setup'].id) 'the indexed record must keep its id'
+}
+
 
 # ---------------------------------------------------------------------------
 # report
