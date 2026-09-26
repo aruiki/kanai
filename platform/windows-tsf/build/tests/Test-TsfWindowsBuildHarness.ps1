@@ -291,7 +291,8 @@ if (-not $SkipPeUnit) {
             '0002-kanai-tsf-identity.patch',
             '0003-session-generation-binding.patch',
         '0004-windows-python-toolchain.patch',
-        '0005-windows-runtime-identity.patch'
+        '0005-windows-runtime-identity.patch',
+        '0006-windows-installer-runtime-path.patch'
         )
         if ($fingerprintRecords.Count -ne $expectedFingerprintNames.Count) {
             throw "Mozc overlay fingerprint has $($fingerprintRecords.Count) records; expected $($expectedFingerprintNames.Count)."
@@ -318,7 +319,7 @@ if (-not $SkipPeUnit) {
     PeUnit = (-not $SkipPeUnit)
     SafeOutputCases = 9
     DefaultCacheOutsideRepository = $true
-    OverlayFingerprintRecords = 6
+    OverlayFingerprintRecords = 7
     PinnedTarget = [string]$config.target
     PinnedMozcCommit = [string]$config.mozc.gitlink
     NativeBeta = $false

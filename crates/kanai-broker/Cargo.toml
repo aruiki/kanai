@@ -19,6 +19,7 @@ kanai-mozc = { path = "../kanai-mozc" }
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
 serde.workspace = true
 serde_json.workspace = true
+sha2 = "0.10"
 thiserror.workspace = true
 tokio = { workspace = true, features = ["time", "sync", "rt", "macros", "net"] }
 
@@ -27,9 +28,18 @@ windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_Security_Authorization",
+    # `BCryptGenRandom` with `BCRYPT_USE_SYSTEM_PREFERRED_RNG` is the only
+    # cryptographically secure random source reachable without adding a
+    # dependency. The per-process model API key is generated with it, so this
+    # feature is required for the AI slow path to have a key at all.
+    "Win32_Security_Cryptography",
+    "Win32_System_JobObjects",
     "Win32_System_Pipes",
     "Win32_System_RemoteDesktop",
     "Win32_System_Threading",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_Networking_WinSock",
+    "Win32_Storage_FileSystem",
 ] }
 
 [dev-dependencies]

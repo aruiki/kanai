@@ -1,0 +1,45 @@
+--- a/win32/custom_action/custom_action.cc
++++ b/win32/custom_action/custom_action.cc
+@@ -117,6 +117,17 @@
+   return buf;
+ }
+ 
++// Deferred MSI actions can read CustomActionData, not INSTALLFOLDER.
++// The package supplies the resolved directory separately for each action.
++std::wstring GetInstallerComponentPath(MSIHANDLE msi,
++                                       absl::string_view filename) {
++  const std::wstring directory = GetProperty(msi, L"CustomActionData");
++  if (directory.empty()) {
++    return {};
++  }
++  return directory + L"\\" + mozc::win32::Utf8ToWide(filename);
++}
++
+ bool SetProperty(MSIHANDLE msi, const std::wstring_view name,
+                  const std::wstring_view value) {
+   if (MsiSetProperty(msi, std::wstring(name).c_str(),
+@@ -461,8 +472,12 @@
+                            &native_machine);
+   const bool is_arm64_machine =
+       SUCCEEDED(result) && native_machine == IMAGE_FILE_MACHINE_ARM64;
+-  const std::wstring tip64_path = GetMozcComponentPath(
+-      is_arm64_machine ? mozc::kMozcTIP64X : mozc::kMozcTIP64);
++  const std::wstring tip64_path = GetInstallerComponentPath(
++      msi_handle, is_arm64_machine ? mozc::kMozcTIP64X : mozc::kMozcTIP64);
++  if (tip64_path.empty()) {
++    LOG_ERROR_FOR_OMAHA();
++    return ERROR_INSTALL_FAILURE;
++  }
+ 
+   result = mozc::win32::TsfRegistrar::RegisterCOMServer(
+       tip64_path.c_str(), tip64_path.length(),
+@@ -474,7 +489,8 @@
+   }
+ 
+   // Register 32-bit TIP COM server.
+-  const std::wstring tip32_path = GetMozcComponentPath(mozc::kMozcTIP32);
++  const std::wstring tip32_path =
++      GetInstallerComponentPath(msi_handle, mozc::kMozcTIP32);
+   result = mozc::win32::TsfRegistrar::RegisterCOMServer(
+       tip32_path.c_str(), tip32_path.length(),
+       mozc::win32::COMServerBitness::k32bit);

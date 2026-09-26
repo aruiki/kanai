@@ -1,0 +1,482 @@
+{
+  "schemaVersion": 1,
+  "planId": "kanai-desktop-input-v1",
+  "title": "KanaAI desktop IME input verification against a real Win32 edit host",
+  "purpose": "Prove or disprove that the installed KanaAI TIP actually converts romaji to kana in a running application, using an independent readback of the target's own state for every step. No step may be marked passed on the strength of an injection API return code.",
+  "derivedFrom": {
+    "evidence": ".local/validation/w1 (read-only prior evidence)",
+    "priorOutcome": "SendInput returned a non-zero event count but no key or mouse input was ever delivered, and mozc_tip64.dll was never loaded into the target process. W1 recorded API-level results as if they were delivery.",
+    "defectThisPlanExistsToPrevent": "Treating an API return value as an observable."
+  },
+  "privacy": {
+    "canaryRule": "The only text this harness ever types is the canary below. Any step whose input.text differs is rejected by the plan validator.",
+    "neverCollected": [
+      "environment variables",
+      "clipboard contents",
+      "user documents or their paths",
+      "typed text other than the canary",
+      "window titles of applications other than the harness target"
+    ],
+    "textRecordingPolicy": "For the harness-owned probe host, document text is recorded because the harness owns the buffer. For an external target such as Notepad, text is recorded as a SHA-256 and a length only, and the raw value is never put in the receipt."
+  },
+  "canary": {
+    "romaji": "kanaai",
+    "kana": "かなあい",
+    "kanaCodePoints": [12363, 12394, 12354, 12356],
+    "note": "The romaji and ASCII forms are deliberately identical. The same injected keystrokes must commit kana when the IME is active and ASCII when it is inactive. That single difference is the harness's primary discriminator between a broken injector and a broken input processor."
+  },
+  "targets": {
+    "probehost": {
+      "kind": "harness-owned",
+      "executable": "bin/KanaAIValidationProbeHost.exe",
+      "source": "DesktopValidation.ProbeHost.cs",
+      "windowClass": "KanaAIValidationProbeHostClass",
+      "editControlClass": "EDIT",
+      "recordText": true,
+      "requiresOperatorConsent": false,
+      "why": "Notepad on Windows 11 is single-instance and restores the user's tab session. A previous attempt to use it left a canary tab and a stray process behind. A harness-owned host makes the cleanup exact and keeps user documents out of the picture."
+    },
+    "notepad": {
+      "kind": "external",
+      "executable": "notepad.exe",
+      "recordText": false,
+      "requiresOperatorConsent": true,
+      "warnings": [
+        "Notepad is single-instance; attaching to an already-running Notepad means the harness shares a process with the user's own tabs.",
+        "The harness will not close a Notepad window it did not open.",
+        "Document text will be recorded as a hash and a length only."
+      ]
+    }
+  },
+  "candidateWindow": {
+    "classNames": [
+      "MSCTFIME UI",
+      "MSCTFIME",
+      "IME",
+      "TsfIME",
+      "TsfCandidateWindow",
+      "CandidateWindow",
+      "MozcCandidateWindow",
+      "KanaAIValidationProbeHostClass"
+    ],
+    "ownershipRule": "A candidate window counts as observed only when its process id equals the target process id, because a TSF text service is loaded into the application that owns the focused window.",
+    "textReadability": "Mozc and the OS candidate windows do not expose their contents through UI Automation or WM_GETTEXT. The harness attempts both readbacks and records the exact failure reason. It never guesses at candidate text."
+  },
+  "runtimeProcessesOfInterest": [
+    "mozc_server.exe",
+    "mozc_broker.exe",
+    "mozc_renderer.exe",
+    "kanai-broker.exe"
+  ],
+  "steps": [
+    {
+      "id": "PF-01",
+      "phase": "preflight",
+      "action": "capture-preflight",
+      "title": "Capture the static host description",
+      "assertion": "assert",
+      "direction": "any",
+      "readbackMethod": "static-capture",
+      "expected": { "observable": "environment", "match": "true" },
+      "notes": "Operating system build, architecture, host PowerShell version. Available in plan-only mode."
+    },
+    {
+      "id": "PF-02",
+      "phase": "preflight",
+      "action": "observe-environment",
+      "title": "Capture the injector window station, desktop, session, integrity, UIAccess, DPI awareness and foreground window",
+      "assertion": "assert",
+      "direction": "any",
+      "readbackMethod": "native-preflight",
+      "expected": { "observable": "environment", "match": "true" },
+      "notes": "Fails if the window station name or the desktop name cannot be read at all, because then the injector cannot know which input queue it is feeding."
+    },
+    {
+      "id": "INJ-00",
+      "phase": "injection-path",
+      "action": "loopback-canary",
+      "title": "Prove this session processes injected keystrokes at all",
+      "assertion": "assert",
+      "direction": "any",
+      "readbackMethod": "loopback-wm-gettext",
+      "input": { "text": "kanaai", "interKeyDelayMs": 60, "settleMs": 600 },
+      "expected": { "observable": "injector-loopback-text", "match": "contains", "value": "kanaai" },
+      "notes": "The canary is typed into a window the harness itself created, and read back with a window message that has nothing to do with the injection API. If this step fails, the harness stops blaming the IME: every later step would be inconclusive."
+    },
+    {
+      "id": "TGT-01",
+      "phase": "target",
+      "action": "launch-target",
+      "title": "Launch the harness-owned probe host",
+      "assertion": "assert",
+      "direction": "any",
+      "readbackMethod": "focus-readback",
+      "expected": { "observable": "target-alive", "match": "true" },
+      "notes": "The probe host records its own pid, window handle and window class in a state file, so the harness identifies the target by what the target says about itself, not by a window title guess."
+    },
+    {
+      "id": "TGT-02",
+      "phase": "target",
+      "action": "focus-target",
+      "title": "Bring the target to the foreground",
+      "assertion": "assert",
+      "direction": "any",
+      "readbackMethod": "focus-readback",
+      "expected": { "observable": "foreground-window", "match": "true" },
+      "notes": "The boolean observation is whether the foreground window belongs to the target process id."
+    },
+    {
+      "id": "TGT-03",
+      "phase": "target",
+      "action": "observe-environment",
+      "title": "Compare the injector desktop and window station with the target thread's",
+      "assertion": "assert",
+      "direction": "any",
+      "readbackMethod": "native-preflight",
+      "expected": { "observable": "environment", "match": "true" },
+      "notes": "The boolean observation is that both names were readable and equal. A mismatch is the single most likely explanation for a total, silent input-delivery failure, so it is gated rather than reported as a footnote."
+    },
+    {
+      "id": "CAL-01",
+      "phase": "ime-toggle-a",
+      "action": "press-key",
+      "title": "Toggle the input processor, first direction",
+      "assertion": "record_only",
+      "direction": "any",
+      "calibratesDirection": true,
+      "readbackMethod": "wm-gettext",
+      "input": { "keys": ["VK_CONTROL", "VK_SPACE"], "chord": true, "interKeyDelayMs": 60, "settleMs": 700 },
+      "expected": { "observable": "document-text", "match": "true" },
+      "notes": "The harness does not assume a starting IME state. It toggles, commits, toggles back and commits again, and lets the two results calibrate which direction is IME-on."
+    },
+    {
+      "id": "CAL-02",
+      "phase": "ime-toggle-a",
+      "action": "type-text",
+      "title": "Type the canary",
+      "assertion": "record_only",
+      "direction": "any",
+      "calibratesDirection": true,
+      "readbackMethod": "wm-gettext",
+      "input": { "mode": "vk", "text": "kanaai", "interKeyDelayMs": 60, "settleMs": 500 },
+      "expected": { "observable": "document-text", "match": "true" },
+      "notes": "Recorded, not asserted: while a composition is open the preedit is normally rendered by the text service and is not part of the document text, so the document is not a reliable witness at this point. The committed text is."
+    },
+    {
+      "id": "CAL-03",
+      "phase": "ime-toggle-a",
+      "action": "press-key",
+      "title": "Commit with Enter, first direction",
+      "assertion": "assert",
+      "direction": "any",
+      "calibratesDirection": true,
+      "readbackMethod": "wm-gettext",
+      "input": { "keys": ["VK_RETURN"], "interKeyDelayMs": 60, "settleMs": 700 },
+      "expected": { "observable": "document-kana", "match": "predicate", "predicate": "kana-present" },
+      "notes": "The committed document must contain kana. A return count of 2 from the injection call proves nothing about this."
+    },
+    {
+      "id": "CAL-04",
+      "phase": "ime-toggle-a",
+      "action": "press-key",
+      "title": "Clear the document with backspace",
+      "assertion": "assert",
+      "direction": "any",
+      "readbackMethod": "wm-gettext",
+      "input": { "keys": ["VK_BACK"], "repeat": 12, "interKeyDelayMs": 30, "settleMs": 400 },
+      "expected": { "observable": "document-text", "match": "equals", "value": "" }
+    },
+    {
+      "id": "CAL-05",
+      "phase": "ime-toggle-b",
+      "action": "press-key",
+      "title": "Toggle the input processor, second direction",
+      "assertion": "record_only",
+      "direction": "any",
+      "calibratesDirection": true,
+      "readbackMethod": "wm-gettext",
+      "input": { "keys": ["VK_CONTROL", "VK_SPACE"], "chord": true, "interKeyDelayMs": 60, "settleMs": 700 },
+      "expected": { "observable": "document-text", "match": "true" }
+    },
+    {
+      "id": "CAL-06",
+      "phase": "ime-toggle-b",
+      "action": "type-text",
+      "title": "Type the canary",
+      "assertion": "record_only",
+      "direction": "any",
+      "calibratesDirection": true,
+      "readbackMethod": "wm-gettext",
+      "input": { "mode": "vk", "text": "kanaai", "interKeyDelayMs": 60, "settleMs": 500 },
+      "expected": { "observable": "document-text", "match": "true" }
+    },
+    {
+      "id": "CAL-07",
+      "phase": "ime-toggle-b",
+      "action": "press-key",
+      "title": "Commit with Enter, second direction",
+      "assertion": "assert",
+      "direction": "any",
+      "calibratesDirection": true,
+      "readbackMethod": "wm-gettext",
+      "input": { "keys": ["VK_RETURN"], "interKeyDelayMs": 60, "settleMs": 700 },
+      "expected": { "observable": "document-ascii", "match": "equals", "value": "kanaai" },
+      "notes": "The identical injection that produced kana in CAL-03 must produce exactly the ASCII canary here. If both commits are kana, or both are ASCII, the toggle did not change the input processor and the receipt says so."
+    },
+    {
+      "id": "CAL-08",
+      "phase": "ime-toggle-b",
+      "action": "press-key",
+      "title": "Clear the document with backspace",
+      "assertion": "assert",
+      "direction": "any",
+      "readbackMethod": "wm-gettext",
+      "input": { "keys": ["VK_BACK"], "repeat": 12, "interKeyDelayMs": 30, "settleMs": 400 },
+      "expected": { "observable": "document-text", "match": "equals", "value": "" }
+    },
+    {
+      "id": "ON-00",
+      "phase": "ime-on",
+      "action": "press-key",
+      "title": "Put the input processor into the IME-on direction",
+      "assertion": "assert",
+      "direction": "ime-on",
+      "imeSetup": { "targetState": "on", "togglesFrom": "calibrated-state" },
+      "readbackMethod": "wm-gettext",
+      "input": { "keys": ["VK_CONTROL", "VK_SPACE"], "chord": true, "interKeyDelayMs": 60, "settleMs": 700 },
+      "expected": { "observable": "document-text", "match": "equals", "value": "" },
+      "notes": "The number of toggles is computed from the calibration, so the harness neither assumes nor needs a starting IME state. If the calibration did not determine a direction this step is recorded as blocked, never as passed."
+    },
+    {
+      "id": "ON-01",
+      "phase": "ime-on",
+      "action": "type-text",
+      "title": "Type romaji with the IME active",
+      "assertion": "record_only",
+      "direction": "ime-on",
+      "readbackMethod": "wm-gettext",
+      "input": { "mode": "vk", "text": "kanaai", "interKeyDelayMs": 60, "settleMs": 500 },
+      "expected": { "observable": "document-text", "match": "true" }
+    },
+    {
+      "id": "ON-02",
+      "phase": "ime-on",
+      "action": "press-key",
+      "title": "Convert with Space and observe the candidate window",
+      "assertion": "assert",
+      "direction": "ime-on",
+      "readbackMethod": "candidate-window-enumeration",
+      "input": { "keys": ["VK_SPACE"], "interKeyDelayMs": 60, "settleMs": 900 },
+      "expected": { "observable": "candidate-window", "match": "predicate", "predicate": "candidate-window-present" },
+      "notes": "Counted as observed only when a visible top-level window of a known IME class belongs to the target process. Candidate text is not readable and is not guessed."
+    },
+    {
+      "id": "ON-03",
+      "phase": "ime-on",
+      "action": "press-key",
+      "title": "Commit the converted text with Enter",
+      "assertion": "assert",
+      "direction": "ime-on",
+      "readbackMethod": "wm-gettext",
+      "input": { "keys": ["VK_RETURN"], "interKeyDelayMs": 60, "settleMs": 700 },
+      "expected": { "observable": "document-kana", "match": "predicate", "predicate": "kana-present" }
+    },
+    {
+      "id": "ON-04",
+      "phase": "ime-on",
+      "action": "press-key",
+      "title": "Clear the document with backspace",
+      "assertion": "assert",
+      "direction": "ime-on",
+      "readbackMethod": "wm-gettext",
+      "input": { "keys": ["VK_BACK"], "repeat": 12, "interKeyDelayMs": 30, "settleMs": 400 },
+      "expected": { "observable": "document-text", "match": "equals", "value": "" }
+    },
+    {
+      "id": "ON-05",
+      "phase": "ime-on",
+      "action": "type-text",
+      "title": "Type romaji again for the cancel test",
+      "assertion": "record_only",
+      "direction": "ime-on",
+      "readbackMethod": "wm-gettext",
+      "input": { "mode": "vk", "text": "kanaai", "interKeyDelayMs": 60, "settleMs": 500 },
+      "expected": { "observable": "document-text", "match": "true" }
+    },
+    {
+      "id": "ON-06",
+      "phase": "ime-on",
+      "action": "press-key",
+      "title": "Open the candidate list with Space",
+      "assertion": "record_only",
+      "direction": "ime-on",
+      "readbackMethod": "candidate-window-enumeration",
+      "input": { "keys": ["VK_SPACE"], "interKeyDelayMs": 60, "settleMs": 900 },
+      "expected": { "observable": "candidate-window", "match": "true" }
+    },
+    {
+      "id": "ON-07",
+      "phase": "ime-on",
+      "action": "press-key",
+      "title": "Cancel with Escape and require the document to return to its baseline",
+      "assertion": "assert",
+      "direction": "ime-on",
+      "readbackMethod": "wm-gettext",
+      "input": { "keys": ["VK_ESCAPE"], "interKeyDelayMs": 60, "settleMs": 700 },
+      "expected": { "observable": "document-unchanged", "match": "true" },
+      "notes": "The baseline is the document text captured immediately before ON-05. This is the only cancel assertion that is exact rather than approximate."
+    },
+    {
+      "id": "FOC-01",
+      "phase": "focus-transition",
+      "action": "focus-target",
+      "title": "Move focus away from the target",
+      "assertion": "assert",
+      "direction": "ime-on",
+      "readbackMethod": "focus-readback",
+      "input": { "focusTo": "loopback" },
+      "expected": { "observable": "foreground-window", "match": "true" }
+    },
+    {
+      "id": "FOC-02",
+      "phase": "focus-transition",
+      "action": "focus-target",
+      "title": "Move focus back to the target",
+      "assertion": "assert",
+      "direction": "ime-on",
+      "readbackMethod": "focus-readback",
+      "input": { "focusTo": "target" },
+      "expected": { "observable": "foreground-window", "match": "true" }
+    },
+    {
+      "id": "FOC-03",
+      "phase": "focus-transition",
+      "action": "type-text",
+      "title": "Type the canary after the focus round trip",
+      "assertion": "record_only",
+      "direction": "ime-on",
+      "readbackMethod": "wm-gettext",
+      "input": { "mode": "vk", "text": "kanaai", "interKeyDelayMs": 60, "settleMs": 500 },
+      "expected": { "observable": "document-text", "match": "true" }
+    },
+    {
+      "id": "FOC-04",
+      "phase": "focus-transition",
+      "action": "press-key",
+      "title": "Commit after the focus round trip",
+      "assertion": "assert",
+      "direction": "ime-on",
+      "readbackMethod": "wm-gettext",
+      "input": { "keys": ["VK_RETURN"], "interKeyDelayMs": 60, "settleMs": 700 },
+      "expected": { "observable": "document-kana", "match": "predicate", "predicate": "kana-present" }
+    },
+    {
+      "id": "RST-01",
+      "phase": "restart",
+      "action": "close-target",
+      "title": "Close the target process",
+      "assertion": "assert",
+      "direction": "any",
+      "readbackMethod": "focus-readback",
+      "expected": { "observable": "target-alive", "match": "false" }
+    },
+    {
+      "id": "RST-02",
+      "phase": "restart",
+      "action": "launch-target",
+      "title": "Relaunch the target process",
+      "assertion": "assert",
+      "direction": "any",
+      "readbackMethod": "focus-readback",
+      "expected": { "observable": "target-alive", "match": "true" }
+    },
+    {
+      "id": "RST-03",
+      "phase": "restart",
+      "action": "focus-target",
+      "title": "Focus the relaunched target",
+      "assertion": "assert",
+      "direction": "any",
+      "readbackMethod": "focus-readback",
+      "expected": { "observable": "foreground-window", "match": "true" }
+    },
+    {
+      "id": "RST-04",
+      "phase": "restart",
+      "action": "type-text",
+      "title": "Type the canary in the relaunched process",
+      "assertion": "record_only",
+      "direction": "any",
+      "readbackMethod": "wm-gettext",
+      "input": { "mode": "vk", "text": "kanaai", "interKeyDelayMs": 60, "settleMs": 500 },
+      "expected": { "observable": "document-text", "match": "true" }
+    },
+    {
+      "id": "RST-05",
+      "phase": "restart",
+      "action": "press-key",
+      "title": "Commit in the relaunched process",
+      "assertion": "assert",
+      "direction": "any",
+      "readbackMethod": "wm-gettext",
+      "input": { "keys": ["VK_RETURN"], "interKeyDelayMs": 60, "settleMs": 700 },
+      "expected": { "observable": "document-kana", "match": "predicate", "predicate": "kana-present" },
+      "notes": "This document is also what the target reports about itself in its own state file, which OBS-01 reads back through a completely different channel."
+    },
+    {
+      "id": "OBS-01",
+      "phase": "observation",
+      "action": "observe-processes",
+      "title": "Record which runtime processes a real application started",
+      "assertion": "record_only",
+      "direction": "any",
+      "readbackMethod": "process-enumeration",
+      "expected": { "observable": "process-list", "match": "true" },
+      "notes": "Observation only. The presence or absence of a Mozc server or a broker process is reported with its pid and start time; it is not asserted as pass or fail, because a pinned Mozc TIP may legitimately convert in-process."
+    },
+    {
+      "id": "OBS-02",
+      "phase": "observation",
+      "action": "observe-candidates",
+      "title": "Record the final candidate window observation and whether its text is readable",
+      "assertion": "record_only",
+      "direction": "any",
+      "readbackMethod": "candidate-window-enumeration",
+      "expected": { "observable": "candidate-window", "match": "true" },
+      "notes": "The receipt states plainly which readback channels were attempted for candidate text and why they failed, rather than guessing at the contents."
+    },
+    {
+      "id": "CLN-01",
+      "phase": "cleanup",
+      "action": "cleanup",
+      "title": "Close only what the harness launched",
+      "assertion": "assert",
+      "direction": "any",
+      "readbackMethod": "focus-readback",
+      "expected": { "observable": "target-alive", "match": "false" },
+      "notes": "Cleanup is driven by a ledger of handles and pids, and a window is only closed when its class name matches the one the harness registered."
+    },
+    {
+      "id": "OBS-03",
+      "phase": "observation",
+      "action": "observe-environment",
+      "title": "Read the target's own account of itself, written from inside the target process",
+      "assertion": "assert",
+      "direction": "any",
+      "readbackMethod": "target-state-file",
+      "expected": { "observable": "document-text", "match": "contains", "value": "かなあい" },
+      "notes": "The strongest single piece of evidence in the run: the target process recorded its own text and its own loaded-module list at exit, with no window message and no UI Automation involved."
+    },
+    {
+      "id": "CLN-02",
+      "phase": "cleanup",
+      "action": "cleanup",
+      "title": "Run cleanup a second time to prove it is idempotent",
+      "assertion": "assert",
+      "direction": "any",
+      "readbackMethod": "focus-readback",
+      "expected": { "observable": "target-alive", "match": "false" },
+      "notes": "The second pass must resolve to already-clean or verify-absent for every ledger entry. Any other outcome is a cleanup defect and is reported as one."
+    }
+  ]
+}

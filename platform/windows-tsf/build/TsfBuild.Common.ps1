@@ -104,7 +104,8 @@ function Get-TsfMozcOverlayFingerprint {
         '0002-kanai-tsf-identity.patch',
         '0003-session-generation-binding.patch',
         '0004-windows-python-toolchain.patch',
-        '0005-windows-runtime-identity.patch'
+        '0005-windows-runtime-identity.patch',
+        '0006-windows-installer-runtime-path.patch'
     )) {
         $patchPath = Join-Path $patchRoot $patchName
         if (-not (Test-Path -LiteralPath $patchPath -PathType Leaf)) {
@@ -908,7 +909,14 @@ function Get-TsfRelativePath {
 
 function Get-TsfSha256 {
     param([Parameter(Mandatory = $true)][string]$Path)
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    $stream = [System.IO.File]::OpenRead($Path)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
 }
 
 function Get-TsfTreeFingerprint {

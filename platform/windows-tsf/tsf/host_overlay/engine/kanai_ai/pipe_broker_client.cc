@@ -19,6 +19,7 @@
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <span>
 #include <string>
 #include <string_view>
@@ -77,6 +78,81 @@ class UniqueHandle {
  private:
   HANDLE handle_ = nullptr;
 };
+
+std::wstring SiblingBrokerImage() {
+  std::vector<wchar_t> image(32'768);
+  const DWORD length = ::GetModuleFileNameW(nullptr, image.data(),
+                                           static_cast<DWORD>(image.size()));
+  if (length == 0 || length >= image.size()) return {};
+  std::wstring path(image.data(), length);
+  const auto separator = path.find_last_of(L"\\/");
+  if (separator == std::wstring::npos) return {};
+  return path.substr(0, separator + 1) + L"kanai-broker.exe";
+}
+
+// Only called by the optional transport worker. Keep the first request
+// fail-open: model startup is never awaited, and retries are rate-limited.
+void MaybeStartSiblingBroker() {
+  // Explicit lab endpoints must never accidentally launch the installed model.
+  if (::GetEnvironmentVariableW(L"KANAI_AI_TSF_PIPE", nullptr, 0) != 0 ||
+      ::GetEnvironmentVariableW(L"KANAI_AI_TSF_SERVER_IMAGE", nullptr, 0) != 0) {
+    return;
+  }
+  struct Launcher {
+    std::mutex mutex;
+    Clock::time_point next_attempt{};
+    UniqueHandle ownership;
+    UniqueHandle job;
+    UniqueHandle process;
+  };
+  static Launcher launcher;
+  std::lock_guard<std::mutex> lock(launcher.mutex);
+  if (Clock::now() < launcher.next_attempt) return;
+  launcher.next_attempt = Clock::now() + std::chrono::seconds(5);
+  if (launcher.process.valid() &&
+      ::WaitForSingleObject(launcher.process.get(), 0) == WAIT_TIMEOUT) return;
+  launcher.process.reset();
+  launcher.job.reset();
+  if (!launcher.ownership.valid()) {
+    DWORD session = 0;
+    if (!::ProcessIdToSessionId(::GetCurrentProcessId(), &session)) return;
+    const std::wstring name = L"Local\\KanaAI.BrokerLauncher.v1." +
+                              std::to_wstring(session);
+    // Object existence is a process-lifetime lease, not thread-owned locking.
+    UniqueHandle ownership(::CreateMutexW(nullptr, FALSE, name.c_str()));
+    const DWORD error = ::GetLastError();
+    if (!ownership.valid() || error == ERROR_ALREADY_EXISTS) return;
+    launcher.ownership = std::move(ownership);
+  }
+  const std::wstring executable = SiblingBrokerImage();
+  if (executable.empty()) return;
+  UniqueHandle job(::CreateJobObjectW(nullptr, nullptr));
+  JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits = {};
+  limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+  if (!job.valid() || !::SetInformationJobObject(
+          job.get(), JobObjectExtendedLimitInformation, &limits, sizeof(limits))) {
+    return;
+  }
+  std::wstring command = L"\"" + executable + L"\"";
+  const std::wstring directory = executable.substr(0, executable.find_last_of(L"\\/"));
+  STARTUPINFOW startup = {};
+  startup.cb = sizeof(startup);
+  startup.dwFlags = STARTF_USESHOWWINDOW;
+  startup.wShowWindow = SW_HIDE;
+  PROCESS_INFORMATION child = {};
+  if (!::CreateProcessW(executable.c_str(), command.data(), nullptr, nullptr,
+                        FALSE, CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr,
+                        directory.c_str(), &startup, &child)) return;
+  UniqueHandle process(child.hProcess);
+  UniqueHandle thread(child.hThread);
+  if (!::AssignProcessToJobObject(job.get(), process.get()) ||
+      ::ResumeThread(thread.get()) == static_cast<DWORD>(-1)) {
+    ::TerminateProcess(process.get(), 1);
+    return;
+  }
+  launcher.job = std::move(job);
+  launcher.process = std::move(process);
+}
 
 std::wstring ReadConfiguredPipeName() {
   std::wstring default_name;
@@ -142,12 +218,15 @@ bool CompleteOverlapped(HANDLE handle, HANDLE event, OVERLAPPED* overlapped,
 }
 
 bool ConnectPipe(const std::wstring& pipe_name, Clock::time_point deadline,
-                 UniqueHandle* pipe) {
+                 UniqueHandle* pipe, bool allow_start = false) {
   if (pipe == nullptr || pipe_name.empty() ||
       RemainingMilliseconds(deadline) == 0) {
     return false;
   }
   if (!::WaitNamedPipeW(pipe_name.c_str(), RemainingMilliseconds(deadline))) {
+    if (::GetLastError() == ERROR_FILE_NOT_FOUND && allow_start) {
+      MaybeStartSiblingBroker();
+    }
     return false;
   }
   UniqueHandle handle(::CreateFileW(
@@ -305,14 +384,10 @@ bool VerifyServerImage(HANDLE pipe) {
                                   TRUE) == CSTR_EQUAL;
   }
 
-  const std::size_t separator = image.find_last_of(L"\\/");
-  const std::wstring basename = separator == std::wstring::npos
-                                    ? image
-                                    : image.substr(separator + 1);
-  return ::CompareStringOrdinal(basename.c_str(), -1, L"kanai-broker.exe", -1,
-                                TRUE) == CSTR_EQUAL ||
-         ::CompareStringOrdinal(basename.c_str(), -1, L"kanai_broker.exe", -1,
-                                TRUE) == CSTR_EQUAL;
+  const std::wstring expected = SiblingBrokerImage();
+  return !expected.empty() &&
+         ::CompareStringOrdinal(image.c_str(), -1, expected.c_str(), -1,
+                                 TRUE) == CSTR_EQUAL;
 }
 
 bool Authenticate(HANDLE pipe, HANDLE event, const std::string& client_id,
@@ -384,7 +459,7 @@ bool PipeBrokerClient::Rerank(const RerankRequest& request,
   const auto exchange = [&](const std::string& payload,
                             std::string* response_json) {
     UniqueHandle pipe;
-    if (!ConnectPipe(pipe_name_, deadline, &pipe)) {
+    if (!ConnectPipe(pipe_name_, deadline, &pipe, true)) {
       return false;
     }
     UniqueHandle event(::CreateEventW(nullptr, TRUE, FALSE, nullptr));

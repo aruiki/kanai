@@ -1,3 +1,39 @@
+# 配布段階の運用規約（2026-09-25更新）
+
+ユーザーのベータ公開・ワンクリック導入の依頼に合わせ、配布段階を整理する。
+この節は本ファイルの過去のphase表現より優先する。最終製品条件はGOAL.mdに保持する。
+
+## ビルド候補
+
+Setup.exe/MSI生成、静的検査、単体テストまでの成果物。公開済みベータとは呼ばない。
+GitHubのdraftは準備用に使用できるが、公開したと報告しない。
+
+## GitHub prerelease（ベータ）
+
+- 対応OS/CPU/アプリ、動作する機能、未実装機能をリリースノートと同梱文書へ明記する。
+- 同じ候補を実際にインストールし、TSF登録、かな入力、漢字変換、候補表示、確定・取消、フォーカス切替、アンインストールを確認する。
+- 初回導入と再導入の失敗・巻き戻しを確認する。公開範囲に該当する致命的な入力障害やデータ漏えいが残る候補は公開しない。
+- ワンクリックとはSetup.exe起動後にビルド・手動コピー・コマンド操作を要しないこと。UACや再起動が必要なら説明する。
+- AI非搭載の場合はその旨を明示し、AI搭載版として宣伝しない。先行版の機能範囲はユーザーの指示と一致させる。
+- 署名済みを優先する。未署名ベータは署名状態とWindowsでの表示を明記し、SHA-256、対応ソース、ライセンス、既知制限を添える。署名検証やOS保護の無効化を利用手順にしない。
+- 対象コミット、パッチ、依存関係、実際の配布ファイルのハッシュを固定する。GitHubのprereleaseとして公開する。
+- ベータの公開はGOAL全条件の達成を意味せず、`.goal-complete` は作成しない。
+
+## 完成版
+
+GOAL.mdの全条件、署名、実モデル品質、プライバシー、対応環境、独立verifierによる判定を必要とする。
+ベータを定義したことで完成版の要件を削除・PASS扱いしない。
+
+## 今回の方針変更の理由と影響
+
+従来は「ベータ」という名称にも製品完成の全条件を要求し、段階的な配布依頼と衝突していた。
+今後はベータ公開条件と完成条件を別々に評価する。未検証のインストーラーを公開する許可ではない。
+ビルド担当による完成宣言の禁止、実測による検証、Mozcフォールバックと入力保護は継続する。
+
+---
+
+以下は最終的に目指す機能範囲と過去のphase設計。現在の公開判断には上記の段階別規約を使用する。
+
 # KanaAI TSF beta and release contract
 
 ## Product decision
@@ -109,7 +145,7 @@ Before publishing a Windows beta:
    pass or are explicitly documented as unsupported.
 5. A broker failure and model timeout both fall back safely without losing the
    composition or committing text unexpectedly.
-6. The package contains no API keys, user profiles, model weights, or text.
+6. The package contains no API keys, user profiles, or user text. If the user-approved AI bundle is included, only the pinned, license-approved model/runtime and required notices are allowed; every model/runtime byte, digest, license, and SBOM entry must be recorded.
 7. External SHA-256, SBOM, provenance, and signing status are published
    separately and honestly.
 8. The public page and installer describe the artifact as a TSF IME, not as a

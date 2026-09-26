@@ -1,96 +1,18 @@
-# KanaAI Phase 1 progress
+# 開発状況の読み方
 
-**Last updated:** 2026-09-25
-**Phase 1:** native Windows TSF Local AI Quality Alpha
-**Overall technical progress:** **75%**
-**Public beta readiness:** **0%** until a real TSF TIP is built, registered, and tested in desktop applications.
-**Niche local-AI preview readiness:** **40%** — DLL/build/load and dry-run gates pass; real registration and one-host input smoke remain.
+最新の状態は[STATE.md](../STATE.md)冒頭、製品完成条件は[GOAL.md](../GOAL.md)、配布条件は[リリース契約](PRODUCT_RELEASE_CONTRACT.md)を参照する。
 
-## Short-term product goal
+以前の75%などの数値は、未登録のDLLを登録完了相当へ加点しており、現在の完成率として利用しない。
+進捗は次の観測結果で管理する。
 
-The immediate goal is a practical AI-equipped model based on Mozc, not a
-claim of ATOK binary or data parity. The first usable target is a Windows x64
-TSF preview that:
+| 項目 | 確認状態 |
+|---|---|
+| x86/x64 TIP、変換サーバー、候補表示、Mozc broker | Windowsでビルド済み |
+| Setup.exe / MSI | 未署名の**Mozc-only候補B1**を`.local/installer-beta-mozc`に生成済み（MSI 18,427,904 bytes / SHA-256 `1F040CE2…FA27363F`、AI payload 0件）。旧candidateのMSI実機installは終了値0。B1は未導入 |
+| 本物のTSF登録・アプリ入力 | x64/x86 COM登録とJapanese profileを確認。operatorは旧candidateで文字入力・変換・かな切替成功を報告（partial）。候補・確定・取消・focus・restart・削除再導入は未検証 |
+| AI接続単体テスト | 7件×100回成功。実モデルの証拠ではない |
+| 同梱ローカルAIモデル | Qwen2.5-1.5B + llama.cpp pairingをA2実装候補として承認。llama.cpp runtime archiveとQwen weightは取得・hash検証、runtime 51-entry layoutと実model staging receiptも確認。KanaAI install/Windows実行、model quality、transitive notice/SBOMは未検証 |
+| 公開ベータ | 未公開。**ユーザー決定D-1（2026-09-26）により公開範囲は「AI無効のMozcベータ」**（旧「AI同梱版のみ」は上書き）。署名はD-3により必須ではない。公開サイトはD-5により作らず、公表面はREADMEとRelease bodyのみ |
+| 製品完成 | 未完了 |
 
-- keeps Mozc conversion, composition, candidate UI, and commit authoritative;
-- adds bounded local AI reranking, prediction, repair, and learning;
-- runs model work off the blocking key path and falls back to Mozc on timeout,
-  absence, malformed output, or stale generation; and
-- is measured against a pinned Mozc baseline for top-k quality, MRR, p95
-  latency, acceptance, fallback, and recovery.
-
-The first preview is intentionally narrow: Windows 10/11 x64, one tested
-host application, optional local AI, and MozcOnly fallback. It is not a
-commercial support or ATOK-parity claim.
-
-Progress is gate-based, not a count of source lines. A source skeleton, a
-compile-only DLL, or a Workbench does not count as a usable beta.
-
-## Gates
-
-| Gate | Weight | Current | Evidence / next condition |
-|---|---:|---:|---|
-| Product contract and TSF/AI boundaries | 10% | 10% | Phase 1 is explicitly native TSF + bounded local AI |
-| Pinned Mozc Windows x64 baseline | 20% | 20% | `//win32/tip:mozc_tip64` built successfully; PE32+ x64 DLL and SHA-256 recorded |
-| Native TSF integration and registration | 20% | 20% | Patched server/TIP artifacts build and DLL load; PE-valid registration dry-run passes; real API/app tests remain |
-| Rust broker and local AI quality path | 20% | 20% | Core fast policy/cache, broker framing/auth/generation, and async enhancement contracts pass; TSF wiring remains |
-| Evaluation, recovery, and security tests | 20% | 5% | Offline quality/fallback harness exists; real TSF/app and model evaluation remain |
-| Distribution and user-facing release contract | 10% | 0% | No artifact exists; packaging follows native test gates |
-| **Total technical progress** | **100%** | **75%** | Next milestone: real Windows registration and application input smoke |
-
-## Latest verified build evidence
-
-- Target: `//win32/tip:mozc_tip64`
-- Host: Windows x64, Visual Studio 2022 MSVC 19.44, Bazel 9.0.2
-- Result: successful upstream pinned build, 802 actions, 156 seconds
-- Artifact type: PE32+ DLL, x86-64
-- SHA-256: `e1c60179607da5c135e1eac0bde6ffe24d61bad31349086cf86ffe896b92452f`
-- KanaAI patched `mozc_server_win`: build completed successfully, 1270 actions, 304.9 seconds
-- Patched server artifact: PE32+ x86-64 executable
-- Patched server SHA-256: `e57a2df3c6f3cd6a518f38aafede130ea13129deb6667286af98b23617b26018`
-- Registration/application smoke: DLL `LoadLibraryW` passed; PE32+ x64 and dependency dump passed
-- Registration projection: x64 per-user dry-run passed with `TipDllValid=true`; no registry write performed
-- Real `ITfInputProcessorProfiles::Register` probe: returned `E_FAIL` under the current non-admin WSL/Windows session; no keys retained
-- A temporary KanaAI-GUID identity build also returned the same result, isolating the blocker to TSF registration authority/host policy rather than the DLL loader
-- Remaining gate: approved KanaAI identity/resource patch, elevated or supported per-user TSF API/profile registration, and desktop input tests
-
-
-The current two-hour target is a **Windows x64 technical alpha**, not a public
-beta claim. The time-boxed critical path is:
-
-- **T+0–30 min:** finish the pinned Mozc Windows x64 build and record the
-  concrete artifact or blocker;
-- **T+30–60 min:** load/register the TIP in a controlled Windows smoke host;
-- **T+60–90 min:** connect the Rust bounded-quality hook with Mozc fallback;
-- **T+90–120 min:** run preedit/candidate/commit, timeout, and unload smoke
-  tests, then publish the evidence and remaining blockers.
-
-If the TSF DLL cannot be built and exercised in this environment, the result
-is reported as a blocker rather than being called a beta. x86, full UIA,
-installer/signing, exhaustive Office/Edge tests, and ATOK-level quality remain
-post-checkpoint gates.
-## Reporting rule
-
-Development follows [`DEVELOPMENT_DIRECTIVE.md`](DEVELOPMENT_DIRECTIVE.md):
-full-power continuous work, direct integration of completed agent results, and
-no source-only success claims. Progress updates are posted at meaningful
-checkpoints, not on a false real-time timer. Each update includes the
-percentage, evidence, blockers, and next action. Percentages separate technical
-progress from release readiness so a source scaffold cannot be mistaken for a
-usable IME.
-
-## After Phase 1
-
-Phase 1 completion is the start of the quality loop, not the end of the
-project. The continuing loop is:
-
-1. collect Mozc baseline and KanaAI quality metrics;
-2. analyze misses and regressions by composition, segmentation, candidate,
-   learning, and latency class;
-3. improve the local ranker/policy or permitted Mozc configuration;
-4. rerun the fixed evaluation and real-application tests; and
-5. promote only measured improvements.
-
-No ATOK proprietary data or implementation is used. The long-term quality
-reference is a mature Japanese IME experience, evaluated against reproducible
-KanaAI baselines.
+この表は実行証拠の代用にならない。最新コマンド、失敗と次の作業はSTATE.mdに記録する。

@@ -2,14 +2,20 @@
 //!
 //! The Unix listener is a reproducible integration endpoint for WSL and CI;
 //! Windows uses the same framed/authenticated dispatcher through the native
-//! pipe adapter. The listener never enables a model by default: without an
-//! explicit local policy it returns the Mozc baseline.
+//! pipe adapter. Windows loads the optional installed bundle in the background;
+//! the listener continues returning the Mozc baseline while it starts.
 
+#[cfg(any(windows, test))]
+#[path = "kanai-broker/installed_ai.rs"]
+mod installed_ai;
+
+#[cfg(unix)]
 use kanai_broker::{
     EnhancementBackend, EnhancementError, EnhancementPolicy, LocalOpenAiBackend, ProviderLocality,
     RerankOutput, SemanticAssistOutput,
 };
 
+#[cfg(unix)]
 mod disabled_backend {
     use async_trait::async_trait;
     use kanai_broker::{
@@ -51,11 +57,13 @@ mod disabled_backend {
     }
 }
 
+#[cfg(unix)]
 enum ConfiguredBackend {
     Disabled(disabled_backend::DefaultEnhancementBackend),
     Local(LocalOpenAiBackend),
 }
 
+#[cfg(unix)]
 #[async_trait::async_trait]
 impl EnhancementBackend for ConfiguredBackend {
     fn provider_id(&self) -> &str {
@@ -95,6 +103,7 @@ impl EnhancementBackend for ConfiguredBackend {
     }
 }
 
+#[cfg(unix)]
 fn configured_backend() -> ConfiguredBackend {
     if matches!(
         std::env::var("KANAI_BROKER_ENHANCEMENT").as_deref(),
@@ -122,8 +131,6 @@ mod unix_listener {
         SessionBroker, SharedSecret, SharedSecretAuthenticator, serve_authenticated_request,
     };
     use kanai_mozc::MozcBridgeConfig;
-
-    use super::configured_backend;
 
     pub async fn run() -> Result<(), Box<dyn Error>> {
         let socket = socket_path();
@@ -154,7 +161,12 @@ mod unix_listener {
             },
         ));
         let policy = super::enhancement_policy();
-        let queue = Arc::new(EnhancementQueue::start(configured_backend(), policy, 4, 2)?);
+        let queue = Arc::new(EnhancementQueue::start(
+            super::configured_backend(),
+            policy,
+            4,
+            2,
+        )?);
         let listener = UnixListener::bind(&socket)?;
         fs::set_permissions(&socket, fs::Permissions::from_mode(0o600))?;
         println!("kanai-broker listening on {}", socket.display());
@@ -222,8 +234,6 @@ mod windows_listener {
     use windows_sys::Win32::System::RemoteDesktop::ProcessIdToSessionId;
     use windows_sys::Win32::System::Threading::GetCurrentProcessId;
 
-    use super::configured_backend;
-
     pub async fn run() -> Result<(), Box<dyn Error>> {
         let broker = Arc::new(SessionBroker::with_config(
             MozcSessionBackend::new(MozcBridgeConfig::from_environment()),
@@ -232,15 +242,22 @@ mod windows_listener {
                 ..BrokerConfig::default()
             },
         ));
-        let policy = super::enhancement_policy();
-        let queue = Arc::new(EnhancementQueue::start(configured_backend(), policy, 4, 2)?);
+        let policy =
+            super::installed_ai::policy(std::env::var("KANAI_BROKER_ENHANCEMENT").ok().as_deref());
+        let backend = super::installed_ai::SwitchableBackend::default();
+        let queue = Arc::new(EnhancementQueue::start(backend.clone(), policy, 4, 2)?);
         let pipe_name = std::env::var("KANAI_AI_TSF_PIPE")
             .unwrap_or_else(|_| format!("\\\\.\\pipe\\KanaAI.TsfBroker.v1.{}", session_id()));
         println!("kanai-broker listening on {pipe_name}");
-        serve_named_pipe(pipe_name, broker, queue, |handle| {
-            Arc::new(WindowsPeerAuthenticator::new(handle, "KanaAI.MozcServer"))
-        })
-        .await?;
+        let ai = super::installed_ai::BackgroundAi::start(backend, policy);
+        let result = tokio::select! {
+            result = serve_named_pipe(pipe_name, broker, queue, |handle| {
+                Arc::new(WindowsPeerAuthenticator::new(handle, "KanaAI.MozcServer"))
+            }) => result,
+            result = tokio::signal::ctrl_c() => result,
+        };
+        ai.shutdown().await;
+        result?;
         Ok(())
     }
 
@@ -251,6 +268,7 @@ mod windows_listener {
     }
 }
 
+#[cfg(unix)]
 fn enhancement_policy() -> EnhancementPolicy {
     match std::env::var("KANAI_BROKER_ENHANCEMENT").as_deref() {
         Ok("local") | Ok("local-only") => EnhancementPolicy::LocalQualityOnly,

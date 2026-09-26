@@ -1,26 +1,32 @@
 {
   "schemaVersion": 1,
+  "status": "approved-implementation-candidate-not-staged",
   "runtime": "llama.cpp OpenAI-compatible server",
   "defaultEndpoint": "http://127.0.0.1:8080/v1",
+  "endpointPolicy": "development example only; production uses a validated random loopback port and per-process authentication",
   "profiles": [
     {
-      "id": "tiny",
-      "model": "Qwen3-0.6B",
+      "id": "qwen2.5-1.5b-q4",
+      "model": "Qwen2.5-1.5B",
+      "repository": "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+      "revision": "91cad51170dc346986eccefdc2dd33a9da36ead9",
+      "file": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
       "quantization": "Q4_K_M",
-      "role": "experimental short ambiguity/repair"
-    },
-    {
-      "id": "compact",
-      "model": "Qwen3-1.7B",
-      "quantization": "Q4_K_M",
-      "role": "recommended local semantic reranker and writing assist"
-    },
-    {
-      "id": "balanced",
-      "model": "Qwen3-4B",
-      "quantization": "Q4_K_M",
-      "role": "explicit long-form assist"
+      "bytes": 1117320736,
+      "sha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+      "license": "Apache-2.0",
+      "role": "bounded local semantic reranking; never a synchronous key-path dependency"
     }
   ],
-  "notice": "Model weights are not bundled. Verify the model and GGUF license, revision, and SHA-256 before redistribution."
+  "runtimeIdentity": {
+    "repository": "ggml-org/llama.cpp",
+    "release": "b11146",
+    "revision": "7fe450e19305b828c199d602c23a8337aaa1f03b",
+    "asset": "llama-b11146-bin-win-cpu-x64.zip",
+    "bytes": 18560055,
+    "sha256": "14cf1303ca9ac3abd94816850532f9f9a69ac66fbaca3776fc6f9061c2fac1d1",
+    "license": "MIT"
+  },
+  "sourceManifest": "platform/windows-tsf/ai-runtime/manifest-v1.json",
+  "notice": "The Qwen weight is not bundled in the current AI-non-bundled product. Use the pinned manifest, license notices, SBOM, and verified staging receipt before redistribution."
 }

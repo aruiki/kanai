@@ -127,7 +127,11 @@ impl WindowsPeerAuthenticator {
         let client_id = client_id.into();
         let allowed_client_image = env::var("KANAI_AI_TSF_CLIENT_IMAGE")
             .ok()
-            .filter(|value| !value.trim().is_empty());
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| {
+                let broker = process_image_name(unsafe { GetCurrentProcessId() })?;
+                sibling_client_image(&broker)
+            });
         Self {
             pipe: pipe as usize,
             client_id,
@@ -380,8 +384,23 @@ fn client_process_image(pipe: HANDLE) -> Option<String> {
     process_image_name(pid)
 }
 
-fn image_basename(path: &str) -> &str {
-    path.rsplit(['\\', '/']).next().unwrap_or(path)
+/// Installed file name of the Mozc session server that hosts the TSF client.
+///
+/// This must stay equal to the name the installer actually writes next to
+/// `kanai-broker.exe`. `scripts/build-windows-installer.ps1` declares
+/// `mozc_server.exe` in its PE payload table and emits the `RuntimeFiles`
+/// component group into `INSTALLFOLDER`, so the broker and the server share
+/// one directory. The upstream Bazel target name (`mozc_server_win`) is *not*
+/// the installed name: assuming it here silently rejects every real TSF
+/// connection, because this allowlist gates the whole authenticated pipe.
+const MOZC_CLIENT_IMAGE_FILE_NAME: &str = "mozc_server.exe";
+
+fn sibling_client_image(broker: &str) -> Option<String> {
+    let separator = broker.rfind(['\\', '/'])?;
+    Some(format!(
+        "{}{MOZC_CLIENT_IMAGE_FILE_NAME}",
+        &broker[..=separator]
+    ))
 }
 
 fn normalized_image_path(path: &str) -> String {
@@ -391,16 +410,13 @@ fn normalized_image_path(path: &str) -> String {
 }
 
 fn allowed_client_image(image: &str, client_id: &str, configured_image: Option<&str>) -> bool {
-    if let Some(expected) = configured_image {
-        return normalized_image_path(image) == normalized_image_path(expected);
-    }
     if client_id != "KanaAI.MozcServer" {
         return false;
     }
-    matches!(
-        image_basename(image).to_ascii_lowercase().as_str(),
-        "mozc_server_win.exe" | "mozc_server.exe" | "kanai_mozc_bridge.exe"
-    )
+    if let Some(expected) = configured_image {
+        return normalized_image_path(image) == normalized_image_path(expected);
+    }
+    false
 }
 
 fn same_windows_session(pipe: HANDLE) -> bool {
@@ -482,12 +498,38 @@ fn token_user(token: HANDLE) -> Option<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{allowed_client_image, image_basename, normalized_image_path};
+    use super::{
+        MOZC_CLIENT_IMAGE_FILE_NAME, allowed_client_image, normalized_image_path,
+        sibling_client_image,
+    };
+
+    /// Guards the installed layout, not just the allowlist logic. The installed
+    /// Mozc session server is `mozc_server.exe` in the same directory as
+    /// `kanai-broker.exe`; `scripts/build-windows-installer.ps1` lists that exact
+    /// name in its PE payload table and installs the `RuntimeFiles` group into
+    /// `INSTALLFOLDER`. A regression test that assumed the upstream Bazel target
+    /// name `mozc_server_win.exe` passed while rejecting every real connection,
+    /// so the name is asserted against the installer's spelling here.
+    #[test]
+    fn installed_client_image_name_matches_the_installer_payload() {
+        assert_eq!(MOZC_CLIENT_IMAGE_FILE_NAME, "mozc_server.exe");
+    }
 
     #[test]
-    fn image_allowlist_accepts_only_known_mozc_host_names_or_exact_override() {
+    fn image_allowlist_requires_exact_sibling_or_explicit_override() {
+        let expected = sibling_client_image(r"C:\Program Files\KanaAI\kanai-broker.exe");
         assert!(allowed_client_image(
-            r"C:\Program Files\KanaAI\mozc_server_win.exe",
+            r"C:\Program Files\KanaAI\mozc_server.exe",
+            "KanaAI.MozcServer",
+            expected.as_deref(),
+        ));
+        assert!(!allowed_client_image(
+            r"C:\Temp\mozc_server.exe",
+            "KanaAI.MozcServer",
+            expected.as_deref(),
+        ));
+        assert!(!allowed_client_image(
+            r"C:\Program Files\KanaAI\mozc_server.exe",
             "KanaAI.MozcServer",
             None,
         ));
@@ -495,6 +537,13 @@ mod tests {
             r"C:\Temp\notepad.exe",
             "KanaAI.MozcServer",
             None,
+        ));
+        // The upstream Bazel target name is not the installed file name and
+        // must not be accepted by the sibling allowlist.
+        assert!(!allowed_client_image(
+            r"C:\Program Files\KanaAI\mozc_server_win.exe",
+            "KanaAI.MozcServer",
+            expected.as_deref(),
         ));
         assert!(allowed_client_image(
             r"C:\KanaAI\custom-host.exe",
@@ -512,9 +561,10 @@ mod tests {
             Some(r"C:\KanaAI\custom-host.exe"),
         ));
         assert_eq!(
-            image_basename(r"C:\KanaAI\mozc_server_win.exe"),
-            "mozc_server_win.exe"
+            sibling_client_image(r"C:\KanaAI\kanai-broker.exe"),
+            Some(r"C:\KanaAI\mozc_server.exe".to_owned())
         );
+        assert_eq!(sibling_client_image("kanai-broker.exe"), None);
         assert_eq!(normalized_image_path(r"C:\KanaAI\"), r"c:\kanaai");
     }
 }

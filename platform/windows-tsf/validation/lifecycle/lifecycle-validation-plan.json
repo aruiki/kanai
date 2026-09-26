@@ -1,0 +1,457 @@
+{
+  "schemaVersion": 1,
+  "planId": "kanai-installer-lifecycle-v1",
+  "title": "KanaAI per-machine installer lifecycle: install, register, uninstall, reinstall, upgrade, downgrade",
+  "purpose": "Prove, on a real machine, that one fixed-hash KanaAI candidate installs from Setup.exe and from its MSI, actually registers a TSF text service and language profile, uninstalls without leftovers, reinstalls over the same product code, and behaves as declared on upgrade and downgrade. Every asserted step is decided by an independently observed machine state, never by a command exit code alone.",
+  "verificationStage": "W2",
+  "w2Status": "UNVERIFIED",
+  "w2StatusNote": "No lifecycle run has been performed. This plan and its harness are preparation only. A W2 claim may only come from a receipt written by an -Execute run on a real machine.",
+  "derivedFrom": {
+    "package": "platform/windows-tsf/installer/package/KanaAI.wxs",
+    "builder": "scripts/build-windows-installer.ps1",
+    "launcher": "platform/windows-tsf/installer/package/Setup.cs",
+    "launcherManifest": "platform/windows-tsf/installer/package/Setup.manifest",
+    "registrationMetadata": "platform/windows-tsf/registration/registration.json",
+    "registrationSlice": "platform/windows-tsf/installer/Common-TsfRegistration.ps1",
+    "defectThisPlanExistsToPrevent": "Recording a Windows Installer exit code as if it were proof that the product was installed, registered, or cleanly removed.",
+    "knownPriorDefect": "The desktop-input stage W1 recorded SendInput API results as if they were delivered input, and never observed a Mozc module in the target. This harness is built so the same class of mistake cannot pass here: the plan validator refuses a phase whose only required assertion is command-exit-code."
+  },
+  "pinnedIdentity": {
+    "source": "platform/windows-tsf/installer/package/KanaAI.wxs",
+    "sourceLines": "3-5",
+    "upgradeCode": "{381B4CC9-ABAA-4AB2-9DC8-FCA54CE3B964}",
+    "packageName": "KanaAI Development Preview",
+    "manufacturer": "KanaAI Project",
+    "language": "1041",
+    "scope": "perMachine",
+    "installerVersion": "500",
+    "platform": "x64",
+    "upgradePolicy": {
+      "element": "MajorUpgrade",
+      "schedule": "afterInstallInitialize",
+      "downgradeErrorMessagePresent": true,
+      "declaredForwardUpgrade": "A newer package with the same UpgradeCode removes the installed older product after InstallInitialize, so the product code changes and the old product code is gone.",
+      "declaredDowngrade": "A DowngradeErrorMessage is set, so installing an older package over a newer one is refused by the Windows Installer with error 1638 and the installed product is left unchanged.",
+      "note": "This is the behaviour declared in the package source. It is a claim about the source, not an observation. Only the downgrade-refused phase, on a real machine, can turn it into an observation, and it is the only phase that asserts it."
+    },
+    "installFolder": {
+      "directoryId": "INSTALLFOLDER",
+      "name": "KanaAI",
+      "parentDirectoryId": "ProgramFilesFolder",
+      "leaf": "KanaAI",
+      "assertionPolicy": "leaf-only-before-install, full-observed-path-after-install",
+      "note": "The plan asserts only the directory leaf before the install. The absolute root is read back from the Windows Installer after the install (ProductInfo InstallLocation) and is compared with the path the candidate's own Directory table declares. The package is built per-machine with 'wix build -arch x64', for which ProgramFilesFolder is the 64-bit Program Files, but this harness records the observed path and never asserts a hand-written guess about it."
+    }
+  },
+  "registrationIdentity": {
+    "source": "platform/windows-tsf/registration/registration.json and platform/windows-tsf/installer/Common-TsfRegistration.ps1",
+    "textServiceClsid": "{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}",
+    "languageProfileGuid": "{F3C2B7A1-6D54-4E8B-9A10-2C7D8E9F0A12}",
+    "languageSegment": "0x00000411",
+    "languageId": 1041,
+    "profileName": "0x0411:{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}{F3C2B7A1-6D54-4E8B-9A10-2C7D8E9F0A12}",
+    "machineTextServiceRoot": "SOFTWARE\\Microsoft\\CTF\\TIP",
+    "machineComRoot": "SOFTWARE\\Classes\\CLSID",
+    "profileSubkey": "LanguageProfile",
+    "registryView": "Registry64",
+    "identityApprovedInSourceTree": false,
+    "identityNote": "platform/windows-tsf/registration/registration.json still records registrationIdentity.identityApproved = false. That is a source-tree readiness gate for the registration slice; it is recorded here as a fact and is not asserted as a lifecycle outcome.",
+    "registrationRule": "The Windows Installer product state is the authority on whether the product is installed. The registry keys are corroborating observation only, and a key with no real file behind its InProcServer32 is reported as a failure, not as a registration."
+  },
+  "productExecutables": [
+    "mozc_server.exe",
+    "mozc_broker.exe",
+    "mozc_renderer.exe",
+    "kanai-broker.exe",
+    "llama-server.exe"
+  ],
+  "exitCodeSemantics": {
+    "note": "The harness has a documented interpretation for every Windows Installer exit code it accepts. An exit code outside that table is a failure, not a pass.",
+    "acceptedForSuccessfulInstallOrUninstall": "0,3010,1641,3011",
+    "expectedForRefusedDowngrade": "1638",
+    "refusedCodes": [1618, 1625, 1633, 1639, 1603, 1604, 1602, 1605],
+    "refusedCodeNote": "These are not tolerated silently. Each one fails the phase, and the receipt records the code and its meaning."
+  },
+  "phases": [
+    {
+      "id": "PF-01",
+      "name": "preflight",
+      "title": "Observe the machine before the harness touches anything",
+      "destructive": false,
+      "command": null,
+      "asserts": [
+        { "check": "product-state", "expect": "absent", "required": true, "note": "the candidate product code is not already installed; a clean-install baseline is impossible otherwise" },
+        { "check": "registration-absent", "expect": "true", "required": true, "note": "no KanaAI TSF registration exists on this machine yet" },
+        { "check": "install-directory", "expect": "absent", "required": true, "note": "the install directory the candidate declares does not exist yet" },
+        { "check": "no-orphan-processes", "expect": "true", "required": false, "note": "recorded, not asserted: a pre-existing KanaAI process is a baseline fact, not a run failure" }
+      ],
+      "proves": [
+        "The Windows Installer reports the candidate product code as not installed.",
+        "The KanaAI TIP, language profile and COM keys are absent.",
+        "The install directory declared by the candidate does not exist.",
+        "The environment this run would modify is recorded before any modification."
+      ],
+      "cannotProve": [
+        "That the machine has no other problems.",
+        "That the candidate can be installed at all."
+      ]
+    },
+    {
+      "id": "PF-02",
+      "name": "baseline",
+      "title": "Capture the full pre-run inventory the later phases compare against",
+      "destructive": false,
+      "command": null,
+      "asserts": [
+        { "check": "product-state", "expect": "absent", "required": true },
+        { "check": "registration-absent", "expect": "true", "required": true },
+        { "check": "install-directory", "expect": "absent", "required": true }
+      ],
+      "proves": [
+        "A complete before-picture exists for the file inventory, the product process list and the installed-product set, so a later 'nothing changed' claim is falsifiable."
+      ],
+      "cannotProve": [
+        "Anything about the candidate's own correctness; nothing has been run yet."
+      ]
+    },
+    {
+      "id": "IS-01",
+      "name": "install-setup",
+      "title": "Clean install from Setup.exe, the one-double-click path",
+      "destructive": true,
+      "command": {
+        "executable": "{setupPath}",
+        "arguments": [],
+        "acceptedExitCodes": "0,3010,1641,3011",
+        "timeoutSeconds": 3600,
+        "logFile": "install-setup.log",
+        "note": "Setup.exe is a windowed launcher: it writes its embedded MSI to a temporary directory, runs msiexec /i ... /qb! /norestart, shows a modal message box and returns msiexec's exit code. The harness starts it, does not click anything, and the operator must dismiss the box."
+      },
+      "requires": ["setup"],
+      "preconditions": [],
+      "asserts": [
+        { "check": "command-exit-code", "expect": "0,3010,1641,3011", "required": true },
+        { "check": "product-state", "expect": "installed", "required": true, "note": "the Windows Installer, not the exit code, says whether the product is installed" },
+        { "check": "product-code", "expect": "from-candidate-msi", "required": true, "note": "the installed product code must be the candidate MSI's own product code, which is how the Setup.exe phase proves it installed this exact MSI even though Setup.exe extracts the MSI to a temporary directory and deletes it" },
+        { "check": "registration-present", "expect": "true", "required": true },
+        { "check": "registration-target-file-present", "expect": "true", "required": true },
+        { "check": "install-directory", "expect": "present", "required": true },
+        { "check": "expected-files", "expect": "all-present", "required": true },
+        { "check": "no-orphan-processes", "expect": "true", "required": false, "note": "recorded only: a fresh install may legitimately start a broker or a server" }
+      ],
+      "proves": [
+        "Setup.exe, launched the way a user launches it, installs the candidate per machine.",
+        "The product is genuinely registered with the Windows Installer, under the candidate's own product code.",
+        "The TSF text service key, the Japanese language profile key and the COM class key all exist after the install, and the registered InProcServer32 names a real file.",
+        "Every file the candidate MSI declares is present in the install directory."
+      ],
+      "cannotProve": [
+        "That the message box contents are correct; the harness cannot read a dialog it is not allowed to touch.",
+        "That the text service actually converts romaji; that is the desktop-input stage, not this one.",
+        "That the install is reproducible on another machine."
+      ]
+    },
+    {
+      "id": "UC-01",
+      "name": "uninstall-clean-1",
+      "title": "Clean uninstall of the Setup.exe install",
+      "destructive": true,
+      "command": {
+        "executable": "{msiexec}",
+        "arguments": ["/x", "{productCode}", "/qn", "/norestart", "/l*v", "{logPath}"],
+        "acceptedExitCodes": "0,3010,1641,3011",
+        "timeoutSeconds": 3600,
+        "logFile": "uninstall-clean-1.log"
+      },
+      "requires": [],
+      "preconditions": [
+        { "observed": "productState", "equals": "installed", "note": "never uninstall a product the harness did not install; if this is not met the phase is unconfirmed and runs no command" }
+      ],
+      "asserts": [
+        { "check": "command-exit-code", "expect": "0,3010,1641,3011", "required": true },
+        { "check": "product-state", "expect": "absent", "required": true },
+        { "check": "registration-absent", "expect": "true", "required": true },
+        { "check": "registration-target-file-present", "expect": "false", "required": true },
+        { "check": "install-directory", "expect": "absent", "required": true },
+        { "check": "no-orphan-processes", "expect": "true", "required": true }
+      ],
+      "proves": [
+        "After the uninstall the Windows Installer no longer lists the product.",
+        "The KanaAI TIP, language profile and COM keys are gone.",
+        "The registered text service DLL is gone.",
+        "The install directory does not exist and holds no files.",
+        "No KanaAI process that the harness did not start and that was not present at baseline is still running."
+      ],
+      "cannotProve": [
+        "That no file outside the install directory was left behind; the harness deliberately inventories only the install directory and the KanaAI registration surface, because a machine-wide sweep is not its business.",
+        "That the uninstall was driven by the KanaAI custom actions rather than only by MSI file removal; the receipt records the registration keys separately so an unregistration gap is visible."
+      ]
+    },
+    {
+      "id": "IM-01",
+      "name": "install-msi",
+      "title": "Clean install directly from the MSI",
+      "destructive": true,
+      "command": {
+        "executable": "{msiexec}",
+        "arguments": ["/i", "{msiPath}", "/qn", "/norestart", "/l*v", "{logPath}"],
+        "acceptedExitCodes": "0,3010,1641,3011",
+        "timeoutSeconds": 3600,
+        "logFile": "install-msi.log"
+      },
+      "requires": ["msi"],
+      "preconditions": [
+        { "observed": "productState", "equals": "absent", "note": "a clean install requires a clean machine; if the product is still present the phase is unconfirmed and runs no command" }
+      ],
+      "asserts": [
+        { "check": "command-exit-code", "expect": "0,3010,1641,3011", "required": true },
+        { "check": "product-state", "expect": "installed", "required": true },
+        { "check": "product-code", "expect": "from-candidate-msi", "required": true },
+        { "check": "registration-present", "expect": "true", "required": true },
+        { "check": "registration-target-file-present", "expect": "true", "required": true },
+        { "check": "install-directory", "expect": "present", "required": true },
+        { "check": "expected-files", "expect": "all-present", "required": true },
+        { "check": "msi-log-classification", "expect": "first-install", "required": true, "note": "the verbose log must actually show an install sequence; an unclassifiable log is unconfirmed, never a pass" },
+        { "check": "no-orphan-processes", "expect": "true", "required": false }
+      ],
+      "proves": [
+        "The MSI installs per machine on its own, without the Setup.exe launcher.",
+        "The same registration and file-completeness evidence holds for the direct MSI path.",
+        "The Windows Installer log for this run is an install, not a removal or a silent no-op."
+      ],
+      "cannotProve": [
+        "That the MSI is the byte-for-byte MSI embedded in Setup.exe; that is a build-time invariant checked by the builder, and the Setup phase only proves the installed product code matches this MSI's product code."
+      ]
+    },
+    {
+      "id": "RS-01",
+      "name": "reinstall-same",
+      "title": "Reinstall the same MSI over the same product code, and prove it is not a repair in disguise",
+      "destructive": true,
+      "command": {
+        "executable": "{msiexec}",
+        "arguments": ["/i", "{msiPath}", "/qn", "/norestart", "/l*v", "{logPath}"],
+        "acceptedExitCodes": "0,3010,1641,3011",
+        "timeoutSeconds": 3600,
+        "logFile": "reinstall-same.log",
+        "note": "No REINSTALL or REINSTALLMODE property is supplied. The harness records that fact, because supplying it would turn this phase into the repair test it is supposed to be distinct from."
+      },
+      "requires": ["msi"],
+      "preconditions": [
+        { "observed": "productState", "equals": "installed", "note": "a reinstall is only meaningful over an existing install" }
+      ],
+      "asserts": [
+        { "check": "command-exit-code", "expect": "0,3010,1641,3011", "required": true },
+        { "check": "product-state", "expect": "installed", "required": true },
+        { "check": "product-code", "expect": "from-candidate-msi", "required": true },
+        { "check": "install-date-unchanged", "expect": "true", "required": true, "note": "a second, genuinely fresh installation record would carry a new InstallDate" },
+        { "check": "file-inventory-unchanged", "expect": "true", "required": true, "note": "the install directory file set is identical before and after" },
+        { "check": "expected-files", "expect": "all-present", "required": true },
+        { "check": "registration-present", "expect": "true", "required": true, "note": "the reinstall must not leave the TIP unregistered, which is what an uninstall/reinstall pair would look like from the outside" },
+        { "check": "msi-log-classification", "expect": "reinstall", "required": true, "note": "the decisive evidence that Windows Installer treated this as a reinstall of the existing product. If the log carries no decisive marker the phase is unconfirmed; the harness does not decide this from the exit code" }
+      ],
+      "proves": [
+        "Reinstalling the same MSI over the same product code is accepted and leaves the product installed.",
+        "The installed InstallDate did not change, so no new installation record was created.",
+        "The install directory file set is identical, so nothing was re-extracted from scratch and nothing was removed.",
+        "The Windows Installer log for this run shows a REINSTALL property, which is the difference between a reinstall and a first install."
+      ],
+      "cannotProve": [
+        "That the reinstall is idempotent under a rollback, or that a deliberately corrupted file is restored; the harness does not damage the install to find out.",
+        "Whether Windows Installer would behave identically with REINSTALLMODE set; that is deliberately out of scope for this phase.",
+        "If the log cannot be classified, this phase proves nothing about repair-versus-reinstall and says so."
+      ]
+    },
+    {
+      "id": "UF-01",
+      "name": "upgrade-forward",
+      "title": "Install a newer package over the installed one (MajorUpgrade forward path)",
+      "destructive": true,
+      "command": {
+        "executable": "{msiexec}",
+        "arguments": ["/i", "{newerMsiPath}", "/qn", "/norestart", "/l*v", "{logPath}"],
+        "acceptedExitCodes": "0,3010,1641,3011",
+        "timeoutSeconds": 3600,
+        "logFile": "upgrade-forward.log"
+      },
+      "requires": ["msi-newer"],
+      "preconditions": [
+        { "observed": "productState", "equals": "installed", "note": "a forward upgrade is only meaningful over an existing install" },
+        { "observed": "newerIsNewer", "equals": "true", "note": "the supplied newer MSI must really carry a higher ProductVersion than what is installed, otherwise this phase is not an upgrade and would silently prove something else" }
+      ],
+      "asserts": [
+        { "check": "command-exit-code", "expect": "0,3010,1641,3011", "required": true },
+        { "check": "product-state", "expect": "installed", "required": true },
+        { "check": "product-code", "expect": "from-newer-msi", "required": true, "note": "after a MajorUpgrade the installed product code is the new package's, and the old product code is no longer installed; the receipt records the before and after product codes" },
+        { "check": "expected-files", "expect": "all-present", "required": true, "note": "compared against the newer package's own declared file set" },
+        { "check": "registration-present", "expect": "true", "required": true },
+        { "check": "msi-log-classification", "expect": "any", "required": false, "note": "recorded for a human verifier. A MajorUpgrade run legitimately shows both a removal and an install sequence, so the harness does not force a classification." }
+      ],
+      "proves": [
+        "A newer package with the same UpgradeCode replaces the installed one and the installed product code changes to the newer one.",
+        "The newer package's declared files are all present afterwards.",
+        "The TSF registration survives the upgrade."
+      ],
+      "cannotProve": [
+        "That user data, history or personal adaptation survive the upgrade; this harness does not inspect or measure them.",
+        "That the rollback of the upgrade works; a deliberate rollback is not exercised here."
+      ]
+    },
+    {
+      "id": "DR-01",
+      "name": "downgrade-refused",
+      "title": "Install an older package over the newer one and require the declared refusal",
+      "destructive": true,
+      "command": {
+        "executable": "{msiexec}",
+        "arguments": ["/i", "{olderMsiPath}", "/qn", "/norestart", "/l*v", "{logPath}"],
+        "acceptedExitCodes": "1638",
+        "timeoutSeconds": 3600,
+        "logFile": "downgrade-refused.log"
+      },
+      "requires": ["msi-older"],
+      "preconditions": [
+        { "observed": "productState", "equals": "installed", "note": "a downgrade is only meaningful over a newer existing install" },
+        { "observed": "olderIsOlder", "equals": "true", "note": "the supplied older MSI must really carry a lower ProductVersion than what is installed, otherwise this phase is not a downgrade and would silently prove something else" }
+      ],
+      "asserts": [
+        { "check": "command-exit-code", "expect": "1638", "required": true, "note": "1638 is the Windows Installer's 'another version of this product is already installed'. KanaAI.wxs sets MajorUpgrade DowngradeErrorMessage, so a downgrade must be refused, not performed." },
+        { "check": "product-state", "expect": "installed", "required": true, "note": "the refusal must leave the newer product installed" },
+        { "check": "product-code", "expect": "from-current-msi", "required": true, "note": "the installed product code must still be the newer one; a downgrade that quietly replaced the product would be a policy failure" },
+        { "check": "file-inventory-unchanged", "expect": "true", "required": true, "note": "a refused downgrade must not have touched the installed files" },
+        { "check": "registration-present", "expect": "true", "required": true },
+        { "check": "msi-log-classification", "expect": "downgrade-refused", "required": true }
+      ],
+      "proves": [
+        "Installing an older package over the newer one is refused with 1638, as the package source declares.",
+        "The refusal is inert: the newer product, its files and its TSF registration are untouched."
+      ],
+      "cannotProve": [
+        "That a user cannot force a downgrade by uninstalling first; the harness does not attempt that.",
+        "That the rollback policy is correct for a failed forward upgrade; that path is not exercised here."
+      ]
+    },
+    {
+      "id": "UC-02",
+      "name": "uninstall-clean-2",
+      "title": "Final clean uninstall, leaving the machine as the baseline found it",
+      "destructive": true,
+      "command": {
+        "executable": "{msiexec}",
+        "arguments": ["/x", "{productCode}", "/qn", "/norestart", "/l*v", "{logPath}"],
+        "acceptedExitCodes": "0,3010,1641,3011",
+        "timeoutSeconds": 3600,
+        "logFile": "uninstall-clean-2.log"
+      },
+      "requires": [],
+      "preconditions": [
+        { "observed": "productState", "equals": "installed", "note": "never uninstall a product the harness did not install" }
+      ],
+      "asserts": [
+        { "check": "command-exit-code", "expect": "0,3010,1641,3011", "required": true },
+        { "check": "product-state", "expect": "absent", "required": true },
+        { "check": "registration-absent", "expect": "true", "required": true },
+        { "check": "registration-target-file-present", "expect": "false", "required": true },
+        { "check": "install-directory", "expect": "absent", "required": true },
+        { "check": "no-orphan-processes", "expect": "true", "required": true }
+      ],
+      "proves": [
+        "The candidate can be removed cleanly a second time, so the earlier install was not the only one.",
+        "After the removal the product, the registration, the install directory and the product processes are all absent."
+      ],
+      "cannotProve": [
+        "That the machine is bit-for-bit as it was before the run; the harness compares its own recorded before-picture for the product, the registration surface, the install directory and the product processes, and nothing else."
+      ]
+    },
+    {
+      "id": "OB-01",
+      "name": "absent-final",
+      "title": "Independent final absence observation, with no command of its own",
+      "destructive": false,
+      "command": null,
+      "asserts": [
+        { "check": "product-state", "expect": "absent", "required": true },
+        { "check": "registration-absent", "expect": "true", "required": true },
+        { "check": "install-directory", "expect": "absent", "required": true },
+        { "check": "no-orphan-processes", "expect": "true", "required": true }
+      ],
+      "proves": [
+        "A second, separate observation after the last uninstall still finds nothing installed, nothing registered, no install directory and no KanaAI process."
+      ],
+      "cannotProve": [
+        "Anything about what the removed product did while it was installed."
+      ]
+    },
+    {
+      "id": "CL-01",
+      "name": "cleanup",
+      "title": "Close only what this harness started, and prove the cleanup is idempotent",
+      "destructive": false,
+      "command": null,
+      "asserts": [
+        { "check": "no-orphan-processes", "expect": "true", "required": true },
+        { "check": "product-state", "expect": "absent", "required": true }
+      ],
+      "proves": [
+        "No process the harness started is still running, judged by pid plus a matching image name so a recycled pid is never killed.",
+        "Running the cleanup logic a second time resolves to already-clean for every ledger entry.",
+        "No path outside the harness own output directory is ever deleted by this phase."
+      ],
+      "cannotProve": [
+        "That the machine has no unrelated leftover state; cleanup is scoped to this run's own ledger by construction."
+      ]
+    }
+  ],
+  "safetyGates": [
+    {
+      "id": "consent",
+      "rule": "-Execute refuses to start without -AllowLifecycle, which the coordinator supplies only after the user has been told what the run does to the machine."
+    },
+    {
+      "id": "machine-lock",
+      "rule": "-Execute refuses to start without -LockConfirmed, because docs/PARALLEL_DEVELOPMENT.md reserves real machine install, registration and uninstall for a single holder of the 'machine' lock. The harness asserts the flag; it does not take the lock itself."
+    },
+    {
+      "id": "elevation",
+      "rule": "-Execute refuses to start unless the process is an elevated administrator on a 64-bit operating system. The package is perMachine and writes HKLM and Program Files, so an unelevated run cannot be meaningful."
+    },
+    {
+      "id": "candidate-identity",
+      "rule": "Before any phase runs, the candidate MSI's own Property table and package template platform are read through the Windows Installer automation interface. A ProductName, UpgradeCode, ProductCode, ProductVersion, ALLUSERS or platform that does not match the pinned KanaAI identity is a hard refusal, not a warning."
+    },
+    {
+      "id": "unexpected-existing-install",
+      "rule": "If any product sharing the pinned KanaAI UpgradeCode is already installed, the run is refused unless -AllowUnexpectedExistingInstall is passed. A pre-existing install of the target product code additionally forfeits the clean-install baseline, and the phases that depended on it are reported unconfirmed rather than passed."
+    },
+    {
+      "id": "dry-render",
+      "rule": "Every command is rendered to its exact command line and printed as a what-if line before it is started, and recorded in the receipt with its exit code."
+    },
+    {
+      "id": "owned-deletion",
+      "rule": "The only deletion this harness performs is inside its own output directory. Removing C:\\Program Files\\KanaAI is the uninstaller's job, never the harness's."
+    },
+    {
+      "id": "missing-optional-candidate",
+      "rule": "A phase whose optional candidate was not supplied (Setup.exe, an older MSI, a newer MSI) runs no command and is reported unconfirmed with the reason. It is never silently skipped and never reported as a pass."
+    }
+  ],
+  "privacy": {
+    "neverCollected": [
+      "environment variables and their values",
+      "clipboard contents",
+      "user documents and their paths",
+      "any installed product other than the ones sharing the pinned KanaAI UpgradeCode",
+      "window titles, window handles or any desktop interaction",
+      "secrets, tokens or credentials of any kind"
+    ],
+    "pathPolicy": "Artifacts are recorded relative to the harness own output root. The candidate is identified by a repository-relative path plus its SHA-256, never by an absolute path under the operator's home directory. Any path that still carries a user profile, LocalAppData, Temp or MyDocuments prefix is rewritten to a token before it reaches the receipt.",
+    "accountPolicy": "The account name and the elevation state are recorded because a verification receipt has to name the context it ran in. No profile path is."
+  },
+  "nonGoals": [
+    "Proving that the installed TIP converts romaji to kana in a running application. That is the desktop-input verification stage and this harness neither launches an application nor touches a desktop.",
+    "Proving the local AI payload runs or produces acceptable output.",
+    "Proving a rollback of a failed upgrade, or a repair of a deliberately corrupted file.",
+    "Producing a signed, released, or generally available product. This stage is verification of one fixed-hash candidate."
+  ]
+}

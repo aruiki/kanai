@@ -6,15 +6,20 @@
 //! stale-generation handling, and deterministic local fallback semantics that
 //! a future platform adapter can reuse.
 
+pub mod ai_runtime;
 pub mod broker;
 pub mod enhancement;
 pub mod frame;
 pub mod local_model;
+pub mod local_runtime;
 pub mod mozc_session;
 #[cfg(windows)]
 pub mod pipe_windows;
 pub mod protocol;
 pub mod queue;
+#[cfg(windows)]
+pub mod runtime_process_windows;
+pub mod runtime_supervisor;
 pub mod service;
 pub mod session;
 pub mod transport;
@@ -32,6 +37,18 @@ pub use frame::{
     FrameDecoder, FrameError, FramedIo, MAX_FRAME_BYTES, MemoryTransport,
 };
 pub use local_model::LocalOpenAiBackend;
+pub use local_runtime::{
+    LocalRuntimeError, MAX_RUNTIME_CONFIG_BYTES, MAX_RUNTIME_CONTEXT_SIZE, MAX_RUNTIME_PATH_BYTES,
+    MAX_RUNTIME_RECEIPT_ENTRIES, MAX_RUNTIME_TEXT_BYTES, PINNED_BROKER_BYTES, PINNED_BROKER_FILE,
+    PINNED_BROKER_SHA256, PINNED_MANIFEST_SCHEMA, PINNED_MANIFEST_SHA256, PINNED_MANIFEST_STATUS,
+    PINNED_MODEL_BYTES, PINNED_MODEL_FILE, PINNED_MODEL_ID, PINNED_MODEL_REPOSITORY,
+    PINNED_MODEL_REVISION, PINNED_MODEL_SHA256, PINNED_RUNTIME_BYTES, PINNED_RUNTIME_ENTRY_COUNT,
+    PINNED_RUNTIME_ENTRY_NAMES_SHA256, PINNED_RUNTIME_ID, PINNED_RUNTIME_RELEASE,
+    PINNED_RUNTIME_REPOSITORY, PINNED_RUNTIME_REVISION, PINNED_RUNTIME_SHA256,
+    RUNTIME_LOOPBACK_HOST, RelativeInstalledPath, RuntimeConfigError, RuntimeLaunchConfig,
+    RuntimeLaunchOptions, RuntimeLaunchPlan, TokenReference, build_runtime_launch_plan,
+    build_runtime_launch_plan_from_json,
+};
 pub use mozc_session::MozcSessionBackend;
 #[cfg(windows)]
 pub use pipe_windows::{WindowsPeerAuthenticator, serve_named_pipe};
@@ -54,6 +71,12 @@ pub use protocol::{
 pub use queue::{
     EnhancementQueue, EnhancementQueueError, MAX_ENHANCEMENT_QUEUE_CAPACITY,
     MAX_ENHANCEMENT_WORKERS,
+};
+pub use runtime_supervisor::{
+    MAX_RUNTIME_BACKOFF, MAX_RUNTIME_RESTARTS, MAX_STOP_CONFIRM_TIMEOUT, RuntimeChild,
+    RuntimeClock, RuntimeFailure, RuntimeProcess, RuntimeProcessError, RuntimeStateSnapshot,
+    RuntimeSupervisor, RuntimeSupervisorConfig, RuntimeSupervisorConfigError,
+    RuntimeSupervisorError, RuntimeSupervisorState, TokioRuntimeClock,
 };
 pub use service::serve_authenticated_request;
 pub use session::{SessionBackend, SessionBroker, SessionBrokerError};

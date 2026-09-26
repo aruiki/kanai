@@ -14,6 +14,8 @@
       <ComponentGroupRef Id="RuntimeFiles" />
     </Feature>
     <Binary Id="Registrar" SourceFile="$(var.HelperPath)" />
+    <SetProperty Id="RegisterTIP" Value="[INSTALLFOLDER]" Before="RegisterTIP" Sequence="execute" />
+    <SetProperty Id="UnregisterRollback" Value="[INSTALLFOLDER]" Before="UnregisterRollback" Sequence="execute" />
     <CustomAction Id="RegisterTIP" BinaryRef="Registrar" DllEntry="RegisterTIP" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="RegisterRollback" BinaryRef="Registrar" DllEntry="RegisterTIPRollback" Execute="rollback" Impersonate="no" Return="check" />
     <CustomAction Id="UnregisterTIP" BinaryRef="Registrar" DllEntry="UnregisterTIP" Execute="deferred" Impersonate="no" Return="check" />

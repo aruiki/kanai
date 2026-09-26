@@ -9,3 +9,11 @@ target/
 .kanai/
 *.log
 .DS_Store
+
+# Generated validation evidence. These receipts are rewritten on every run and
+# contain machine-specific data (window station/desktop names, install paths).
+# Committing them would change `git status` on each run, which is part of the
+# staging manifest's `repositoryStatusLines` source identity, and would make
+# restage + build fail with "Runtime manifest source identity changed".
+# Durable evidence belongs in a release receipt or .local/, not in source.
+platform/windows-tsf/validation/*/runs/

@@ -67,6 +67,7 @@ def main() -> int:
         tsf_root / "patches" / "0003-session-generation-binding.patch",
         tsf_root / "patches" / "0004-windows-python-toolchain.patch",
         tsf_root / "patches" / "0005-windows-runtime-identity.patch",
+        tsf_root / "patches" / "0006-windows-installer-runtime-path.patch",
     ]
 
     if not mozc_src.is_dir():
@@ -117,6 +118,13 @@ def main() -> int:
             "RegisterProfiles",
             "AddLanguageProfile",
             "RegisterCategory",
+        ],
+    )
+    require_markers(
+        tsf_root / "patches" / "0006-windows-installer-runtime-path.patch",
+        [
+            'GetProperty(msi, L"CustomActionData")',
+            "GetInstallerComponentPath(msi_handle",
         ],
     )
     require_markers(
@@ -194,12 +202,17 @@ def main() -> int:
     if metadata["status"] != "development-seam-not-public-beta":
         raise AssertionError("metadata overstates TSF readiness")
     if metadata["integration"]["patchedUpstreamFiles"] != [
+        "third_party/mozc/src/MODULE.bazel",
+        "third_party/mozc/src/base/const.h",
+        "third_party/mozc/src/base/system_util.cc",
         "third_party/mozc/src/engine/BUILD.bazel",
         "third_party/mozc/src/engine/modules.cc",
         "third_party/mozc/src/session/BUILD.bazel",
         "third_party/mozc/src/session/session_handler.cc",
         "third_party/mozc/src/win32/base/tsf_profile.cc",
+        "third_party/mozc/src/win32/custom_action/custom_action.cc",
         "third_party/mozc/src/win32/tip/tip_keyevent_handler.cc",
+        "third_party/mozc/src/win32/tip/tip_resource.rc",
     ]:
         raise AssertionError("metadata patch boundary drifted")
     if metadata["broker"]["frameMagic"] != "KBF1":

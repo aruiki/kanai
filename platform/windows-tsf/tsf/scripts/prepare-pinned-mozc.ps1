@@ -105,7 +105,8 @@ try {
         [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0002-kanai-tsf-identity.patch')),
         [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0003-session-generation-binding.patch')),
         [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0004-windows-python-toolchain.patch')),
-        [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0005-windows-runtime-identity.patch'))
+        [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0005-windows-runtime-identity.patch')),
+        [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0006-windows-installer-runtime-path.patch'))
     )
     foreach ($patchPath in $patchPaths) {
         Invoke-Native -FilePath 'git' -WorkingDirectory $sourceDirectory -ArgumentList @(
@@ -129,12 +130,16 @@ finally {
     StagedMozcRoot = $sourceDirectory
     PatchedFiles = @(
         'src/MODULE.bazel',
+        'src/base/const.h',
+        'src/base/system_util.cc',
         'src/engine/BUILD.bazel',
         'src/engine/modules.cc',
         'src/session/BUILD.bazel',
         'src/session/session_handler.cc',
         'src/win32/base/tsf_profile.cc',
-        'src/win32/tip/tip_keyevent_handler.cc'
+        'src/win32/custom_action/custom_action.cc',
+        'src/win32/tip/tip_keyevent_handler.cc',
+        'src/win32/tip/tip_resource.rc'
     )
     AddedOverlay = 'src/engine/kanai_ai'
     PublicBeta = $false

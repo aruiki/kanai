@@ -45,12 +45,17 @@
     "rerankSessionPreparationImplemented": true,
     "sessionReleaseImplemented": true,
     "patchedUpstreamFiles": [
+      "third_party/mozc/src/MODULE.bazel",
+      "third_party/mozc/src/base/const.h",
+      "third_party/mozc/src/base/system_util.cc",
       "third_party/mozc/src/engine/BUILD.bazel",
       "third_party/mozc/src/engine/modules.cc",
       "third_party/mozc/src/session/BUILD.bazel",
       "third_party/mozc/src/session/session_handler.cc",
       "third_party/mozc/src/win32/base/tsf_profile.cc",
-      "third_party/mozc/src/win32/tip/tip_keyevent_handler.cc"
+      "third_party/mozc/src/win32/custom_action/custom_action.cc",
+      "third_party/mozc/src/win32/tip/tip_keyevent_handler.cc",
+      "third_party/mozc/src/win32/tip/tip_resource.rc"
     ],
     "replacedTipFiles": [],
     "modelReportsAvailable": false,

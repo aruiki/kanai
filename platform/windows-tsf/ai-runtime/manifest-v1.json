@@ -1,0 +1,217 @@
+{
+  "schema": "kanai.ai.runtime.manifest/v1",
+  "schemaVersion": 1,
+  "manifestVersion": 1,
+  "status": "pinned-assets-verified-not-staged",
+  "asOf": "2026-09-26",
+  "noSecrets": true,
+  "product": {
+    "name": "KanaAI local AI runtime",
+    "role": "optional-local-slow-path",
+    "offlineOnly": true,
+    "networkAtRuntime": false
+  },
+  "platform": {
+    "os": "windows",
+    "architecture": "x64",
+    "cpuOnly": true,
+    "gpuRequired": false
+  },
+  "model": {
+    "id": "qwen2.5-1.5b-instruct-q4_k_m",
+    "repository": "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+    "revision": "91cad51170dc346986eccefdc2dd33a9da36ead9",
+    "sourceUrl": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/qwen2.5-1.5b-instruct-q4_k_m.gguf?download=true",
+    "metadataUrl": "https://huggingface.co/api/models/Qwen/Qwen2.5-1.5B-Instruct-GGUF/revision/91cad51170dc346986eccefdc2dd33a9da36ead9",
+    "licenseUrl": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/blob/91cad51170dc346986eccefdc2dd33a9da36ead9/LICENSE",
+    "license": "Apache-2.0",
+    "licensePath": "licenses/Qwen-Apache-2.0.txt",
+    "licenseFileBytes": 11927,
+    "licenseFileSha256": "425153e94d7d7ebb80995e7efd8713b7ca2c98d38d3bad54781a9fab848069e8",
+    "noticePath": "THIRD-PARTY-NOTICES.txt",
+    "expectedRole": "optional local semantic reranking and explicit slow-path assist; never a synchronous key-path dependency",
+    "cpuOnly": true,
+    "offlineOnly": true,
+    "weight": {
+      "fileName": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "bytes": 1117320736,
+      "sha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+      "lfsSha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+      "fileCommit": "dd26da440ef0330c47919d1ecae0966d24022222",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/qwen2.5-1.5b-instruct-q4_k_m.gguf?download=true",
+      "lfs": true,
+      "cpuOnly": true,
+      "offlineOnly": true
+    },
+    "provenance": {
+      "upstreamMetadataVerified": true,
+      "upstreamMetadataEvidence": "A1M pairing independently checked by the coordinator and approved for A2 implementation",
+      "conversionReproducibilityVerified": false,
+      "conversionReproducibilityStatus": "unverified",
+      "conversionReproducibilityReason": "The GGUF conversion recipe, converter revision, and byte-for-byte conversion were not independently reproduced in this checkout."
+    }
+  },
+  "broker": {
+    "id": "kanai-broker-x64",
+    "fileName": "kanai-broker.exe",
+    "role": "optional-local-slow-path broker; the Rust KanaAI broker, not a Mozc payload",
+    "architecture": "x64",
+    "bytes": 2817024,
+    "sha256": "85f4930d5976b5339de10216d53c20bea4d68d3bae6d25e2668ed24de101dac4",
+    "machine": "0x8664",
+    "optionalHeaderMagic": "0x020B",
+    "kind": "Exe"
+  },
+  "runtime": {
+    "id": "llama.cpp-b11146-win-cpu-x64",
+    "repository": "ggml-org/llama.cpp",
+    "release": "b11146",
+    "revision": "7fe450e19305b828c199d602c23a8337aaa1f03b",
+    "sourceUrl": "https://github.com/ggml-org/llama.cpp/releases/download/b11146/llama-b11146-bin-win-cpu-x64.zip",
+    "metadataUrl": "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/b11146",
+    "licenseUrl": "https://github.com/ggml-org/llama.cpp/blob/7fe450e19305b828c199d602c23a8337aaa1f03b/LICENSE",
+    "license": "MIT",
+    "licensePath": "licenses/llama.cpp-MIT.txt",
+    "licenseFileBytes": 1396,
+    "licenseFileSha256": "b63f92bb31389f53ce2b005be8f59e59f43b6117c0d41bd94749eb4b5b7518f8",
+    "noticePath": "THIRD-PARTY-NOTICES.txt",
+    "expectedRole": "optional local llama.cpp inference runtime for the model; not a synchronous key-path dependency",
+    "cpuOnly": true,
+    "offlineOnly": true,
+    "asset": {
+      "fileName": "llama-b11146-bin-win-cpu-x64.zip",
+      "bytes": 18560055,
+      "sha256": "14cf1303ca9ac3abd94816850532f9f9a69ac66fbaca3776fc6f9061c2fac1d1",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11146/llama-b11146-bin-win-cpu-x64.zip",
+      "cpuOnly": true,
+      "offlineOnly": true
+    },
+    "archive": {
+      "format": "zip",
+      "entryPolicy": {
+        "status": "inspected-pinned-archive-layout",
+        "mode": "exact-allowlist",
+        "entryCount": 51,
+        "entryNamesSha256": "68da91a595ea841f87c7f7f34aff23bdf0a9910f129cf0fd3a06264205b61f0c",
+        "allowedExactEntries": [
+          "LICENSE-LLVM-OpenMP",
+          "ggml-base.dll",
+          "ggml-cpu-alderlake.dll",
+          "ggml-cpu-cannonlake.dll",
+          "ggml-cpu-cascadelake.dll",
+          "ggml-cpu-cooperlake.dll",
+          "ggml-cpu-haswell.dll",
+          "ggml-cpu-icelake.dll",
+          "ggml-cpu-ivybridge.dll",
+          "ggml-cpu-piledriver.dll",
+          "ggml-cpu-sandybridge.dll",
+          "ggml-cpu-sapphirerapids.dll",
+          "ggml-cpu-skylakex.dll",
+          "ggml-cpu-sse42.dll",
+          "ggml-cpu-x64.dll",
+          "ggml-cpu-zen4.dll",
+          "ggml-rpc-server.exe",
+          "ggml-rpc.dll",
+          "ggml.dll",
+          "libomp.dll",
+          "llama-batched-bench-impl.dll",
+          "llama-batched-bench.exe",
+          "llama-bench-impl.dll",
+          "llama-bench.exe",
+          "llama-cli-impl.dll",
+          "llama-cli.exe",
+          "llama-common.dll",
+          "llama-completion-impl.dll",
+          "llama-completion.exe",
+          "llama-fit-params-impl.dll",
+          "llama-fit-params.exe",
+          "llama-gemma3-cli.exe",
+          "llama-gguf-split.exe",
+          "llama-imatrix.exe",
+          "llama-llava-cli.exe",
+          "llama-minicpmv-cli.exe",
+          "llama-mtmd-cli.exe",
+          "llama-mtmd-debug.exe",
+          "llama-perplexity-impl.dll",
+          "llama-perplexity.exe",
+          "llama-quantize-impl.dll",
+          "llama-quantize.exe",
+          "llama-qwen2vl-cli.exe",
+          "llama-results.exe",
+          "llama-server-impl.dll",
+          "llama-server.exe",
+          "llama-tokenize.exe",
+          "llama-tts.exe",
+          "llama.dll",
+          "llama.exe",
+          "mtmd.dll"
+        ],
+        "allowedEntryPatterns": [
+          "^$"
+        ],
+        "requiredEntries": [
+          "LICENSE-LLVM-OpenMP",
+          "ggml.dll",
+          "libomp.dll",
+          "llama-common.dll",
+          "llama-server-impl.dll",
+          "llama-server.exe",
+          "llama.dll",
+          "mtmd.dll"
+        ],
+        "directoryEntriesAllowed": false,
+        "note": "The archive digest and this exact 51-entry layout were inspected from the pinned b11146 asset on 2026-09-26. Any added, missing, renamed, or duplicate entry is rejected. Runtime dependency closure and final SBOM remain separate release gates."
+      },
+      "maxEntries": 512,
+      "maxExtractedBytes": 268435456,
+      "maxEntryBytes": 134217728
+    },
+    "provenance": {
+      "upstreamMetadataVerified": true,
+      "upstreamMetadataEvidence": "A1M pairing independently checked by the coordinator and approved for A2 implementation",
+      "conversionReproducibilityVerified": false,
+      "conversionReproducibilityStatus": "not-reproduced",
+      "conversionReproducibilityReason": "The supplied runtime is a pinned prebuilt release archive; a local source build and byte comparison were not performed."
+    }
+  },
+  "licenseNotice": {
+    "path": "THIRD-PARTY-NOTICES.txt",
+    "bytes": 3613,
+    "sha256": "2fa9a4c66b97ca5ae42de7f9372514d866c3e824f4f27ef08ebd07adf76dbae4",
+    "dependencyNoticeStatus": "unverified-incomplete",
+    "sbomStatus": "not-generated"
+  },
+  "staging": {
+    "defaultOutputDirectory": ".local/ai-runtime/staged",
+    "modelDirectory": "model",
+    "runtimeDirectory": "runtime",
+    "licenseDirectory": "licenses",
+    "noticeFile": "THIRD-PARTY-NOTICES.txt",
+    "receiptFile": "STAGING-RECEIPT.json",
+    "layout": "flat files in declared directories",
+    "deletePolicy": "never-delete-caller-paths"
+  },
+  "fetchPolicy": {
+    "defaultMode": "plan",
+    "explicitFetchSwitch": "-Fetch",
+    "networkImplemented": false,
+    "allowedSchemes": [
+      "https"
+    ],
+    "offlineAtRuntime": true
+  },
+  "verification": {
+    "upstreamMetadata": "verified-by-coordinator",
+    "artifactDigests": {
+      "model": "local-weight-verified",
+      "runtime": "local-archive-verified"
+    },
+    "localDownload": {
+      "model": "performed-and-verified",
+      "runtime": "performed-and-verified"
+    },
+    "conversionReproducibility": "unverified",
+    "windowsExecution": "not-performed",
+    "archiveEntryLayout": "inspected-pinned-archive-2026-09-26"
+  }
+}

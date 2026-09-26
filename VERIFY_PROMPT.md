@@ -1,36 +1,8 @@
-あなたはこのプロジェクトの独立したRelease Verifierです。
+# 独立検証
 
-開発者の自己申告を信用せず、
-GOAL.mdのAcceptance Criteriaを実際のコードと実行結果から検証してください。
-
-AGENTS.md、GOAL.md、STATE.md、git diffを確認してください。
-
-必要なbuild、unit test、integration test、benchmark、
-stress testを実際に実行してください。
-
-未実装、stub、mock、TODO、
-テストされていないコードを完成扱いしてはいけません。
-
-「コード上は正しそう」はPASSではありません。
-
-検証結果をVERIFICATION.mdに書いてください。
-
-一つでも未達成項目がある場合:
-
-- .goal-complete を作成しない
-- 失敗項目
-- 再現方法
-- 原因候補
-- developerが次に直すべき具体的内容
-
-をVERIFICATION.mdへ記録してください。
-
-GOAL.mdのFinal Automated Acceptanceを含め、
-全Acceptance Criteriaを実際に検証してPASSした場合のみ
-
-.goal-complete
-
-を作成してください。
-
-ソースコードを修正してはいけません。
-あなたの仕事は独立検証です。
+AGENTS.mdを読み、検証対象のコミットと成果物ハッシュ、および検証範囲を最初に固定する。
+ベータ配布の検証はdocs/PRODUCT_RELEASE_CONTRACT.md、製品完成の検証はGOAL.mdに従う。
+開発者の自己申告やmockを実製品の証拠にせず、対応するbuild/test/導入/実アプリ入力/削除を実行する。
+製品コードを修正しない。並行編集があればその対象の検証を無効として新しい固定対象でやり直す。
+VERIFICATION.mdへ対象、コマンド、結果、未実行項目、再現手順を記録する。
+ベータの一部条件が通っても製品完成としない。GOAL全条件を実証した場合だけ `.goal-complete` を作成できる。

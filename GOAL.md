@@ -1,3 +1,7 @@
+> 運用補足（2026-09-25）: この文書は完成版の受け入れ条件である。
+> ユーザーが依頼した段階的なベータ公開は `docs/PRODUCT_RELEASE_CONTRACT.md`
+> 冒頭の公開条件で判断する。ベータ公開を本書のチェック項目のPASSや製品完成と扱わない。
+
 # PRODUCT GOAL
 
 KanaAIは、pinned Mozcを日本語変換基盤として使う、**Windowsで実際にインストールでき、普段の日本語入力として持続利用できる完全ローカルAI IME**である。
@@ -204,7 +208,7 @@ Performanceのsource microbenchmark、Linux bridge、fixture runtime、CLI/API�
 - Model processはread-only model/dictionary/data、最小権限user/filesystem/network policyで動作し、credentialやproduction profileをmodel serverへ渡さない。User-supplied model runnerが任意のnetwork/child processを無制限に起動しないようにする。
 - C++/Rust FFI、CBOR/JSON/TSV、pipe、candidate permutations、Mozc bridge、import/export、UI data boundariesはbounds/range/ownership/lifetime exact check。ASan/UBSan（利用可能なtarget）、Windows Application Verifier/Debug sanitizers、fuzz/negative corpusをrelease-critical boundaryへ適用する。
 - Model/dictionary/Mozc/dependencyはlicense、source、version、digest、SBOM、notice、redistribution条件を記録する。Secret、API key、user text、profile、local model cacheをsource/CI/artifactへ入れない。
-- Release installer、binary、更新packageにはrelease identity署名を付与し、署名できないartifactのpublic releaseを禁止する。SHA-256、SBOM、provenance、rollback、security response、known limitationをrelease channelで公開する。
+- 完成版のinstaller、binary、更新packageにはrelease identity署名を付与する。未署名ベータの扱いはPRODUCT_RELEASE_CONTRACT.mdの段階別規約による。SHA-256、SBOM、provenance、rollback、security response、known limitationをrelease channelで公開する。
 
 # PLATFORM / ENVIRONMENT REQUIREMENTS
 
@@ -348,6 +352,6 @@ Performanceのsource microbenchmark、Linux bridge、fixture runtime、CLI/API�
 10. AI fallback/ON/OFF、remote/network、secure field、learning、upgrade/uninstallを隠れたswitchやcompletionからのsilent exclusionでgateをgreenにしてはならない。すべての機能とfallbackを明示的に検証する。
 11. User personal data、raw key/preedit/context、learning/model prompt/response、credential、real dictionary/model fileをsource、test fixture、logs、artifact、public issueへreleased/committedしない。Canary/synthetic dataを使い、security reviewを通したredacted evidenceだけpreserveする。
 12. `GOAL.md`の変更はdiff/理由/impactを明示し、scope/quality/performance/security/privacy/deletion/validationを弱める変更にはuserの明示decision/承認を必要とする。任意のagent都合でrequirements/checkboxを消さない。
-13. Milestone完了はplanning/progressに過ぎない。`COMPLETION GATES`全てとindependent verifierの`.goal-complete`以外に「完成」「production-ready」「final」「beta」等のclaimを置いてはならない。
+13. Milestone完了はplanning/progressに過ぎない。`COMPLETION GATES`全てとindependent verifierの`.goal-complete`以外に「完成」「production-ready」「final」のclaimを置いてはならない。ベータの表示はPRODUCT_RELEASE_CONTRACT.mdの公開条件を満たす場合に限る。
 14. Final release artifactsはactual user journey、改善、failure recovery、uninstallまで観察できる。不能なOS権限/signing/legal/physical validationはcheck boxをpretend passさせず、BLOCKERS/STATE/VERIFICATIONに正確に記録する。
 15. Future scope (Linux/macOS/ARM64/sync/writing assistant等)を追加することは許されるが、Windows core completionをそのfuture featureの未実装で延期・無限化してはならない。

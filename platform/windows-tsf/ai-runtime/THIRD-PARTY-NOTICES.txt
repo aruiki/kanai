@@ -1,0 +1,83 @@
+KanaAI local AI runtime third-party notices
+==============================================
+
+Scope and evidence
+------------------
+
+This file accompanies the pinned A2-01 manifest.  It is a source and
+license notice for the two upstream artifacts selected by the coordinator;
+it is not a claim that the Windows product, installer, model quality, or
+runtime behavior has been verified.
+
+The manifest records the exact upstream identities and bytes. Both pinned
+inputs have now been downloaded and hash-verified in the local staging area.
+They have not been installed into KanaAI or executed as part of the product
+by this change.
+
+Qwen model
+----------
+
+Repository: Qwen/Qwen2.5-1.5B-Instruct-GGUF
+Revision: 91cad51170dc346986eccefdc2dd33a9da36ead9
+Weight file: qwen2.5-1.5b-instruct-q4_k_m.gguf
+Weight commit: dd26da440ef0330c47919d1ecae0966d24022222
+License identifier: Apache-2.0
+License copy: licenses/Qwen-Apache-2.0.txt
+
+The full Apache License 2.0 text from the pinned revision is included in the
+referenced file.  That text includes the upstream attribution
+"Copyright 2024 Alibaba Cloud".  This checkout does not contain a separately
+verified model NOTICE file, so no additional NOTICE text is invented here.
+
+The GGUF conversion recipe, converter revision, and byte-for-byte conversion
+reproducibility were not independently reproduced.  The pinned upstream file
+identity is recorded as metadata; that is not the same as a verified local
+conversion build.
+
+llama.cpp runtime
+-----------------
+
+Repository: ggml-org/llama.cpp
+Release: b11146
+Commit: 7fe450e19305b828c199d602c23a8337aaa1f03b
+Windows asset: llama-b11146-bin-win-cpu-x64.zip
+License identifier: MIT
+License copy: licenses/llama.cpp-MIT.txt
+
+The complete MIT text and the upstream ggml authors copyright attribution are
+included in the referenced file. The prebuilt Windows archive is a pinned
+binary input; a local source build and byte-for-byte reproducibility have not
+been performed.
+
+The pinned archive was inspected after download on 2026-09-26. It contains 51
+flat entries, including `llama-server.exe`, its `llama-*-impl.dll` closure,
+CPU-specific `ggml-cpu-*.dll` files, `libomp.dll`, `mtmd.dll`, and
+`LICENSE-LLVM-OpenMP`. The archive entry names and count are pinned in the
+manifest. The LLVM OpenMP license file is retained with the extracted runtime;
+this does not by itself complete the transitive dependency notice inventory.
+
+Dependency notices and SBOM status
+----------------------------------
+
+UNVERIFIED / INCOMPLETE DEPENDENCY NOTICE INVENTORY
+
+The exact b11146 Windows archive's transitive dependency inventory and final
+SBOM have not been completed in this checkout. The archive's shipped notice
+and any separate build notices must be checked against the exact release
+before redistribution. This paragraph is an explicit blocker, not a
+placeholder assertion that a dependency notice is complete. No invented
+SBOM component or dependency license is included.
+
+The local staging policy in manifest-v1.json permits only the exact declared
+runtime archive entries and validates the archive's exact size, entry names,
+and SHA-256 before extraction. The archive layout has been inspected; runtime
+behavior on Windows, dependency closure, and quality still require testing.
+
+Operational boundary
+--------------------
+
+The model and runtime are optional local slow-path components.  The manifest
+marks the intended runtime as Windows x64 CPU-only and offline.  Network
+download is not performed by the default validation/plan path.  The current
+AI-non-bundled product behavior is unchanged by these metadata and staging
+files.

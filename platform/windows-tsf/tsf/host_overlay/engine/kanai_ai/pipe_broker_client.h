@@ -22,6 +22,10 @@ using PipeReleaseTransport =
 // model's bounded worker. The returned callable owns one reusable client,
 // verifies the broker process image before authentication, and performs no
 // I/O until the worker invokes it.
+// An absent default pipe triggers a hidden sibling broker launch on that worker,
+// with a process-lifetime job, one launcher per Windows session and 5s backoff.
+// Explicit lab pipe/image overrides disable automatic startup. Release never
+// starts a broker. The first startup request falls back without waiting.
 PipeRerankTransport MakePipeRerankTransport(std::uint32_t timeout_milliseconds);
 PipeReleaseTransport MakePipeReleaseTransport(
     std::uint32_t timeout_milliseconds);

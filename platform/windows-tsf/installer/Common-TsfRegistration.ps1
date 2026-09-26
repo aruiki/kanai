@@ -14,6 +14,18 @@ $script:TsfRegistrationLanguageSegment = '0x00000411'
 $script:TsfRegistrationLanguageId = 1041
 $script:TsfRegistrationDllName = 'KanaAI.TsfTip.dll'
 
+function Get-TsfSha256 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $stream = [System.IO.File]::OpenRead($Path)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function Get-TsfRequiredProperty {
     param(
         [Parameter(Mandatory = $true)]$Object,
@@ -300,7 +312,7 @@ function Get-TsfWindowsTestReceipt {
         if (-not [string]::IsNullOrWhiteSpace($expectedHash) -and
             -not [string]::IsNullOrWhiteSpace($TipDllPath) -and
             (Test-Path -LiteralPath $TipDllPath -PathType Leaf)) {
-            $actualHash = (Get-FileHash -LiteralPath $TipDllPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            $actualHash = Get-TsfSha256 -Path $TipDllPath
             $result.HashMatches = ($actualHash -ieq $expectedHash.ToLowerInvariant())
         }
         else {

@@ -4,7 +4,15 @@
 //! broker schedules it through `EnhancementQueue`; a missing model, timeout,
 //! malformed response, or cancelled request returns an error and the queue
 //! preserves the Mozc baseline.
+//!
+//! The pinned runtime is launched with `--api-key-file`, so `/health` answers
+//! without a token but `/v1/models` and `/v1/chat/completions` answer `401`
+//! unless the request carries `Authorization: Bearer <key>`.  A key is
+//! therefore optional here only so a caller that has no key at all (an
+//! unauthenticated runtime) still constructs; when a key is supplied it is
+//! validated here and sent only as a bearer token on the request.
 
+use std::fmt;
 use std::net::IpAddr;
 use std::time::{Duration, Instant};
 
@@ -23,13 +31,36 @@ const MAX_RESPONSE_BYTES: usize = 64 * 1024;
 const MAX_CONTEXT_CHARS: usize = 512;
 const MAX_CANDIDATES: usize = 9;
 const MAX_DEADLINE: Duration = Duration::from_secs(2);
+const MAX_API_KEY_BYTES: usize = 512;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct LocalOpenAiBackend {
     client: Client,
     endpoint: Url,
     model: String,
     provider_id: String,
+    /// Never printed, never logged, never placed in the URL or the payload.
+    api_key: Option<String>,
+}
+
+/// Diagnostics expose that a key exists, never its material.
+impl fmt::Debug for LocalOpenAiBackend {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("LocalOpenAiBackend")
+            .field("endpoint", &self.endpoint.as_str())
+            .field("model", &self.model)
+            .field("provider_id", &self.provider_id)
+            .field(
+                "api_key",
+                &if self.api_key.is_some() {
+                    "<redacted>"
+                } else {
+                    "none"
+                },
+            )
+            .finish()
+    }
 }
 
 fn is_loopback_host(host: Option<&str>) -> bool {
@@ -45,28 +76,71 @@ fn is_loopback_host(host: Option<&str>) -> bool {
         .is_ok_and(|address| address.is_loopback())
 }
 
+/// A bearer token must be a bounded, single-line, control-free value.  Anything
+/// else cannot be transported as a header without ambiguity, and a control
+/// character or whitespace would allow header injection into the request.
+fn validate_api_key(key: &str) -> Result<(), String> {
+    if key.is_empty()
+        || key.len() > MAX_API_KEY_BYTES
+        || key
+            .chars()
+            .any(|character| character.is_control() || character.is_whitespace())
+    {
+        return Err(
+            "KANAI_AI_API_KEY must be non-empty, at most 512 bytes, and free of control characters and whitespace"
+                .to_owned(),
+        );
+    }
+    Ok(())
+}
+
 impl LocalOpenAiBackend {
     /// Construct a local backend only when an explicit loopback HTTP endpoint
     /// and model are configured. Remote endpoints and TLS endpoints are
     /// rejected by design so the broker cannot accidentally depend on a
     /// network-facing or platform TLS runtime.
+    ///
+    /// No API key is configured here; see [`Self::new_with_api_key`] for a
+    /// runtime that was started with `--api-key-file`.
     pub fn from_environment() -> Option<Self> {
         let base = std::env::var("KANAI_AI_BASE_URL").ok()?;
         let model = std::env::var("KANAI_AI_MODEL").ok()?;
         Self::new(base, model).ok()
     }
 
+    /// Construct a local backend that sends no `Authorization` header.
     pub fn new(base_url: impl AsRef<str>, model: impl Into<String>) -> Result<Self, String> {
-        let base = Url::parse(base_url.as_ref()).map_err(|error| error.to_string())?;
+        Self::build(base_url.as_ref(), model.into(), None)
+    }
+
+    /// Construct a local backend that authenticates with `api_key`.
+    ///
+    /// The key is required to be a bounded, single-line, control-free token:
+    /// an empty key, a key longer than 512 bytes, or a key containing
+    /// whitespace or a control character is a construction error rather than
+    /// a request-time failure, because such a value cannot be transported as a
+    /// header without ambiguity or injection.
+    pub fn new_with_api_key(
+        base_url: impl AsRef<str>,
+        model: impl Into<String>,
+        api_key: impl Into<String>,
+    ) -> Result<Self, String> {
+        Self::build(base_url.as_ref(), model.into(), Some(api_key.into()))
+    }
+
+    fn build(base_url: &str, model: String, api_key: Option<String>) -> Result<Self, String> {
+        let base = Url::parse(base_url).map_err(|error| error.to_string())?;
         if !base.username().is_empty() || base.password().is_some() {
             return Err("KANAI_AI_BASE_URL must not contain credentials".to_owned());
         }
         if base.scheme() != "http" || !is_loopback_host(base.host_str()) {
             return Err("KANAI_AI_BASE_URL must be an HTTP loopback endpoint".to_owned());
         }
-        let model = model.into();
         if model.is_empty() || model.len() > 128 || model.chars().any(char::is_control) {
             return Err("KANAI_AI_MODEL must be non-empty, bounded, and control-free".to_owned());
+        }
+        if let Some(key) = api_key.as_deref() {
+            validate_api_key(key)?;
         }
         let mut endpoint = base;
         endpoint.set_path("/v1/chat/completions");
@@ -75,6 +149,11 @@ impl LocalOpenAiBackend {
         let client = Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .timeout(MAX_DEADLINE)
+            // The product promises a fully local runtime.  A machine-wide proxy
+            // must never be allowed to intercept loopback model traffic, or the
+            // request could leave the machine and the model could be reached
+            // through a non-loopback hop.
+            .no_proxy()
             .build()
             .map_err(|error| error.to_string())?;
         let provider_id = format!("openai-compatible:{}", model);
@@ -83,6 +162,7 @@ impl LocalOpenAiBackend {
             endpoint,
             model,
             provider_id,
+            api_key,
         })
     }
 
@@ -94,19 +174,19 @@ impl LocalOpenAiBackend {
         if cancellation.is_cancelled() {
             return Err(EnhancementError::Cancelled);
         }
-        let mut response = self
-            .client
-            .post(self.endpoint.clone())
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|error| {
-                if error.is_timeout() {
-                    EnhancementError::ProviderTimeout
-                } else {
-                    EnhancementError::ProviderUnavailable(error.to_string())
-                }
-            })?;
+        let mut builder = self.client.post(self.endpoint.clone()).json(&payload);
+        if let Some(api_key) = self.api_key.as_deref() {
+            // The key travels only as a bearer token header.  It is never part
+            // of the URL, never part of the JSON payload, and never logged.
+            builder = builder.bearer_auth(api_key);
+        }
+        let mut response = builder.send().await.map_err(|error| {
+            if error.is_timeout() {
+                EnhancementError::ProviderTimeout
+            } else {
+                EnhancementError::ProviderUnavailable(error.to_string())
+            }
+        })?;
         if !response.status().is_success() {
             return Err(EnhancementError::ProviderUnavailable(format!(
                 "local model returned HTTP {}",
