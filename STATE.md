@@ -50,11 +50,20 @@ D-1〜D-5 の決定はそのまま有効（下の履歴区切りを参照）。
 | DR-01 (downgrade→0.0.9) | fail: command-exit-code, product-code |
 | UC-02 / OB-01 / CL-01 | pass |
 
-**残る未解決（次のセッションの作業）:**
-1. **`expected-files` が全導入フェーズで失敗（最重要）**。install-directory は pass なので 64-bit 配置は正しい。MSI の File table が宣言するファイルと実際の導入ファイルの不一致。receipt が出れば `checks[]` の evidence に欠落ファイル一覧が出る。**まず W2 を再実行して receipt を出し、欠落ファイル名を特定する**こと。
-2. **UF-01 / DR-01 は fixture が旧 wxs（`ProgramFilesFolder`）でビルドされている**ため食い違う（`.local/installer-fixture-newer` = 0.1.1、`.local/installer-fixture-older` = 0.0.9）。**fixture も `ProgramFiles64Folder` で再ビルドが必要**（同じ stage→build 手順で `-Version` を変える）。
-3. **2つ目のハーネスクラッシュは修正済み（`267f7c4`）**: `LifecycleValidation.Common.ps1` 1339 行 `Resolve-KanaAiLifecycleOverallStatus` の `@($Results)` が同じ `List[object]` 不具合を踏み、**receipt 直前で落ちていた**（これが #2 ランの receipt 未生成の原因）。各分岐で `$list` へ直接代入する形に修正（`if` 式は1要素配列をスカラーにアンロールし StrictMode 下で `.Count` が落ちるため）。**自己テスト 77/77 pass**。
-4. 次: W2 再実行 → receipt 取得 → `expected-files` の欠落ファイル確定・修正 → fixture 再ビルド → 再度 W2 → **W1 デスクトップ日本語入力検証** → SBOM/署名 → GitHub prerelease。
+**#3 W2 ラン（`.local/w2-execute-20260926-202806`、receipt 生成成功）**: クラッシュ2件修正の効果で **receipt.json が生成された**。結果:
+- **pass**: PF-01, PF-02, **IS-01 (Setup.exe ワンクリック全面 pass)**, UC-01, UC-02, OB-01, CL-01
+- unconfirmed: IM-01 / RS-01 → `msi-log-classification` のみ（インストール証拠は expected-files 含め**全て pass**）
+- fail: UF-01 / DR-01（fixture が旧 wxs = 32-bit）
+
+**このセッションの追加修正:**
+- **`expected-files` の真因（`7016bb6`）**: `Get-KanaAiLifecycleMsiFilePlan` が MSI File テーブルの `短縮名|長い名前` から**短縮名**を採用していた。実導入名は長い名前（例 `MOZC-LICENSE.txt`）。長い名前に修正 → **IS-01/IM-01/RS-01 の expected-files が pass に**。
+- **`msi-log-classification` の真因（`5186877`）**: 日本語 Windows の MSI ログは「操作開始」「削除を正しく完了しました」と**日本語**で出るため英語パターンが一致しない。言語中立トークン（`Doing action:` / `ActionStart(Name=` / `CleanupConfigData(RemovingProduct=1)` / `REINSTALL`）と日本語を追加。曖昧性検出は維持（ST-07 pass）。**自己テスト 77/77 pass**。
+
+**残る作業（次セッション）:**
+1. **W2 再実行**（`5186877` 適用後）→ IM-01 は pass 見込み。RS-01 はログに REINSTALL と InstallInitialize が併存し `ambiguous-multiple-markers`（README 記載の既知制限）になる可能性あり。
+2. **fixture 再ビルド**: `.local/installer-fixture-newer`(0.1.1) / `-older`(0.0.9) を `ProgramFiles64Folder` で作り直す → UF-01/DR-01 の product-code / exit-code。
+3. **W1 デスクトップ日本語入力検証 = リリースの主要ゲート（未着手）**: 実アプリ（Notepad 等）で かな入力・漢字変換・候補表示・確定・フォーカス切替を確認。
+4. **GitHub prerelease**: 未署名を明記し SHA-256 / 対象コミット / ライセンスを添付。**W1/W2 未達の現状では公開不可**（リリース契約は「未検証のインストーラを公開する許可ではない」と明記）。push / release 作成には GitHub 認証が必要。
 
 **注意**: restage と build の間、および W2 実行中は source へ書かない（`Runtime manifest source identity changed` で失敗する）。診断用スクリプトは `.local/launch-setup-diag.ps1` / `.local/run-setup-diag.ps1` / `.local/rebuild-candidate.ps1`（いずれも gitignore 済み）。
 
