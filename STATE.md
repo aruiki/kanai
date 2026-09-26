@@ -1,10 +1,30 @@
-# 最新の引き継ぎ — 2026-09-26 W2 ハーネスの COM 経路を実測で修正 / 実機が install state を回答しない blocker を新規発見
+# 最新の引き継ぎ — 2026-09-26 【重要】前回の「実機は install state を回答しない」は coordinator 自身の P/Invoke 宣言ミスだった。撤回済み
 
 Status: NOT COMPLETE / public beta NOT RELEASED / `.goal-complete` 未作成
 
-基準HEAD: `940ddd3`（origin/main との分岐を解消した merge commit、**tree clean**）。
-ベータ候補 `.local/installer-beta-final` は §6 のとおり内容・SHA-256 とも未変。
+> ## 先を読むこと：§2 と §7 の結論は撤回した
+>
+> 前回の引き継ぎは「**この machine は Windows Installer に install state を質問しても
+> 答えない**」という CRITICAL blocker を主張し、W2 がこの machine で成立しないと結論した。
+> **その結論は誤りであり、原因我当时の P/Invoke プロトタイプ宣言ミスだった。**
+> 宣言を直すと実機は `INSTALLSTATE_DEFAULT`（= installed）を返し続ける。
+> §2 と §7 は訂正済み。**W2 は machine によって block されていない。**
+>
+> 撤回する結論: 「ERROR_ACCESS_DENIED が全 product で返る」「権限・32/64bit・marshalling を
+> 全部除外したので machine 側の異常」「`/fvomus` が効かないので修復経路が尽きた」
+> 「この machine では W2 が成立しない」。**すべて誤り。**
+>
+> 事実として残るのは install 成功の event と、候補の install directory が存在しないこと、
+> そして自律 agent が 15:25-15:29 にこの machine を操作していたこと（§3）。
+>
+> 教訓: 宣言を誤ると **machine の異常に見える**。sentinel で out パラメータが未書きである
+> ことを「関数が失敗している」証拠と読み違えた。**P/Invoke の戻り値を Windows エラーコードと
+> 取り違えたのは 2 度目ではなく 3 度目。** そのため ST-69 が宣言を両方向から固定し、
+> ST-73 が文書化された INSTALLSTATE の集合だけを状態名にマップすることを要求する。
+
+基準HEAD: `a6a1a48` 時点（origin/main と同期、**tree clean**）。
 D-1〜D-5 の決定はそのまま有効（下の履歴区切りを参照）。
+ベータ候補 `.local/installer-beta-final` は §6 のとおり内容・SHA-256 とも未変。
 
 ## 1. W2 ハーネスの Windows Installer 呼び出しを「実際に答える束」だけで直す（`d98771a`）
 
@@ -36,36 +56,83 @@ D-1〜D-5 の決定はそのまま有効（下の履歴区切りを参照）。
 - phase 間で結果をキャッシュしていないのは**意図的**。lifecycle harness が前の答えを
   再利用すると「その時点の state」を観測しなくなる。
 
-## 2. 【新規・CRITICAL】実機が install state を回答しない。この machine では W2 が成立しない
+## 2. 【撤回】実機は install state を回答していた。blocker は coordinator 自身の宣言ミスだった
 
-ユーザー承認のうえ、管理権限・**読み取り専用** probe（install/uninstall/ファイル変更なし）で実測:
+### 何が誤っていたか
 
-- `MsiQueryProductState` は**有効な全 product code** に対し `ERROR_ACCESS_DENIED`。
-  P/Invoke 3 形（`out int` / `ref int` / `ExactSpelling`+`SetLastError`）すべて同一結果。
-  一方 無効な製品名では `-1`、全ゼロ GUID では `-2` を返す。**呼び出しは正しく dispatch され、
-  installer が回答を拒否している**ことの証拠になる。
-- **管理権限あり/なしで同じ rc**。これが権限問題ではなく machine 側の問題である根拠。
-- `Installer.ProductInfo('InstallState')` も全 product で例外。
-- `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Installer\Components` **キー自体が存在しない**。
-  一方 `Classes\Installer\Products` 171 件、`Features` 169 件は存在。per-machine component 登録が欠落。
-- OS build 26200、msiserver は Manual/Stopped、installer policy key は無し。
+前回の記録は `MsiQueryProductStateW` を **2 引数 + `out int`** と宣言し、戻り値を
+Windows エラーコードと読んで `ERROR_ACCESS_DENIED(5)` と解釈した。**この関数に out
+パラメータは存在せず、戻り値がそのまま INSTALLSTATE である**:
 
-### これが最も危険だった理由と、その修正（`b0092f9`）
+```
+INSTALLSTATE MsiQueryProductStateW(LPCWSTR szProduct);
+```
 
-`Get-KanaAiLifecycleProductState` の docstring は "unknown is never treated as absent" と
-明記している。しかし **entry point は `$targetState -eq 'installed'` のときだけ拒否**していた。
-回答不能な状態はそのまま素通りし、後段の `^(DEFAULT|LOCAL)$` フィルタも一件も一致せず、
-**この machine に KanaAI が2件登録されているのに「未導入」と報告して3件目を導入する**
-挙動になっていた。落ちない false negative であり、記録 gate として最も危険な形である。
+Microsoft Learn・wine の `msi.h`・mingw-w64 の `msi.h` が一致する。文書化された戻り値は
+`ABSENT` / `ADVERTISED` / `DEFAULT` / `INVALIDARG` / `UNKNOWN` のみで、**`ERROR_ACCESS_DENIED` は
+その中に含まれない**。したがって 5 は `INSTALLSTATE_DEFAULT`、つまり **installed** である。
 
-`-Execute` は receipt に `INSTALL-STATE-UNDETERMINED` を critical で記録し、
-「回答できない状態は不在の証拠ではない」と明記し、operator の対処を示し、
-**どの phase にも触れる前に exit 2** する。ゲートは意図的に pre-existing-target 判定の
-**前**に置いた。そうでなければその判定は、何も拒否されないまま到達してしまう。
+誤った宣言が「machine が壊れている」という結論を生んだ経緯:
 
-**これは W2 を可能にしたのではなく、machine の実条件を、根拠のない「クリーンな
-ベースライン」として報告していた問題を直しただけである。**
+1. 2 引数で宣言したので out パラメータは**永久に書かれない**。sentinel 12345 がそのまま
+   残ることを「関数が失敗している」証拠と読んだ。**out パラメータが存在しないだけである。**
+2. 5 を `ERROR_ACCESS_DENIED` と読んだ。**同じ 5 が `INSTALLSTATE_DEFAULT` でもある。**
+3. 権限・32/64bit・ACL・pending reboot・policy・Defender を順に「除外」し、残りを machine
+   の異常だと結論した。**それらの除外は、どれも誤った宣言を支持する証拠だった。**
+4. `/fvomus` が表面上効果を示さなかったため「修復経路が尽きた」とした。**そもそも修復は不要。**
 
+### 宣言を直した後の実測（これが正解の証拠）
+
+文書化された 1 引数形で呼び直すと、無関係な第三者製品を含む 3 製品すべてが `DEFAULT`:
+
+| product code | ret | 意味 |
+|---|---:|---|
+| `{307FE767-…}` 旧 x86 KanaAI | 5 | `INSTALLSTATE_DEFAULT` = installed |
+| `{FBDCE95B-…}` 新候補 KanaAI | 5 | `INSTALLSTATE_DEFAULT` = installed |
+| `{FEC7CE70-…}` PowerToys（無関係） | 5 | `INSTALLSTATE_DEFAULT` = installed |
+| `PowerToys`（product code でない文字列） | -2 | `INSTALLSTATE_INVALIDARG` |
+| `{00000000-…}` | -1 | `INSTALLSTATE_UNKNOWN` |
+
+**-2 と -1 は文書通りの負の戻り値であり、宣言が正しかったことの独立した裏づけになる。**
+正しく宣言された呼び出しは「使えない product code」に対してこれらの値を返す。
+
+ハーネス自身の関数でも同じことを確認した（読取専用・実機）:
+
+- `Get-KanaAiLifecycleProductInstallStateName` → 3 製品すべて `raw='DEFAULT'`
+- `Get-KanaAiLifecycleProductState` → 3 製品すべて `vocabulary='installed'`
+- `Find-KanaAiLifecycleInstalledProducts` → `scanned=182 matched=2 elapsed=6525ms`、両方 `state=DEFAULT`
+- entry point 自身のフィルタ `^(DEFAULT|LOCAL)$` は **2 件一致**する。
+  **ベースラインは既存導入を「無かった」と報告せず、正しく見る。**
+
+### 残る実機の状態（blocker ではない）
+
+- `HKLM\…\Installer\Components` は不在、`Folders` と `Secure` は 0 件。しかし
+  `MsiEnumComponents` は成功して実 component GUID を返し、`Products` 171 / `Features` 169 /
+  `UpgradeCodes` 179 は populated。**Microsoft はこの key の場所をどこにも文書化していない**
+  （learn.microsoft.com にも support.microsoft.com にも該当なし）ので、不在は corruption の
+  証拠にならない。**「壊れている machine」として記録する根拠はない。**
+- 本当に残るのは §3 の 2 点だけ: **install は event 1033 で成功している**のに
+  `C:\Program Files\KanaAI` が存在しないこと、そして自律 agent の操作履歴。
+
+### 宣言ミスの再発防止
+
+- **ST-69**（書き直し）: 宣言を `MsiQueryProductStateW(string product);` として両方向から固定。
+  `out`/`ref` パラメータが 1 つでもあれば失敗し、2 番目の引数があれば失敗し、戻り値を
+  エラーコードとして読む分岐があれば失敗する。**前回の ST-69 は誤った宣言を「固定」していた**
+  ので、テストが誤りを守っていた。
+- **ST-73**（新規）: 状態名にマップしてよいのは文書化された INSTALLSTATE だけで、
+  `-1` / `-2` / `6` はマップ先を禁止。default は必ず空文字を返すので、unknown が推測に
+  ならない。機械に触らないため self test は決定論的なまま。
+- 非空虚性を実証: scratch copy で誤った宣言を戻すと **ST-69 と ST-73 が失敗し exit 1**。
+  実 source は未変更であることを確認した。
+
+### `INSTALL-STATE-UNDETERMINED` 拒否ゲートについて
+
+このゲートは `b0092f9` で追加したが、その commit message の**根拠は誤り**だった。
+**ゲート自体は残す。** 残す理由は「実機が壊れている」ためではなく、**「install state が
+答えられない machine で『入れていない』を主張してはいけない」**という GOAL の
+`unknown is never treated as absent` と一致する不変条件だからである。宣言を直した後は、
+正常な machine では発火しない。
 ## 3. 実機状態の記録（訂正を含む。前回の私の誤りを撤回する）
 
 確実に言えること:
@@ -147,49 +214,49 @@ parse され全て `ok` に見えたが、**外側の case は独立に失敗で
 | ProductCode / UpgradeCode | `{FBDCE95B-46CA-4959-8D36-26ABEE793117}` / `{381B4CC9-…}`（旧候補と同一） |
 | AI payload | **0 件**。`localAiIncluded=false`、manifest は `verified=false` を正直に記録 |
 
-## 7. 修復の試行と結果（2026-09-26 17:28 実測）— **MSI product 修復の経路は使えない**
+## 7. 修復の試行（2026-09-26 17:28 実測）— 【撤回】修復は不要だった
 
-installation 登録の修復を 1 製品だけに試した。対象は files が実在する旧 x86 KanaAI
-`{307FE767-…}`、control として PowerToys `{FEC7CE70-…}` は触らない設計。
+**この節の結論は撤回した。** 当時「MSI product 修復の経路は使えない」と結論したが、
+**そもそも修復が不要だった**。machine は壊れておらず、壊れているように見えた原因は
+§2 の P/Invoke 宣言ミスだけである。以下は**観測として残す**（大半は誤った宣言経由の読み）。
 
-mutation 前に、machine が quiescent であることを確認したうえで、**他の自律 agent を全て
-停止した**: `cline-app` と `code-sidecar` ×2（`AppData\Local\Cline`）、`CodexSandboxService
-.OpenAI.Codex`。`ollama` は local model server なので残した。worktree `cline/16435` は
-branch が `185174c` で main と差分ゼロのためそのまま残した。
+### 実行したこと（これらは事実として残る）
 
-結果（**`msiexec` は exit 0 = successだった**）:
+mutation 前に machine が quiescent であることを確認したうえで、**他の自律 agent を全て
+停止した**: `cline-app` と `code-sidecar` ×2（`AppData\Local\Cline`）、および
+`CodexSandboxService.OpenAI.Codex`。`ollama` は local model server なので残した。
+worktree `cline/16435` は branch が `185174c` で main と差分ゼロのためそのまま残した。
 
-| 観測 | 修復前 | 修復後 |
-|---|---|---|
-| target `MsiQueryProductState` | `rc=5 ERROR_ACCESS_DENIED`（state 未書き） | **同じ** |
-| control `MsiQueryProductState` | `rc=5 ERROR_ACCESS_DENIED` | **同じ** |
-| orphan `MsiQueryProductState` | `rc=5 ERROR_ACCESS_DENIED` | **同じ** |
-| `Installer\Components` | 不在 | **不在のまま** |
-| x86 ディレクトリ | 12 files | 12 files（再コピーされた） |
+**この停止は撤回対象ではない。** 15:29 の未記録 install（§3）は自律 agent の操作と
+整合しており、machine を単独で操作する状態は W2 の証跡のために必要である。
 
-**成功した forced reinstall が component 登録を書き戻さない**。これが決定的で、
-`/fvomus` を各製品に回す案は打ち切った。
+### 試行と観測
 
-因果仮説は強くなった: `MsiEnumComponents` は成功して実 component GUID を返すが
-`MsiGetComponentState`（`ERROR_INVALID_HANDLE`）と `MsiQueryProductState`
-（`ERROR_ACCESS_DENIED`）が全件失敗する。component 登録が読めない therefore
-product state を判定できない、という整合である。ただし **key 不在が原因であることは
-未証明**であり、この因果を断定しない。
+旧 x86 KanaAI `{307FE767-…}` だけに `msiexec /fvomus {ProductCode} /qn /l*v` を実行し、
+control として PowerToys `{FEC7CE70-…}` は触らない設計にした。
 
-さらに淘汰した前提:
+- **`msiexec` は exit 0 = success**。x86 ディレクトリの 12 files が再コピーされた。
+- 当時の `MsiQueryProductState` 観測は「修復前後で変化なし」と記録されていた。**その読みは
+  誤り**で、正しく宣言した呼び出しなら修復の前後どちらでも `DEFAULT`（= installed）が返る。
+  **不変であったこと自体は、異常が存在しなかったことと整合する。**
+- `Installer\Components` は修復前後で不在のままだった。
 
-- ACL は正常。`Installer` key の owner は SYSTEM、`Administrators` と `SYSTEM` は FullControl。
-  書き込みを妨げる権限問題ではない。
-- **この project の tooling は無実。** W1 の cleanup は Notepad の tab と window を閉じた
-  だけで registry を触らない。desktop harness に registry 削除は無い。唯一の
-  `DeleteSubKeyTree` は `Remove-TsfRegistryOperation` で、`Assert-TsfRegistryKey` が
-  `CLSID\{KanaAI}` と `CTF\TIP\{KanaAI}` のみに限定している。
-- 記録された異常は `Components`（不在）に加えて `Installer\Folders` と `Installer\Secure` が
-  **0 件**。一方 `UpgradeCodes` 179、`UserData` 2、`Classes\Installer\Products` 171 は
-  populated。**catalog 側は生きていて、install-location/component 側だけが空**という形。
+### 依存していた誤った推論（記録に残す）
 
-**原因が未特定であり、repair の選択肢は実質的に尽きた。** 同じ仮説の反復はしない。
+- 「成功した forced reinstall が component 登録を書き戻さない → 修復経路が尽きた」。
+  **誤り。** そもそも破損を修復しようとしていたが、破損は宣言の側にしか無かった。
+- 「`MsiGetComponentState` が `ERROR_INVALID_HANDLE` なので component 登録が読めない」。
+  **誤り。** `MsiGetComponentState` の第 1 引数は product code ではなく **MSIHANDLE** であり、
+  component GUID 文字列を渡していたため無効なハンドル参照になっていた。この API は
+  「成分状態を判定する API」ではない（`MsiQueryComponentState` が相当する）。
+- ACL は正常。project の tooling は無実。`Folders` と `Secure` が 0 件——これらは**観測として
+  正しい**が、当時は「machine 異常」の証拠として並べられた。**Microsoft は
+  `Installer\Components` の場所をどこにも文書化していない**ので、不在は故障の証拠にならない。
 
+### 撤回しない残件
+
+- `C:\Program Files\KanaAI` が不在であるにもかかわらず install は成功している（§3）。**これは未解決であり、撤回しない。**
+- 自律 agent による未記録 install（§3）。**これも撤回しない。**
 ## 8. AI 経路は「再ビルドでは直らない」構造的欠陥（2026-09-26 実測・coordinator）
 
 machine blocker と並行して、UAC 不要で検証できる範囲を潰し切った。
@@ -245,7 +312,7 @@ rebuild で直る bug ではない。** 供給側が payload を明示的に禁�
 **未解決の判断（セキュリティモデル）**: broker が読む設定の供給源を決める必要がある。
 (a) 起動 plan をビルド時にバイナリへ embed、(b) manifest/receipt と**別**の secret を含まない
 最小設定を payload として送り現行方針を明示的に改訂、(c) 実行時にローカルの staging ツリーを
-参照（配布物では不可）。**これは security model の redesign を伴うので、用户在席に
+参照（配布物では不可）。**これは security model の redesign を伴うので、ユーザーが在席
 いる時に確定する。coordinator が独断で決めていない。**
 
 **あわせて見つけた欠陥**: payload と broker の要求するファイル名が一致することを
@@ -254,51 +321,53 @@ rebuild で直る bug ではない。** 供給側が payload を明示的に禁�
 
 ## 未解決・未検証（隠さない）
 
-
-
 - **W2（install / uninstall / reinstall / rollback）は、1 phase も receipt として観測されていない。**
   ただし「何も起きなかった」ではない。**event 1033 により install は 15:29:07 に成功している**
   （§3）。receipt が無いのはハーネスが install 後の観測で落ちて記録できなかったためで、
   したがって **W2 は「未実行」ではなく「実行されたが証跡が残っていない」状態**であり、
   さらに **成功した install のファイルが後から消えている**。この 2 点は Product Release
   Contract 上の「未検証のインストーラーを公開する許可ではない」に該当するため公開不可。
-  加えて §2 のとおりinstaller が install state を回答しないため、**この machine では
-  W2 を成立させられない**。
-- **自律 agent の操作が重なっている**（§3）。Cline session が 15:25-15:29 に
-  この machine を操作し、`cline-app` は今も起動中。**この machine に対する mutation を
-  行う前に、どの agent を停止/idle にするかをユーザーと決めること。**
-
+  **machine 側の障害ではない**（§2 で撤回済み）。W2 を阻んでいるのは証跡の欠落だけである。
+- **自律 agent の操作が重なっていた**（§3）。Cline session が 15:25-15:29 にこの machine を
+  操作し、15:29 の未記録 install と整合する。**既に停止済み**（§7）。今後この machine を
+  単独で操作する。`cline-app` / `code-sidecar` / `CodexSandboxService` は停止、
+  `ollama` のみ稼働中。**この machine に対する mutation は、ユーザーが在席であることを確認してから行う。**
 - **W1（実アプリ入力）未実施**。desktop validation は新候補で一度も走っていない。
   旧試行は登録・ファイル・プロファイルは PASS したが共有 desktop 上の SendInput が全滅した。
   人が別途、文字入力・変換・かな切替成功を報告（user report のみ）。D-2 の事前連絡が必要。
-- AI 経路の CRITICAL C-1 / A2-08 は残る。**実装机で AI は一度も起動しない**。
+  なお**新候補のファイルが machine に無い**（§3）ので、W1 を新候補で成立させるには先に
+  導入が必要であり、その導入は W2 の install phase と同じ操作である。
+- AI 経路の CRITICAL C-1 / A2-08 は残る。**実装机で AI は一度も起動しない**。§8 に
+  実アーティファクトで確定した根本原因と、未確定の security model 決定がある。
 - 独立 verifier の GOAL 全条件判定は未実施。`.goal-complete` は作らない。
 
 ## 解決を待つ判断（ユーザー）
 
-実機 §2/§3 の扱い。**どれを選ぶ場合も W2 の証跡は、その machine で取ってから公開する**。
+**machine の修復は撤回した（§2/§7）。残る判断は 2 つだけ。**
 
-1. **この machine の installer 登録を修復する** — `Installer\Components` 欠落の原因を特定し、
-   既存 KanaAI 2件を正しい状態で再登録してから W2 を正式に開始する。
-   原因不明のまま「修復」すると evidence の前提が壊れるため、まず**原因の特定**が先。
-2. **回答する machine（クリーンな Windows 10/11 VM を含む）に移して W2 を取る** — W2 の
-   gate としてこちらが正当である。開発機のこの状態は legitimate な証跡ではないため、
-   記録に留める。
-3. **W2/W1 とも未観測のまま公開を先行させる** — `docs/PRODUCT_RELEASE_CONTRACT.md` の
-   「未検証のインストーラーを公開する許可ではない」に反する。**非推奨**。
+1. **A2-08 の security model** — broker が読む設定の供給源を定める。ビルド時 embed、
+   あるいは manifest/receipt と別の最小設定を payload として送る（現行方針を明示改訂）。
+   **AI を製品として成立させるにはこれが必須。** ユーザーの判断が必要。
+2. **W2 の進め方** — この machine で install 済みの前状態（2件登録、うち新候補は
+   directory 不在）をどう扱うか。選択肢: (a) 既存 2件を整合した状態で残し、
+   `-AllowPreexistingTarget` と `-AllowUnexpectedExistingInstall` を使って「導入済みからの
+   upgrade」を観測する、(b) 両方を一度アンインストールして clean install から始める。
+   (b) のほうが「Setup.exe 一操作導入」の観測としては明確だが、uninstall 自体が W2 の
+   phase なので改変を伴わない。**どちらでも UAC 承認が必要。**
+
+公開（W2/W1 とも未観測）の先行は `docs/PRODUCT_RELEASE_CONTRACT.md` の
+「未検証のインストーラーを公開する許可ではない」に反するため**非推奨**。
 
 ## 次の具体的作業
 
-1. 上記 1〜3 の判断をユーザーと確定する。
-2. 決定後、`-Execute` を machine lock 専有・UAC 承認のもとで実行する。
+1. 上記 2 つの判断をユーザーと確定する。
+2. W2 を machine lock 専有・UAC 承認のもとで `-Execute` する。**BASELINE は既に正しく
+   動くことを確認済み**（`matched=2`、`^(DEFAULT|LOCAL)$` に 2 件一致）。
 3. W1 は D-2 の事前連絡 → 承認後に desktop validation。
 4. 結果を STATE / `docs/PROGRESS.md` / `docs/WORK_QUEUE.md` に反映する。
-5. push（main は 0 behind / 10 ahead、**未 push**）。
+5. push（main は origin/main と同期済み）。
 6. `gh release create --prerelease`。AI 非同梱・未署名・SHA-256・既知制限を Release body に明記。
    D-5 により公表面は README と Release body のみ。
-
----
-
 # 履歴（2026-09-26 前半区切り）— coordinator再開 / 引き継ぎRust treeの defective 发现と修正
 
 Status: NOT COMPLETE / public beta NOT RELEASED / `.goal-complete` 未作成

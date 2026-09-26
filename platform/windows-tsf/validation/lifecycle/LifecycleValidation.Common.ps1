@@ -1964,17 +1964,36 @@ function Get-KanaAiLifecycleExpectedInstallPath {
 
 function Initialize-KanaAiLifecycleMsiNative {
     <#
-        MsiQueryProductState is the only source the harness can use for the
-        InstallState that Installer.ProductInfo refuses, and it is the
-        authoritative answer rather than an inference from the registry.
+        MsiQueryProductState is the authoritative answer to "is this product
+        installed", and it is the only source the harness can use for the
+        InstallState that Installer.ProductInfo refuses.  No registry
+        correlation, and no Win32_Product consistency check.
 
-        The signature is the whole point.  MsiQueryProductState returns a UINT
-        error code and writes the state through an out parameter.  A probe that
-        read the return value as the state reported 5 for an installed product,
-        and 5 is both ERROR_ACCESS_DENIED as an error code and
-        INSTALLSTATE_DEFAULT as a state - two different meanings of one number.
-        Only the out-parameter form is used here, and any non-zero return is
-        reported as unknown rather than guessed.
+        The prototype is one argument and the return value IS the state.
+        MsiQueryProductState has no out parameter at all:
+
+            INSTALLSTATE MsiQueryProductStateW(LPCWSTR szProduct);
+
+        That is stated identically by Microsoft Learn, by the wine msi.h and by
+        the mingw-w64 msi.h, and the documented return values are only
+        INSTALLSTATE_ABSENT, ADVERTISED, DEFAULT, INVALIDARG and UNKNOWN.
+        ERROR_ACCESS_DENIED is not among them, so a five here is
+        INSTALLSTATE_DEFAULT, which means installed.
+
+        This exact prototype was wrong twice in this harness's history and both
+        times it looked like a broken machine rather than a wrong declaration.
+        A two-argument form with an `out int` was declared, the out parameter
+        was observed to stay unwritten, and 5 was read as ERROR_ACCESS_DENIED
+        instead of INSTALLSTATE_DEFAULT. That produced a false "this machine
+        cannot report install state" conclusion, a repair that was never needed,
+        and a refusal gate that would have rejected every healthy machine. The
+        negative results are consistent with the wrong prototype and with nothing
+        else: an invalid product name returns INSTALLSTATE_INVALIDARG and the
+        zero GUID returns INSTALLSTATE_UNKNOWN, which is what the documentation
+        says a correct call does.
+
+        ST-73 pins the one-argument form so the third occurrence cannot be
+        mistaken for a machine fault again.
 
         Add-Type is used the same way the desktop harness already uses it, and
         the type is compiled at most once per process.
@@ -1984,7 +2003,7 @@ function Initialize-KanaAiLifecycleMsiNative {
 public static class KanaAiLifecycleMsiNative
 {
     [System.Runtime.InteropServices.DllImport("msi.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
-    public static extern uint MsiQueryProductStateW(string product, out int installState);
+    public static extern int MsiQueryProductStateW(string product);
 }
 '@
 }
@@ -2026,10 +2045,10 @@ function Get-KanaAiLifecycleProductInstallStateName {
     [void](Enter-KanaAiLifecycleAction -Ledger $Ledger -Kind 'installer-com' -Detail ($ProductCode + '/InstallState'))
     try {
         Initialize-KanaAiLifecycleMsiNative
-        $state = 0
-        $rc = [KanaAiLifecycleMsiNative]::MsiQueryProductStateW($ProductCode, [ref]$state)
-        # A non-zero rc is an error code, never an install state.
-        if ($rc -ne 0) { return '' }
+        # The return value IS the INSTALLSTATE.  There is no out parameter and no
+        # separate error code, so there is nothing to test for zero here: zero is
+        # not a documented return, and every value below is an INSTALLSTATE.
+        $state = [KanaAiLifecycleMsiNative]::MsiQueryProductStateW($ProductCode)
         switch ($state) {
             5 { return 'DEFAULT' }
             3 { return 'LOCAL' }

@@ -940,17 +940,32 @@ Invoke-Test -Id 'ST-68' -Name 'ProductInfo is never reached through InvokeMember
     Assert-True (-not $text.Contains("Get-KanaAiLifecycleProductInfo -Ledger `$Ledger -ProductCode ([string]`$code) -PropertyName 'UpgradeCode'")) 'UpgradeCode must not still be requested from ProductInfo'
 }
 
-Invoke-Test -Id 'ST-69' -Name 'the install state comes from the out-parameter form of MsiQueryProductState' -Body {
-    # MsiQueryProductState returns a UINT error code and writes the state through
-    # an out parameter.  A probe that read the return value as the state reported
-    # 5 for an installed product, and 5 is both ERROR_ACCESS_DENIED and
-    # INSTALLSTATE_DEFAULT.  Asserting the signature is what stops that swap from
-    # coming back, and a non-zero rc must stay unknown rather than become a state.
+Invoke-Test -Id 'ST-69' -Name 'the install state comes from the documented one-argument MsiQueryProductState' -Body {
+    # This case previously asserted the opposite, and it locked the mistake in.
+    # The documented prototype is
+    #     INSTALLSTATE MsiQueryProductStateW(LPCWSTR szProduct);
+    # one argument, no out parameter, and the return value IS the state. Microsoft
+    # Learn, the wine msi.h and the mingw-w64 msi.h agree, and the documented
+    # returns are only ABSENT, ADVERTISED, DEFAULT, INVALIDARG and UNKNOWN, so
+    # ERROR_ACCESS_DENIED is not a value this function can produce. A five is
+    # INSTALLSTATE_DEFAULT and means installed.
+    #
+    # Declaring it with an `out int` produced three false conclusions in a row: a
+    # healthy machine reported ERROR_ACCESS_DENIED, a repair was attempted that was
+    # never needed, and the refusal gate would have rejected every working machine.
+    # So the shape is asserted from both directions, and the call site is checked to
+    # pass exactly one argument.
     $text = [System.IO.File]::ReadAllText($commonPath)
-    Assert-True ($text.Contains('MsiQueryProductStateW(string product, out int installState)')) 'the declaration must take the state through an out parameter'
-    Assert-True (-not ($text -match 'MsiQueryProductStateW\(\s*string\s+\w+\s*\)')) 'no single-argument declaration may exist, that is the swapped signature'
-    Assert-True ($text.Contains('if ($rc -ne 0) { return ')) 'a non-zero error code must return no state instead of a guessed one'
-    Assert-True ($text.Contains('[KanaAiLifecycleMsiNative]::MsiQueryProductStateW($ProductCode, [ref]$state)')) 'the call must pass the state by reference'
+    Assert-True ($text.Contains('MsiQueryProductStateW(string product);')) 'the declaration must be the documented one-argument form'
+    Assert-True (-not ($text -match 'MsiQueryProductStateW\([^)]*\b(out|ref)\b')) 'no out or ref parameter may exist, MsiQueryProductState has no out parameter'
+    Assert-True (-not ($text -match 'MsiQueryProductStateW\([^)]*,[^)]*\)')) 'the declaration must not take a second parameter at all'
+    Assert-True ($text.Contains('[KanaAiLifecycleMsiNative]::MsiQueryProductStateW($ProductCode)')) 'the call must pass only the product code and use the return value as the state'
+    # And no error-code reading of the return value may come back.
+    Assert-True (-not ($text.Contains('$rc = [KanaAiLifecycleMsiNative]::MsiQueryProductStateW'))) 'the return value must never be read as an error code'
+    Assert-True (-not ($text.Contains('if ($rc -ne 0) { return ') )) 'there is no error code to branch on, so that branch must not exist'
+    # The documented return set has no zero, so a zero can only mean the call did
+    # not dispatch, and it must not be mapped onto a real state.
+    Assert-True (-not ($text -match '(?m)^\s*0 \{ return ')) 'zero is not a documented INSTALLSTATE and must not be mapped to one'
 }
 
 Invoke-Test -Id 'ST-70' -Name 'the install state vocabulary maps to the harness vocabulary without machine access' -Body {
@@ -1040,6 +1055,31 @@ Invoke-Test -Id 'ST-72' -Name 'an unanswered install state refuses the run inste
     $afterGate = $run.Substring($gateAt)
     Assert-True ($afterGate.Contains('exit 2')) 'the refusal must exit non-zero'
     Assert-True ($run.Contains('Repair the machine')) 'the refusal must say what the operator has to do'
+}
+
+Invoke-Test -Id 'ST-73' -Name 'the INSTALLSTATE switch covers exactly the documented states' -Body {
+    # MsiQueryProductState is documented to return INSTALLSTATE_ABSENT(2),
+    # ADVERTISED(1), DEFAULT(5), INVALIDARG(-2) or UNKNOWN(-1), and the wider
+    # enum also defines LOCAL(3), SOURCE(4), REMOVED(7), BROKEN(6) and
+    # ADVERTISEDSHORT(-7). Only the real states may become a state name, and
+    # anything else - notably the two negative values a correct call returns for
+    # a bad product code - must become no state at all, so the caller's 'unknown'
+    # is honest instead of a guess. Kept machine-free so the self test stays
+    # deterministic; ST-69 pins the prototype and this pins the mapping.
+    $text = [System.IO.File]::ReadAllText($commonPath)
+    foreach ($pair in @(@('5', 'DEFAULT'), @('3', 'LOCAL'), @('1', 'ADVERTISED'), @('4', 'SOURCE'), @('2', 'ABSENT'), @('7', 'REMOVED'))) {
+        Assert-True ($text.Contains($pair[0] + " { return '" + $pair[1] + "' }")) ("INSTALLSTATE " + $pair[0] + " must map to " + $pair[1])
+    }
+    # The two values a correct call returns for an unusable product code must
+    # never be turned into a state name.
+    Assert-True (-not ($text -match '(?m)^\s*-1 \{ return ')) 'INSTALLSTATE_UNKNOWN must not map to a state name'
+    Assert-True (-not ($text -match '(?m)^\s*-2 \{ return ')) 'INSTALLSTATE_INVALIDARG must not map to a state name'
+    Assert-True (-not ($text -match '(?m)^\s*6 \{ return ')) 'INSTALLSTATE_BROKEN is not a state the harness reports as installed or absent'
+    # Everything not explicitly mapped has to fall through to the empty string.
+    Assert-True ($text.Contains("default { return '' }")) 'any undocumented return must yield no state, so unknown is honest'
+    # And the vocabulary conversion keeps unknown distinct from absent.
+    Assert-Equal 'unknown' (ConvertTo-KanaAiLifecycleProductState -Raw '') 'an unanswered state stays unknown'
+    Assert-Equal 'absent' (ConvertTo-KanaAiLifecycleProductState -Raw 'ABSENT') 'a real absent state is still absent'
 }
 
 # ---------------------------------------------------------------------------
