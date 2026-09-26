@@ -854,6 +854,14 @@ function Read-TargetTextNow {
 
 function Start-ProbeHost {
     if (Test-Path -LiteralPath $targetStatePath) { Remove-Item -LiteralPath $targetStatePath -Force }
+    # The probe host must NOT be started with -WindowStyle Hidden.  Measured:
+    # with -WindowStyle Hidden the host's window never becomes visible, so
+    # TGT-02 fails and every step that needs keystrokes is blocked.  The cause
+    # is STARTF_USESHOWWINDOW with wShowWindow = SW_HIDE, which Windows applies
+    # to the first ShowWindow call the new process makes - and the host calls
+    # ShowWindow(mainWindow, SW_SHOW) as that first call.  Launching it normally
+    # leaves SW_SHOW in effect.  The host is a windowed test target by design;
+    # hiding it defeats the only thing this harness observes.
     $process = Start-Process -FilePath $script:ProbeHostExePath -ArgumentList @('--state', $targetStatePath, '--runid', $runId) -PassThru
     $script:ProbeHostProcess = $process
     $deadline = (Get-Date).AddSeconds(20)

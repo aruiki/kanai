@@ -417,16 +417,26 @@ namespace KanaAI.DesktopValidation
         [DllImport("user32.dll", SetLastError = true)]
         internal static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
 
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        // The Imm* family is in imm32.dll, not user32.dll.  Declared against
+        // user32 they raise EntryPointNotFoundException, which failed PF-02, TGT-03
+        // and OBS-03 and left every step that reads the IME record unable to
+        // observe it.  Same class of defect as the CloseHandle and
+        // RegisterClassExW libraries that were wrong alongside these.
+        [DllImport("imm32.dll", CharSet = CharSet.Unicode)]
         internal static extern IntPtr ImmGetContext(IntPtr hWnd);
 
-        [DllImport("user32.dll", SetLastError = true)]
+        [DllImport("imm32.dll", SetLastError = true)]
         internal static extern bool ImmGetOpenStatus(IntPtr hIMC);
 
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-        internal static extern int ImmGetContextNameW(IntPtr hIMC, StringBuilder name, int maxLength);
+        // ImmGetContextNameW does not exist.  The IMM API that returns the
+        // description of the IME owning a context is ImmGetDescriptionW, and it
+        // is in imm32.dll.  The invented name compiled and passed -SelfTest and
+        // -PlanOnly, and only failed when the native code actually ran, which is
+        // what TGT-03 hit.
+        [DllImport("imm32.dll", CharSet = CharSet.Unicode)]
+        internal static extern int ImmGetDescriptionW(IntPtr hIMC, StringBuilder description, int buflen);
 
-        [DllImport("user32.dll")]
+        [DllImport("imm32.dll")]
         internal static extern bool ImmReleaseContext(IntPtr hIMC);
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
@@ -1143,7 +1153,7 @@ namespace KanaAI.DesktopValidation
                 record.Ok = true;
                 record.Open = ImmGetOpenStatus(context);
                 StringBuilder name = new StringBuilder(256);
-                ImmGetContextNameW(context, name, name.Capacity);
+                ImmGetDescriptionW(context, name, name.Capacity);
                 record.ContextName = name.ToString();
             }
             finally
@@ -1168,6 +1178,14 @@ namespace KanaAI.DesktopValidation
             ShowWindow(target, SW_RESTORE);
             BringWindowToTop(target);
 
+            // A process that has not received input cannot set the foreground
+            // window: Windows ignores the call and only flashes the taskbar.
+            // Tapping Alt releases the foreground lock, which is what makes the
+            // call below take effect.  Measured on this host: without the tap the
+            // foreground stays on its previous owner and SetForegroundWindow
+            // returns FALSE; with it the target becomes the foreground window.
+            TapAltKey();
+
             IntPtr foreground = GetForegroundWindow();
             uint ignoredProcess = 0;
             uint foregroundThread = GetWindowThreadProcessId(foreground, out ignoredProcess);
@@ -1188,6 +1206,38 @@ namespace KanaAI.DesktopValidation
             }
             if (settleMs > 0) { System.Threading.Thread.Sleep(settleMs); }
             return GetForegroundWindow() == target;
+        }
+
+        private const ushort VK_MENU = 0x12;
+
+        // Releases the foreground lock so a process that has not received input
+        // can take the foreground.  SendInput is used rather than
+        // keybd_event because it is the documented way to inject a single key
+        // without affecting the caller's own input state.
+        private static void TapAltKey()
+        {
+            INPUT down = new INPUT();
+            down.type = INPUT_KEYBOARD;
+            down.u.ki = new KEYBDINPUT
+            {
+                wVk = VK_MENU,
+                wScan = 0,
+                dwFlags = 0,
+                time = 0,
+                dwExtraInfo = IntPtr.Zero
+            };
+            INPUT up = new INPUT();
+            up.type = INPUT_KEYBOARD;
+            up.u.ki = new KEYBDINPUT
+            {
+                wVk = VK_MENU,
+                wScan = 0,
+                dwFlags = KEYEVENTF_KEYUP,
+                time = 0,
+                dwExtraInfo = IntPtr.Zero
+            };
+            INPUT[] inputs = new INPUT[] { down, up };
+            SendInput(2, inputs, Marshal.SizeOf(typeof(INPUT)));
         }
 
         public static WindowRecord ShowLoopback(long hwnd)
@@ -1320,7 +1370,12 @@ namespace KanaAI.DesktopValidation
             MSG message;
             do
             {
-                while (PeekMessage(out message, IntPtr.Zero, 0, 0, 0))
+                // The last argument is wRemoveMsg.  0 is PM_NOREMOVE, which leaves
+                // every message in the queue, so once a window exists there is
+                // always a message available and this loop never exits.  Measured:
+                // a standalone replica of CreateLoopbackWindow spun at ~95% CPU
+                // forever with 0 and returned normally with 1 (PM_REMOVE).
+                while (PeekMessage(out message, IntPtr.Zero, 0, 0, 1))
                 {
                     TranslateMessage(ref message);
                     DispatchMessage(ref message);
@@ -1341,9 +1396,15 @@ namespace KanaAI.DesktopValidation
             if (loopbackWindow == IntPtr.Zero || loopbackEdit == IntPtr.Zero) { return false; }
             ShowWindow(loopbackWindow, SW_SHOW);
             BringWindowToTop(loopbackWindow);
+            // SetFocus only sets the keyboard focus, and only when the calling
+            // thread already owns the foreground; it cannot make a window
+            // foreground.  This returned false, so the canary was typed into
+            // whatever window was actually in front and INJ-00 read back empty.
+            // ForceForeground releases the lock and takes the foreground.
+            bool foregrounded = ForceForeground(loopbackWindow.ToInt64(), 150);
             SetFocus(loopbackEdit);
             PumpMessages(150);
-            return loopbackWindow == GetForegroundWindow();
+            return foregrounded && loopbackWindow == GetForegroundWindow();
         }
 
         public static bool DestroyLoopbackWindow()

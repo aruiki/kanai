@@ -732,6 +732,10 @@ Invoke-Test -Id 'ST-55' -Name 'every P/Invoke library name is the DLL that actua
         [pscustomobject]@{ Function = 'OpenProcessToken'; Library = 'advapi32.dll';  Why = 'OpenProcessToken is an advapi32 token function' }
         [pscustomobject]@{ Function = 'OpenProcess';     Library = 'kernel32.dll';  Why = 'OpenProcess is a kernel32 process function' }
         [pscustomobject]@{ Function = 'GetModuleHandleW'; Library = 'kernel32.dll';  Why = 'GetModuleHandleW is a kernel32 module function' }
+        [pscustomobject]@{ Function = 'ImmGetContext';     Library = 'imm32.dll';    Why = 'ImmGetContext is an imm32 IMM function, not a user32 one' }
+        [pscustomobject]@{ Function = 'ImmGetOpenStatus';  Library = 'imm32.dll';    Why = 'ImmGetOpenStatus is an imm32 IMM function' }
+        [pscustomobject]@{ Function = 'ImmGetDescriptionW'; Library = 'imm32.dll';   Why = 'ImmGetDescriptionW is an imm32 IMM function' }
+        [pscustomobject]@{ Function = 'ImmReleaseContext'; Library = 'imm32.dll';    Why = 'ImmReleaseContext is an imm32 IMM function' }
     )
     foreach ($case in $cases) {
         $actual = Library-Of $native $case.Function
@@ -742,9 +746,32 @@ Invoke-Test -Id 'ST-55' -Name 'every P/Invoke library name is the DLL that actua
     $probeLib = Library-Of $probe 'RegisterClassExW'
     Assert-Equal 'user32.dll' $probeLib ('the probe host must declare RegisterClassExW against user32.dll; got ' + $probeLib)
     Assert-Equal (Library-Of $native 'RegisterClassExW') $probeLib 'the injector and the probe host must agree on the library for RegisterClassExW'
-    # And no declaration may name a library the function is not in, for the two
-    # that were wrong: a second occurrence of the wrong pairing is a regression.
-    Assert-True (-not ($native -match [regex]::Escape('[DllImport("advapi32.dll"') -and ($native -match [regex]::Escape('CloseHandle') -and ($native.IndexOf('CloseHandle') -lt $native.IndexOf('[DllImport("advapi32.dll"'))))) 'CloseHandle must not be declared against advapi32 anywhere in the injector'
+    # And no declaration may name a library the function is not in.  A DllImport
+    # attribute sits on its own line and the function it decorates on the next,
+    # so each attribute is read together with the line that follows it.  Comments
+    # are excluded: the comment above this assertion names both the wrong
+    # library and the function, so a search over the whole file matched the
+    # assertion's own explanation and failed a correct source.
+    $sourceLines = @($native -split "`n")
+    $declarations = @()
+    for ($i = 0; $i -lt $sourceLines.Count; $i++) {
+        if ($sourceLines[$i] -match '^\s*\[DllImport') {
+            $next = ''
+            for ($j = $i + 1; $j -lt $sourceLines.Count; $j++) {
+                if ($sourceLines[$j].Trim().Length -gt 0) { $next = $sourceLines[$j]; break }
+            }
+            $declarations += [pscustomobject]@{ Attribute = $sourceLines[$i]; Signature = $next }
+        }
+    }
+    Assert-True ($declarations.Count -ge 40) ('the injector must declare its P/Invoke surface, found ' + $declarations.Count + ' DllImport attributes')
+    $badClose = @($declarations | Where-Object { $_.Attribute -match 'advapi32\.dll' -and $_.Signature -match 'CloseHandle' })
+    Assert-Equal 0 $badClose.Count ('CloseHandle must not be declared against advapi32; found ' + $badClose.Count + ' occurrence(s)')
+    $badRegister = @($declarations | Where-Object { $_.Attribute -match 'kernel32\.dll' -and $_.Signature -match 'RegisterClassExW' })
+    Assert-Equal 0 $badRegister.Count ('RegisterClassExW must not be declared against kernel32; found ' + $badRegister.Count + ' occurrence(s)')
+    $badImm = @($declarations | Where-Object { $_.Attribute -match 'user32\.dll' -and $_.Signature -match 'Imm(GetContext|GetOpenStatus|GetDescriptionW|ReleaseContext)' })
+    Assert-Equal 0 $badImm.Count ('the Imm* family must not be declared against user32; found ' + $badImm.Count + ' occurrence(s)')
+    $invented = @($declarations | Where-Object { $_.Signature -match 'ImmGetContextNameW' })
+    Assert-Equal 0 $invented.Count ('ImmGetContextNameW is not an IMM API and must not be declared at all; found ' + $invented.Count)
 }
 
 Invoke-Test -Id 'ST-56' -Name 'the harness recompiles a binary whose source changed, not only a missing one' -Body {
@@ -763,6 +790,84 @@ Invoke-Test -Id 'ST-56' -Name 'the harness recompiles a binary whose source chan
     # The rule has to be a comparison, so a newer source always wins.
     $pattern = '(?s)if \(\$exists -and \(\(Get-Item -LiteralPath \$script:ProbeHostSourcePath\)\.LastWriteTimeUtc -le \(Get-Item -LiteralPath \$exe\)\.LastWriteTimeUtc\)\) \{ return \$exe \}'
     Assert-True ($run -match $pattern) 'an up-to-date binary is reused, a stale one is rebuilt'
+}
+
+Invoke-Test -Id 'ST-57' -Name 'the message pump removes messages, so it cannot spin' -Body {
+    # Measured, and the reason a W1 run hung for over nine minutes at ~95% CPU
+    # with no receipt: PumpMessages called PeekMessage with wRemoveMsg = 0.
+    # 0 is PM_NOREMOVE, so no message is ever removed from the queue.  Once a
+    # window exists there is always a message available, the inner while never
+    # exits, and the deadline that bounds the outer loop is never reached.
+    #
+    # It is the same shape of defect as the two wrong DllImport libraries: it
+    # compiles, it passes -SelfTest and -PlanOnly, and it only fails when the
+    # native code actually runs.  A standalone replica isolated it - the same
+    # four steps with PM_REMOVE return normally, with PM_NOREMOVE they spin.
+    $native = [System.IO.File]::ReadAllText($nativePath)
+    $pump = [regex]::Match($native, '(?s)public static void PumpMessages\(int milliseconds\)\s*\{.*?\n\s*\}').Value
+    Assert-True ($pump.Length -gt 0) 'PumpMessages must exist in the native source'
+    Assert-True ($pump.Contains('PeekMessage(out message, IntPtr.Zero, 0, 0, 1)')) 'PumpMessages must pass PM_REMOVE, not PM_NOREMOVE'
+    Assert-True (-not ($pump.Contains('PeekMessage(out message, IntPtr.Zero, 0, 0, 0)'))) 'no PeekMessage call may leave the message in the queue'
+    # And the constant must be the documented one: PM_REMOVE is 1, PM_NOREMOVE is 0.
+    Assert-True (-not ($native -match 'PM_NOREMOVE\s*=\s*0[^0-9]') -and ($native -match 'PM_REMOVE')) 'the pump must use the documented PM_REMOVE constant value'
+}
+
+Invoke-Test -Id 'ST-58' -Name 'the harness launches the probe host so its window can be shown' -Body {
+    # Measured, and it is why TGT-02 failed while TGT-01 and TGT-03 passed:
+    # launching the probe host with -WindowStyle Hidden leaves its window
+    # invisible forever, because STARTF_USESHOWWINDOW with wShowWindow = SW_HIDE
+    # is applied to the first ShowWindow call the new process makes, and that
+    # call is ShowWindow(mainWindow, SW_SHOW).  A hidden target cannot be
+    # foregrounded, so no keystroke reaches it and every input-dependent step is
+    # blocked.  The harness must launch it normally.
+    $run = [System.IO.File]::ReadAllText($runPath)
+    $launch = [regex]::Match($run, '(?s)function Start-ProbeHost \{.*?\n\}').Value
+    Assert-True ($launch.Length -gt 0) 'Start-ProbeHost must exist'
+    Assert-True ($launch.Contains('Start-Process -FilePath $script:ProbeHostExePath')) 'the harness must launch the probe host itself'
+    # Comments are stripped before the search.  The comment above this assertion
+    # says the host must not be launched hidden, so a search over the raw text
+    # matched the assertion's own explanation and failed a correct source - the
+    # same trap as ST-55.
+    $launchCode = [regex]::Replace($launch, '(?m)^\s*#.*$', '')
+    Assert-True (-not ($launchCode -match '(?i)WindowStyle\s+Hidden')) 'the probe host must not be launched hidden; that leaves its window invisible'
+    Assert-True (-not ($launchCode -match '(?i)CreateNoWindow')) 'the probe host is a windowed target and must not be started without a window'
+    # And the host must show its own window, which is the call a hidden launch
+    # was overriding.
+    $probe = [System.IO.File]::ReadAllText((Join-Path $root 'DesktopValidation.ProbeHost.cs'))
+    Assert-True ($probe.Contains('ShowWindow(mainWindow, SW_SHOW)')) 'the probe host must show its own window'
+}
+
+Invoke-Test -Id 'ST-59' -Name 'ForceForeground releases the foreground lock before taking the foreground' -Body {
+    # Measured: a process that has not received input cannot set the foreground
+    # window.  Windows ignores SetForegroundWindow and only flashes the taskbar.
+    # Tapping Alt releases the foreground lock, and the same call then works.
+    # Without this, TGT-02 fails and every step that needs keystrokes is
+    # blocked, which is how W1 stayed unverified.
+    $native = [System.IO.File]::ReadAllText($nativePath)
+    # ForceForeground is located by its signature and read up to the next method,
+    # because its body contains nested braces that a non-greedy match would cut
+    # short - the first version of this case searched for the closing brace and so
+    # never saw SetForegroundWindow at all.
+    $startAt = $native.IndexOf('public static bool ForceForeground(long hwnd, int settleMs)')
+    Assert-True ($startAt -ge 0) 'ForceForeground must exist'
+    $tail = $native.Substring($startAt)
+    $next = $tail.IndexOf('public static', 1)
+    $force = if ($next -gt 0) { $tail.Substring(0, $next) } else { $tail }
+    Assert-True ($force.Contains('TapAltKey()')) 'ForceForeground must release the foreground lock before SetForegroundWindow'
+    Assert-True ($force.Contains('SetForegroundWindow(target)')) 'ForceForeground must still take the foreground'
+    $tapAt = $force.IndexOf('TapAltKey()')
+    $setAt = $force.IndexOf('SetForegroundWindow(target)')
+    Assert-True ($tapAt -lt $setAt) 'the Alt tap must precede SetForegroundWindow'
+    $tapStart = $native.IndexOf('private static void TapAltKey()')
+    Assert-True ($tapStart -ge 0) 'TapAltKey must exist'
+    $tapTail = $native.Substring($tapStart)
+    $tapNext = $tapTail.IndexOf('public static', 1)
+    $privateNext = $tapTail.IndexOf('private static', 1)
+    $cut = @($tapNext, $privateNext) | Where-Object { $_ -gt 0 } | Measure-Object -Minimum
+    $tap = if ($cut.Minimum) { $tapTail.Substring(0, $cut.Minimum) } else { $tapTail }
+    Assert-True ($tap.Contains('VK_MENU')) 'the tap must target the Alt key'
+    Assert-True ($tap.Contains('SendInput')) 'the tap must inject a real key event'
+    Assert-True ($tap.Contains('KEYEVENTF_KEYUP')) 'the tap must release the key as well as press it'
 }
 
     # The summary is computed after every case has run.  It used to be computed
