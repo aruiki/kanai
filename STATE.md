@@ -36,9 +36,27 @@ D-1〜D-5 の決定はそのまま有効（下の履歴区切りを参照）。
 **未解決（→ 確定）:**
 - **Setup.exe（ワンクリック）失敗の直接原因を確定**: エラー **1619**（`ERROR_INSTALL_PACKAGE_OPEN_FAILED` = パッケージを開けない）。`Setup.cs` が MSI を `FileAccess.ReadWrite` で**開いたまま** `msiexec` を起動しており、開いた write ハンドルが msiexec の share mode（FILE_SHARE_READ）と衝突して 1619 になる。昇格再現（UseShellExecute=false + CreateNoWindow=true + ファイル保持）で再現し、ログ `MainEngineThread is returning 1619` を確認。**`Setup.cs` を修正**（msiexec 起動前に FileStream を閉じる。`FileAccess.ReadWrite`→`Write`、`FileShare.Read`→`None`、`Process.Start` を using ブロック外へ）。
 
-**次の作業:**
-1. wxs（ProgramFiles64Folder）+ Setup.cs（1619修正）で再ビルド → 新 MSI/Setup.exe（ProductCode は自動で新規）。**restage → build の一続きが必要**（`build-windows-installer.ps1 -RequireCleanSource` は source identity を検証し、その間に source へ書くと失敗する）。
-2. W2 再実行（IS-01 はオペレータが OK をクリックする必要あり）。
+**再ビルド完了**: `scripts/stage-tsf-runtime.ps1` → `scripts/build-windows-installer.ps1 -RequireCleanSource` を一続きで実行し `.local/installer-beta-final` に**修正版候補**を生成（新 ProductCode `{CD242B2B-5E48-492F-B683-A071E2CC4515}`、MSI SHA-256 `D992D3AA0E788A8DCBDB67AF383E3633E5F7C4F7B68C26F55873B4A56E5DF169`、Setup.exe SHA-256 `FB84D82C08E32C23E334CF5F41961BB6D13D50D1F73F1A96ED5DC90F57CCE914`、**未署名**）。実機検証: 新 MSI を `/qn` 導入 → `INSTALLFOLDER = C:\Program Files\KanaAI\`、`MainEngineThread is returning 0`（**64-bit 配置を実測確認**）。
+
+**W2 実行 #2（`.local/w2-execute-20260926-201708`、exitCode=1）の結果**:
+| phase | 結果 |
+|---|---|
+| PF-01 / PF-02 | pass |
+| **IS-01 (Setup.exe)** | **fail: expected-files のみ**（旧5件→1件。product-state / product-code / registration / install-directory は **pass**。**ワンクリック導入が成功し 64-bit に入った**） |
+| UC-01 | pass |
+| IM-01 (MSI) | fail: expected-files のみ |
+| RS-01 (reinstall) | fail: expected-files のみ |
+| UF-01 (upgrade→0.1.1) | fail: product-code, expected-files |
+| DR-01 (downgrade→0.0.9) | fail: command-exit-code, product-code |
+| UC-02 / OB-01 / CL-01 | pass |
+
+**残る未解決（次のセッションの作業）:**
+1. **`expected-files` が全導入フェーズで失敗（最重要）**。install-directory は pass なので 64-bit 配置は正しい。MSI の File table が宣言するファイルと実際の導入ファイルの不一致。receipt が出れば `checks[]` の evidence に欠落ファイル一覧が出る。**まず W2 を再実行して receipt を出し、欠落ファイル名を特定する**こと。
+2. **UF-01 / DR-01 は fixture が旧 wxs（`ProgramFilesFolder`）でビルドされている**ため食い違う（`.local/installer-fixture-newer` = 0.1.1、`.local/installer-fixture-older` = 0.0.9）。**fixture も `ProgramFiles64Folder` で再ビルドが必要**（同じ stage→build 手順で `-Version` を変える）。
+3. **2つ目のハーネスクラッシュは修正済み（`267f7c4`）**: `LifecycleValidation.Common.ps1` 1339 行 `Resolve-KanaAiLifecycleOverallStatus` の `@($Results)` が同じ `List[object]` 不具合を踏み、**receipt 直前で落ちていた**（これが #2 ランの receipt 未生成の原因）。各分岐で `$list` へ直接代入する形に修正（`if` 式は1要素配列をスカラーにアンロールし StrictMode 下で `.Count` が落ちるため）。**自己テスト 77/77 pass**。
+4. 次: W2 再実行 → receipt 取得 → `expected-files` の欠落ファイル確定・修正 → fixture 再ビルド → 再度 W2 → **W1 デスクトップ日本語入力検証** → SBOM/署名 → GitHub prerelease。
+
+**注意**: restage と build の間、および W2 実行中は source へ書かない（`Runtime manifest source identity changed` で失敗する）。診断用スクリプトは `.local/launch-setup-diag.ps1` / `.local/run-setup-diag.ps1` / `.local/rebuild-candidate.ps1`（いずれも gitignore 済み）。
 
 
 ## 1. W2 ハーネスの Windows Installer 呼び出しを「実際に答える束」だけで直す（`d98771a`）
