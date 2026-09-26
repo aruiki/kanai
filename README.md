@@ -13,21 +13,31 @@
 </div>
 
 > [!IMPORTANT]
-> **Status: development candidate — not a public beta.**
+> **Status: public beta published — unsigned, Mozc-baseline only, no local AI.**
+>
+> Download: [v0.1.0-beta.1](https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.1)
+> (`KanaAI-0.1.0-Setup.exe` / `KanaAI-0.1.0-x64.msi`, Windows x64).
 >
 > This repository is the public source and engineering record for KanaAI, and
 > this README plus the GitHub Release body are the only published product
 > surface. There is no product website.
 > The product is a native Windows TSF text service, not the retired
-> Workbench/CLI demo. No installer has been published yet. Do not treat a local
-> build, a DLL load, a source test, or a loopback model mock as proof that the
-> end-user IME is ready.
+> Workbench/CLI demo. Do not treat a local build, a DLL load, a source test, or
+> a loopback model mock as proof that the end-user IME is ready.
 >
-> Two scope decisions are already fixed for the first beta (2026-09-26):
-> it will be **Mozc-baseline only, with no local AI model or runtime included**,
-> and it will be **unsigned**. Neither changes the product requirements in
+> Two scope decisions are fixed for this beta (2026-09-26):
+> it is **Mozc-baseline only, with no local AI model or runtime included**,
+> and it is **unsigned**. Neither changes the product requirements in
 > [docs/PRODUCT_REQUIREMENTS.md](docs/PRODUCT_REQUIREMENTS.md); local AI remains
 > a completion requirement, it is simply not in the first beta.
+>
+> **Read the Release body before installing.** The installer lifecycle is
+> machine-verified by receipt for this exact hash; real-application Japanese
+> input is **operator-confirmed only, without a machine-verified receipt**. That
+> gap is a documented deviation from
+> [docs/PRODUCT_RELEASE_CONTRACT.md](docs/PRODUCT_RELEASE_CONTRACT.md) and is
+> stated in the Release body. This beta is not a completed product and
+> `.goal-complete` has not been created.
 
 [Windows release contract](docs/PRODUCT_RELEASE_CONTRACT.md) ·
 [Product requirements](docs/PRODUCT_REQUIREMENTS.md) ·
@@ -77,13 +87,13 @@ This table describes evidence, not marketing claims.
 | Area | Current state |
 | --- | --- |
 | Mozc/TIP and Windows runtime build | Windows x64 TIP/server/renderer artifacts have been built and statically checked. |
-| Installer | An unsigned MSI/Setup candidate has been built locally. It is not uploaded or public. The first beta is being built as **Mozc-baseline only, with no AI bundle**. |
-| Windows registration | The installed development candidate has x64/x86 COM registration and a Japanese profile. |
-| Real app input | The operator partially reported successful Notepad typing, conversion, and kana switching. Candidate, commit, cancel, focus, restart, and process checks remain pending. |
-| AI bundle | Qwen2.5-1.5B official GGUF + `llama.cpp` CPU runtime were selected for implementation. Both pinned inputs have been downloaded and hash-verified in local staging, but have not been installed into KanaAI, executed as the product runtime, or quality-tested on Windows. **The AI bundle is not part of the first beta.** |
-| W1/W2 | Full native input and installer lifecycle gates are not complete. |
-| Public release | No GitHub Release, tag, Setup.exe, or MSI has been published. There is no product website; everything is published here and in the Release body. |
-| Code signing | Not required for the beta by user decision. The beta will be **unsigned**, and the Release body must say so and explain the resulting Windows warning. |
+| Installer | The unsigned MSI/Setup candidate for this beta is **published** as [v0.1.0-beta.1](https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.1). It is **Mozc-baseline only, with no AI bundle**. |
+| Windows registration | The installed candidate has x64/x86 COM registration (`mozc_tip64.dll` / `mozc_tip32.dll`) and a Japanese input profile. |
+| Real app input | **Operator-confirmed, no machine-verified receipt.** On 2026-09-27 the operator confirmed on the validation machine that the installed candidate works as an IME (kana input, conversion, commit). `mozc_tip64.dll` was independently observed loaded in several live processes of that session. The automatic W1 harness has **not** produced a passing receipt; the blockers were harness observation defects, documented in the Release body. Notepad/Edge/Office composition, candidate, cancel, focus-loss, and restart checks are **not machine-verified**. |
+| AI bundle | Qwen2.5-1.5B official GGUF + `llama.cpp` CPU runtime were selected for implementation. Both pinned inputs have been downloaded and hash-verified in local staging, but have not been installed into KanaAI, executed as the product runtime, or quality-tested on Windows. **The AI bundle is not part of this beta.** |
+| W1/W2 | W2 (installer lifecycle) is machine-verified by receipt for this exact hash. W1 (real-app Japanese input) is operator-confirmed only. |
+| Public release | Published as a GitHub **prerelease**: tag `v0.1.0-beta.1`, assets `KanaAI-0.1.0-Setup.exe` and `KanaAI-0.1.0-x64.msi` with SHA-256 in the Release body. There is no product website; everything is published here and in the Release body. |
+| Code signing | Not required for the beta by user decision. This beta is **unsigned** (`NotSigned` for both MSI and Setup), and the Release body states the resulting Windows warning. |
 | Product completion | Not complete. `.goal-complete` has not been created. |
 
 The authoritative current record is [STATE.md](STATE.md). Historical Linux/WSL
@@ -186,10 +196,16 @@ The intended user experience is a one-click `Setup.exe` flow:
 5. Remove KanaAI from **Settings → Apps → Installed apps** when no longer
    needed.
 
-**There is no public download link yet.** Do not use a local `.local` build as
-a release URL. The release must first pass native installation, input,
-candidate, commit/cancel, focus, uninstall/reinstall, rollback,
-privacy, performance, and independent-verifier gates.
+**Download:** [v0.1.0-beta.1 prerelease](https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.1)
+— `KanaAI-0.1.0-Setup.exe` and `KanaAI-0.1.0-x64.msi`, with SHA-256 values in the
+Release body. Do not use a local `.local` build as a release URL.
+
+The installer lifecycle (install, registration, reinstall, upgrade, downgrade
+refusal, uninstall, absence) is machine-verified by receipt for that exact hash.
+Real-application Japanese input is **operator-confirmed only, with no
+machine-verified receipt**; privacy, performance, secure-field, AI fallback, and
+independent-verifier gates are **not** complete. Those gaps are listed in the
+Release body and are a documented deviation from the release contract.
 
 ## Privacy and failure behavior
 
@@ -218,6 +234,13 @@ artifacts must have receipts for:
 - CPU/memory/latency measurements and held-out Japanese quality evaluation;
 - an independent verifier report tied to the source commit and artifact hashes.
 
+**Published beta deviation (2026-09-27).** `v0.1.0-beta.1` was published with the
+installer-lifecycle receipts only. Real-application input is operator-confirmed
+without a machine-verified receipt, and the secure-field, privacy, performance,
+AI-fallback, and independent-verifier items above are **not** met. The Release
+body lists each gap explicitly; nothing above is waived by the publication, and
+the remaining items stay open.
+
 A prerelease is not the same as a completed product. Passing a beta gate does
 not create `.goal-complete`.
 
@@ -230,8 +253,11 @@ still required for product completion; it is simply not what the first beta ship
 - [x] Pin and stage the reviewed Mozc/TSF source path.
 - [x] Build Windows x64 TIP/server and unsigned installer candidates.
 - [x] Add bounded Rust broker/session/generation contracts.
-- [ ] Complete W1 native input and W2 installer lifecycle evidence.
-- [ ] Freeze a clean source commit and publish the unsigned, Mozc-only GitHub
+- [x] Complete W2 installer lifecycle evidence (receipt: 11/11 phases, one machine).
+- [ ] Complete W1 native input evidence as a **machine-verified receipt**
+      (currently operator-confirmed only; the harness cannot yet observe preedit
+      or enumerate target modules).
+- [x] Freeze a clean source commit and publish the unsigned, Mozc-only GitHub
       prerelease with real hashes and real verified/unverified results.
 - [ ] Bundle the approved Qwen GGUF and `llama.cpp` runtime.
 - [ ] Add automatic runtime supervision and offline installer staging.
