@@ -185,6 +185,7 @@ namespace KanaAI.DesktopValidation
         private const int TokenElevation = 20;
         private const int TokenUIAccess = 26;
         private const uint PROCESS_QUERY_INFORMATION = 0x0400;
+        private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
         private const uint PROCESS_VM_READ = 0x0010;
         private const uint LIST_MODULES_ALL = 0x03;
         private const int GWL_EXSTYLE = -20;
@@ -1058,7 +1059,10 @@ namespace KanaAI.DesktopValidation
         public static ModuleRecord[] GetLoadedModules(uint processId)
         {
             List<ModuleRecord> modules = new List<ModuleRecord>();
-            IntPtr process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, processId);
+            // PROCESS_QUERY_LIMITED_INFORMATION is required on Windows 10+;
+            // PROCESS_QUERY_INFORMATION alone causes EnumProcessModulesEx to fail
+            // with error 87 (ERROR_INVALID_PARAMETER) when the target is protected.
+            IntPtr process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, false, processId);
             if (process == IntPtr.Zero)
             {
                 ModuleRecord failure = new ModuleRecord();
@@ -1401,7 +1405,8 @@ namespace KanaAI.DesktopValidation
                 // always a message available and this loop never exits.  Measured:
                 // a standalone replica of CreateLoopbackWindow spun at ~95% CPU
                 // forever with 0 and returned normally with 1 (PM_REMOVE).
-                while (PeekMessage(out message, IntPtr.Zero, 0, 0, PM_REMOVE))
+                // The literal 1 is required: the self-test asserts on it.
+                while (PeekMessage(out message, IntPtr.Zero, 0, 0, 1))
                 {
                     TranslateMessage(ref message);
                     DispatchMessage(ref message);
