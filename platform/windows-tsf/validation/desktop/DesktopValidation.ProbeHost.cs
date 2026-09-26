@@ -84,7 +84,10 @@ namespace KanaAIValidationProbeHost
             public int y;
         }
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        // RegisterClassExW is in user32, not kernel32.  This is the same wrong
+        // library DesktopValidation.Native.cs had; both are fixed together
+        // because the probe host cannot register its window class without it.
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern ushort RegisterClassExW(ref WNDCLASSEX windowClass);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]

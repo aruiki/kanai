@@ -347,8 +347,16 @@ function Initialize-NativeLayer {
     $dll = $NativeDll
     if ([string]::IsNullOrWhiteSpace($dll)) { $dll = $script:DefaultNativeDll }
 
-    if (-not (Test-Path -LiteralPath $dll -PathType Leaf)) {
-        if ($SkipCompile) { throw "Native DLL is missing and -SkipCompile was given: $dll" }
+    # Recompile when the output is missing OR older than its source.  The
+    # missing-only check that was here before meant an edit to the C# source
+    # was silently ignored as long as a stale DLL sat in bin/, so two wrong
+    # DllImport library names were "fixed" in source and still failed at run
+    # time.  A binary that does not reflect its source is not a binary that can
+    # be reported on.
+    $needsCompile = (-not (Test-Path -LiteralPath $dll -PathType Leaf)) -or
+                   ((Get-Item -LiteralPath $script:NativeSourcePath).LastWriteTimeUtc -gt (Get-Item -LiteralPath $dll).LastWriteTimeUtc)
+    if ($needsCompile) {
+        if ($SkipCompile) { throw "Native DLL is missing or older than its source, and -SkipCompile was given: $dll" }
         if ([string]::IsNullOrWhiteSpace($csc)) {
             # No command-line compiler: fall back to the in-process compiler that
             # Add-Type has always used on Windows PowerShell 5.1.
@@ -371,8 +379,12 @@ function Initialize-NativeLayer {
 function Initialize-ProbeHost {
     $exe = $ProbeHostExe
     if ([string]::IsNullOrWhiteSpace($exe)) { $exe = $script:DefaultProbeHostExe }
-    if (Test-Path -LiteralPath $exe -PathType Leaf) { return $exe }
-    if ($SkipCompile) { throw "Probe host is missing and -SkipCompile was given: $exe" }
+    # Same staleness rule as the native layer: an existing binary is not a
+    # current one.  This returned early on existence alone, so the probe host
+    # kept running a window class registration that could not resolve.
+    $exists = Test-Path -LiteralPath $exe -PathType Leaf
+    if ($exists -and ((Get-Item -LiteralPath $script:ProbeHostSourcePath).LastWriteTimeUtc -le (Get-Item -LiteralPath $exe).LastWriteTimeUtc)) { return $exe }
+    if ($SkipCompile) { throw "Probe host is missing or older than its source, and -SkipCompile was given: $exe" }
     $csc = Find-CscPath
     if ([string]::IsNullOrWhiteSpace($csc)) { throw 'No C# compiler is available and the probe host is not prebuilt.' }
     if (-not (Test-Path -LiteralPath $script:BinDirectory)) { [void](New-Item -ItemType Directory -Path $script:BinDirectory -Force) }

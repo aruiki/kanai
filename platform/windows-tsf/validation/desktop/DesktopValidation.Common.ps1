@@ -567,8 +567,29 @@ function Resolve-KanaAiValidationOverallStatus {
     if ($Mode -eq 'plan-only') { return 'plan_only' }
     if ($Mode -eq 'self-test') { return 'self_test_passed' }
 
+    # The caller passes a List[object], and on this Windows PowerShell build
+    # @($listObject) throws ArgumentException "Argument types do not match".
+    # Measured here: @($list) throws, an ArrayList copy does not.  Convert
+    # without the array subexpression, the way the lifecycle harness's
+    # Resolve-KanaAiLifecycleOverallStatus does, because the two harnesses
+    # share this host and this quirk.
+    if ($null -eq $Results) {
+        $list = @()
+    }
+    elseif ($Results -is [System.Array]) {
+        $list = $Results
+    }
+    elseif ($Results -is [System.Collections.IEnumerable]) {
+        $copy = New-Object System.Collections.ArrayList
+        foreach ($item in $Results) { [void]$copy.Add($item) }
+        $list = $copy.ToArray()
+    }
+    else {
+        $list = @($Results)
+    }
+
     $verdicts = @()
-    foreach ($result in @($Results)) {
+    foreach ($result in $list) {
         $verdicts += [string](Get-KanaAiValidationProperty -Object $result -Name 'verdict')
     }
     if ($verdicts.Count -eq 0) { return 'incomplete' }

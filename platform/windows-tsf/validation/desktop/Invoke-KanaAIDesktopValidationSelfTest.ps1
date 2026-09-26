@@ -704,6 +704,67 @@ try {
     Assert-True ($common -match [regex]::Escape('-Default $false')) 'a call site passes a boolean default'
 }
 
+Invoke-Test -Id 'ST-55' -Name 'every P/Invoke library name is the DLL that actually exports the function' -Body {
+    # Measured: the desktop harness ran to completion and wrote a receipt, but
+    # eleven steps failed with EntryPointNotFoundException because two
+    # DllImport declarations named the wrong library:
+    #   CloseHandle        declared advapi32.dll   -> it is in kernel32.dll
+    #   RegisterClassExW   declared kernel32.dll   -> it is in user32.dll
+    # Both are "the obvious wrong one", which is why they compiled and passed
+    # -SelfTest and -PlanOnly and only failed when the native code actually
+    # ran.  The library a function lives in is a fact about Windows, not a
+    # preference, so it is pinned here from the source.
+    $native = [System.IO.File]::ReadAllText($nativePath)
+    $probe = [System.IO.File]::ReadAllText((Join-Path $root 'DesktopValidation.ProbeHost.cs'))
+
+    function Library-Of([string]$text, [string]$function) {
+        # find the DllImport attribute that precedes the declaration of $function
+        $pattern = '(?s)\[DllImport\("([^"]+)"[^\]]*\)\]\s*(?:private |internal )?static extern\s+\S+\s+' + [regex]::Escape($function) + '\s*\('
+        $m = [regex]::Match($text, $pattern)
+        if (-not $m.Success) { return '' }
+        return $m.Groups[1].Value
+    }
+
+    $cases = @(
+        [pscustomobject]@{ Function = 'CloseHandle';      Library = 'kernel32.dll'; Why = 'CloseHandle is exported by kernel32, not advapi32' }
+        [pscustomobject]@{ Function = 'RegisterClassExW'; Library = 'user32.dll';   Why = 'RegisterClassExW is exported by user32, not kernel32' }
+        [pscustomobject]@{ Function = 'SendInput';        Library = 'user32.dll';   Why = 'SendInput is a user32 input function' }
+        [pscustomobject]@{ Function = 'OpenProcessToken'; Library = 'advapi32.dll';  Why = 'OpenProcessToken is an advapi32 token function' }
+        [pscustomobject]@{ Function = 'OpenProcess';     Library = 'kernel32.dll';  Why = 'OpenProcess is a kernel32 process function' }
+        [pscustomobject]@{ Function = 'GetModuleHandleW'; Library = 'kernel32.dll';  Why = 'GetModuleHandleW is a kernel32 module function' }
+    )
+    foreach ($case in $cases) {
+        $actual = Library-Of $native $case.Function
+        Assert-Equal $case.Library $actual ($($case.Function) + ' must be declared against ' + $case.Library + ' (' + $case.Why + '); got ' + $actual)
+    }
+    # The probe host declares RegisterClassExW too, and it must agree with the
+    # injector, or one of them fails to register the window class.
+    $probeLib = Library-Of $probe 'RegisterClassExW'
+    Assert-Equal 'user32.dll' $probeLib ('the probe host must declare RegisterClassExW against user32.dll; got ' + $probeLib)
+    Assert-Equal (Library-Of $native 'RegisterClassExW') $probeLib 'the injector and the probe host must agree on the library for RegisterClassExW'
+    # And no declaration may name a library the function is not in, for the two
+    # that were wrong: a second occurrence of the wrong pairing is a regression.
+    Assert-True (-not ($native -match [regex]::Escape('[DllImport("advapi32.dll"') -and ($native -match [regex]::Escape('CloseHandle') -and ($native.IndexOf('CloseHandle') -lt $native.IndexOf('[DllImport("advapi32.dll"'))))) 'CloseHandle must not be declared against advapi32 anywhere in the injector'
+}
+
+Invoke-Test -Id 'ST-56' -Name 'the harness recompiles a binary whose source changed, not only a missing one' -Body {
+    # Measured: both C# fixes were made, -SelfTest still passed 55/55, and the
+    # next real run failed with the very same EntryPointNotFoundException,
+    # because Initialize-NativeLayer recompiled only when the DLL was absent
+    # and Initialize-ProbeHost returned early on existence alone.  A binary that
+    # does not reflect its source was being reported on as if it did.  A green
+    # self test is not evidence that the harness will pick up a source change.
+    $run = [System.IO.File]::ReadAllText($runPath)
+    Assert-True ($run.Contains('older than its source')) 'both initialize paths must have a staleness rule'
+    Assert-True ($run.Contains('-gt (Get-Item -LiteralPath $dll).LastWriteTimeUtc)')) 'the native layer must compare the source timestamp against the binary'
+    Assert-True ($run.Contains('-le (Get-Item -LiteralPath $exe).LastWriteTimeUtc)')) 'the probe host must compare the source timestamp against the binary'
+    # And existence alone must not be enough to skip a rebuild.
+    Assert-True (-not ($run -match '(?m)^\s*if \(Test-Path -LiteralPath \$exe -PathType Leaf\) \{ return \$exe \}\s*$')) 'the probe host must not return early on existence alone'
+    # The rule has to be a comparison, so a newer source always wins.
+    $pattern = '(?s)if \(\$exists -and \(\(Get-Item -LiteralPath \$script:ProbeHostSourcePath\)\.LastWriteTimeUtc -le \(Get-Item -LiteralPath \$exe\)\.LastWriteTimeUtc\)\) \{ return \$exe \}'
+    Assert-True ($run -match $pattern) 'an up-to-date binary is reused, a stale one is rebuilt'
+}
+
     # The summary is computed after every case has run.  It used to be computed
     # before the last case, so a case that ran after it could never appear in
     # the summary, and - worse - a failure in it would still exit 0, because

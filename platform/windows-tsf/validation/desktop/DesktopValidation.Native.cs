@@ -438,7 +438,10 @@ namespace KanaAI.DesktopValidation
         [DllImport("advapi32.dll", SetLastError = true)]
         internal static extern bool GetTokenInformation(IntPtr tokenHandle, int tokenInformationClass, IntPtr tokenInformation, int tokenInformationLength, out int returnLength);
 
-        [DllImport("advapi32.dll", SetLastError = true)]
+        // CloseHandle is in kernel32, not advapi32.  Declared against advapi32
+        // it raises EntryPointNotFoundException at the first call, which is
+        // what failed PF-02, TGT-02, TGT-03, FOC-01, FOC-02, RST-03, OBS-03.
+        [DllImport("kernel32.dll", SetLastError = true)]
         internal static extern bool CloseHandle(IntPtr handle);
 
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -459,7 +462,12 @@ namespace KanaAI.DesktopValidation
         [DllImport("psapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         internal static extern uint GetModuleBaseNameW(IntPtr processHandle, IntPtr module, StringBuilder name, int maxLength);
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        // RegisterClassExW is in user32, not kernel32.  Declared against
+        // kernel32 it raises EntryPointNotFoundException, which is what failed
+        // INJ-00 and stopped the probe host from ever registering its window
+        // class, so TGT-01, RST-02 and every step after them reported the
+        // target as not ready or gone.
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern ushort RegisterClassExW(ref WNDCLASSEX windowClass);
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
