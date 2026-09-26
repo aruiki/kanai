@@ -440,10 +440,17 @@ function Get-KanaAiLifecycleMsiLogClassification {
         return $result
     }
     $markers = @(
-        [pscustomobject]@{ Classification = 'downgrade-refused'; Pattern = '(?im)^\s*Error 1638\.|(?im)\b1638\b.*(already installed|older version)|DowngradeErrorMessage'; Label = '1638 / downgrade refusal' },
-        [pscustomobject]@{ Classification = 'uninstall'; Pattern = '(?im)^Product: .*(Removal|removal) completed successfully|(?im)^Action start: RemoveFiles|(?im)Removing product\s*:'; Label = 'removal sequence' },
-        [pscustomobject]@{ Classification = 'reinstall'; Pattern = '(?im)^Property \(REINSTALL(MODE)?\)\s*:|(?im)REINSTALL=ALL|(?im)REINSTALLMODE='; Label = 'REINSTALL property' },
-        [pscustomobject]@{ Classification = 'first-install'; Pattern = '(?im)^Action start: InstallInitialize|(?im)Installation completed successfully|(?im)Property \(Installed\)\s*:\s*1'; Label = 'install sequence' }
+        # The log is localized (a Japanese Windows writes 操作開始 /
+        # 削除を正しく完了しました), so every marker also accepts the
+        # language-neutral msiexec token.  A fresh install legitimately contains
+        # InstallInitialize *and* RemoveFiles, so RemoveFiles alone is not a
+        # removal marker; a real removal is the removal-completed text or
+        # CleanupConfigData(RemovingProduct=1).  Multiple distinct markers stay
+        # unconfirmed, which is the whole point of the check (ST-07).
+        [pscustomobject]@{ Classification = 'downgrade-refused'; Pattern = '(?im)^\s*Error 1638\.|(?im)\b1638\b.*(already installed|older version)|(?im)DowngradeErrorMessage|(?im)エラー 1638'; Label = '1638 / downgrade refusal' },
+        [pscustomobject]@{ Classification = 'uninstall'; Pattern = '(?im)Product: .*(Removal|removal) completed successfully|(?im)Removing product\s*:|(?im)CleanupConfigData\(RemovingProduct=1\)|(?im)削除を正しく完了しました'; Label = 'removal sequence' },
+        [pscustomobject]@{ Classification = 'reinstall'; Pattern = '(?im)^Property \(REINSTALL(MODE)?\)\s*:|(?im)\bREINSTALL\b|(?im)再インストール'; Label = 'REINSTALL property' },
+        [pscustomobject]@{ Classification = 'first-install'; Pattern = '(?im)^Action start: InstallInitialize|(?im)Doing action: InstallInitialize|(?im)ActionStart\(Name=InstallInitialize|(?im)Installation completed successfully|(?im)インストールは正しく完了しました'; Label = 'install sequence' }
     )
     $hits = @()
     foreach ($marker in $markers) {
