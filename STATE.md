@@ -1,10 +1,65 @@
-# 最新の引き継ぎ — 2026-09-26 夜 **W2 は実機で VERIFIED になった。次の gate は W1（実アプリ日本語入力）**
+# 最新の引き継ぎ — 2026-09-27 未明 **W1 ハーネスは端から端まで走るようになった。次の gate は「画面に_candidate_ が出る」**
 
 Status: NOT COMPLETE / public beta NOT RELEASED / `.goal-complete` 未作成
 W2: **VERIFIED**（候補 MSI `2B2C3B3D…` / Setup `B0BCD073…`、この machine 1台のみ）
-W1: **未着手**。desktop validation harness は一度も実走していない。
+W1: **ハーンsは実行可能、製品証拠は未取得**。36 step すべて実行・receipt 出力済みだが、
+canary ウィンドウが画面に出ず、日本語変換の観測に至っていない。
 
-基準 HEAD: `d7e3b1e`（tree clean、origin/main より 12 ahead・未 push）。
+基準 HEAD: `cff7387`（tree clean）。ただし `origin/main` は `bffc502` で**分岐**しており、
+ローカルは 2 ahead / 2 behind。**push していない**。
+
+---
+
+## 0. 2026-09-27 未明セッション：W1 ハーネスの原生を 7 件直した
+
+すべて「走らせて初めて分かった」もの。**前回の W1 失敗は harness 側の欠陥が主因**だった。
+
+### 確定した欠陥と修正
+
+1. **`Get-KanaAiValidationProperty` に `-Default` 引数が無い**のに 7 箇所で呼ばれていた。
+   実 run は step 実行前に `ParameterBindingException` で即死していた。
+   `-Default` を `$null` として追加。**前回の W1「失敗」の直接原因。**
+2. **`Resolve-KanaAiValidationOverallStatus` が `List[object]` に `@()` を適用**して
+   `ArgumentException`（引数の型が一致しない）を投げていた。`ArrayList` 経由のコピーに変更。
+3. **`CloseHandle` を `advapi32.dll` に宣言**していた。`kernel32.dll` が正しい。
+   これが INJ-00 を落とし、probe host が window class を登録できず、
+   **TGT-01/TGT-03 およびそれ以降の全 step が「target not ready/grown」を连锁**していた。
+4. **`ImmGetContextNameW` は存在しない API**。正しくは `ImmGetDescriptionW`（`imm32.dll`）。
+   発明された名前はコンパイルを通り、実 run でのみ `EntryPointNotFoundException` になる。
+5. **`PeekMessage` の `wRemoveMsg` に `0`（PM_NOREMOVE）**を渡していた。
+   queue から message を取り除かないため、後続の取り出しで詰まる。`1`（PM_REMOVE）に修正。
+6. **`Start-ProbeHost` が `-WindowStyle Hidden` で起動**していた。
+   実測で「hidden だと window が visible にならない、normal だと visible」と確認したため削除。
+7. **自己テストの summary / `$failed` スナップショットが最後の case の前に計算**されており、
+   最後の case が summary に反映されなかった。両方を全 case 終了後に移動。
+
+### 実測結果（`overall=failed exit=1`、36 step すべて実行、receipt 出力済み）
+
+- **pass 11 / failed 6 / blocked 12 / record_only 7**
+- **INJ-00**（canary を loopback window に入力できるか）が **readback empty**。
+  これが支配的 failure で、TGT-01（foreground）すら失敗している。
+- これは harness の欠陥ではなく、**「非対称トグルで IME-on を検証する方式」が機能しない**。
+  較calは対称トグルを commit で収束させるが、IME-on 方向を検証していない。
+
+### 未検証（隠さない）
+
+- **canary ウィンドウが画面に何も出ていない**。`candidateWindowObservation.present = true`、
+  class `KanaAIValidationProbeHostClass`、`visible = true` と記録されているが、
+  **スクリーン上に描画されていない**。実測で確認済み（screenshot で他 window のみ）。
+- つまり **W1 は未通過**。日本語変換の観測には至っていない。
+
+### 次の具体的作業
+
+1. **IME-on の検証方式を再設計する**。非対称トグルでは foreground にならない。
+   選択肢: (a) かな/漢字切替キーを直接送って mode を切り替える、
+   (b) 最初から IME-on で起動して較calのみ closed→on に使う、
+   (c) 別の IME-on 手段（設定変更等）を検討。
+2. **canary window の描画が実際に行われているか**を確認する。
+   `BeginPaint`/`EndPaint` が window procedure に無い。WM_PAINT の処理が無いと
+   client area は描画されない（ただし DWM で window frame は出る）。
+3. **git 分岐を解消する**。`origin/main` の `95a4ff5`（W1 修正）と
+   ローカル `21ba1e0`（harness 修正）が両方 W1 に触っている。統合が必要。
+4. W1 が通ったら、その hash で W2 を再実行する。
 
 ---
 
