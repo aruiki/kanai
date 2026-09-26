@@ -423,7 +423,14 @@ function Get-SourceIdentity([string]$RepositoryRoot) {
         $head = Invoke-GitCapture @('-C', $RepositoryRoot, 'rev-parse', 'HEAD')
         if ($head -notmatch '^[0-9a-fA-F]{40}$') { throw "repository HEAD is not a full commit: $head" }
         $statusText = Invoke-GitCapture @('-C', $RepositoryRoot, 'status', '--porcelain=v1', '--untracked-files=normal')
-        $statusLines = if ([string]::IsNullOrWhiteSpace($statusText)) { @() } else { @($statusText -split "`n") }
+        # A clean tree produces no status output at all. An empty array returned
+        # from an `if` expression is unrolled by the PowerShell pipeline into
+        # $null, and StrictMode then throws PropertyNotFoundStrict on $null.Count
+        # below. Assign the empty collection directly so a clean tree stays an
+        # empty array. Measured: this made every clean-source release candidate
+        # build impossible while dirty trees kept working.
+        $statusLines = @()
+        if (-not [string]::IsNullOrWhiteSpace($statusText)) { $statusLines = @($statusText -split "`n") }
         $statusFingerprint = Get-TextSha256 ($statusLines -join "`n")
         $mutationFingerprint = Get-RepositoryMutationFingerprint -RepositoryRoot $RepositoryRoot -StatusLines $statusLines
         $repositoryStatusAvailable = $true
@@ -445,7 +452,7 @@ function Get-SourceIdentity([string]$RepositoryRoot) {
     if ($overlayIdentity.status -ne 'verified') { $reasons += [string]$overlayIdentity.reason }
     if ($buildConfiguration.status -ne 'verified') { $reasons += [string]$buildConfiguration.reason }
     if ($buildInputs.status -ne 'verified') { $reasons += [string]$buildInputs.reason }
-    $dirty = if ($repositoryStatusAvailable) { ($statusLines.Count -gt 0) -or ($mozc.status -eq 'verified' -and -not [bool]$mozc.clean) } else { $null }
+    $dirty = if ($repositoryStatusAvailable) { (@($statusLines).Count -gt 0) -or ($mozc.status -eq 'verified' -and -not [bool]$mozc.clean) } else { $null }
     $overall = if ($reasons.Count -eq 0) { if ($dirty) { 'verified-dirty' } else { 'verified' } } else { 'unverified' }
     return [pscustomobject]@{
         status = $overall
