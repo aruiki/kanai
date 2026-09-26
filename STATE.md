@@ -190,6 +190,68 @@ product state を判定できない、という整合である。ただし **key
 
 **原因が未特定であり、repair の選択肢は実質的に尽きた。** 同じ仮説の反復はしない。
 
+## 8. AI 経路は「再ビルドでは直らない」構造的欠陥（2026-09-26 実測・coordinator）
+
+machine blocker と並行して、UAC 不要で検証できる範囲を潰し切った。
+
+### Rust tree は緑（独立的再実測）
+
+| gate | 結果 |
+|---|---|
+| `cargo fmt --all -- --check` | exit 0 |
+| `cargo check --workspace --all-targets --locked` | exit 0 |
+| `cargo clippy --workspace --all-targets --locked -- -D warnings` | exit 0 |
+| `cargo test --workspace --locked` | **181 passed / 0 failed / 2 ignored**、exit 0 |
+
+2 件 ignored は 1.1GB の staging が要る実 process test であり、**PASS ではない**。
+
+### A2-06 は既に実装済みだった（WORK_QUEUE が古かった）
+
+`kanai-broker.rs:246-259` が `installed_ai::policy(...)` → `SwitchableBackend::default()` →
+`BackgroundAi::start(backend, policy)` → 終了時に `ai.shutdown().await` を実行している。
+`installed_ai.rs` に `run()` / `watch_installed_runtime()` / `start_pinned_ai_runtime()` /
+`reserve_loopback_port()` / stale key directory 回収 / CREATE_NEW・owner-only key file がある。
+**integration は済んでいる。W2 と同じ「記録が古かった」パターンだった。**
+
+### A2-08 の CRITICAL を実アーティファクトで確定（推測ではない）
+
+**需要側** — `installed_ai.rs:444-448`:
+
+    .join("ai");
+    let manifest = read_config(&root.join("manifest-v1.json")).map_err(...)?;
+    let receipt  = read_config(&root.join("STAGING-RECEIPT.json")).map_err(...)?;
+
+**供給側** — `build-windows-installer.ps1:1367-1368`:
+
+    if ($installPaths -ccontains $aiPayloadRootDirectory + '/' + $ManifestInfo.ReceiptRelative) { throw 'The raw local AI staging receipt must never become an MSI payload file.' }
+    if ($installPaths -ccontains $aiPayloadRootDirectory + '/' + $aiSanitizedManifestFileName)   { throw 'The sanitized local AI package manifest must never become an MSI payload file.' }
+
+`:1714-1716` は sanitized manifest を staging にコピーして hash するが MSI にはしない。
+
+**実測** — 実在する AI 同梱 MSI（`.local/installer-ai-beta/KanaAI-0.1.0-x64.msi`、
+1,124,446,208 bytes）の File table を Windows Installer COM で読んだ結果:
+
+- 68 行 = **AI 56 行**（`kanai-broker.exe`、`qwen2.5-1.5b-instruct-q4_k_m.gguf`、
+  llama.cpp runtime 51、license/notice 3）+ **Mozc 12 行**
+- `manifest-v1.json` / `STAGING-RECEIPT.json` / `PACKAGE-MANIFEST.json` は **1 件も含まれない**
+- `manifest-v1.json` は `.local` 全体（staging 成品 5 世代を含む）に **0 件**。repo の
+  `platform/windows-tsf/ai-runtime/manifest-v1.json` だけが唯一の存在。
+
+**結論: broker が要求する設定ファイルは、ビルドし直しても供給されない。これは設計矛盾であり、
+rebuild で直る bug ではない。** 供給側が payload を明示的に禁じており、需要側はそれを
+必須としている。**「AI は一度も起動していない」という STATE の記述は正しいが、
+「上流で直した」という記録だった。**
+
+**未解決の判断（セキュリティモデル）**: broker が読む設定の供給源を決める必要がある。
+(a) 起動 plan をビルド時にバイナリへ embed、(b) manifest/receipt と**別**の secret を含まない
+最小設定を payload として送り現行方針を明示的に改訂、(c) 実行時にローカルの staging ツリーを
+参照（配布物では不可）。**これは security model の redesign を伴うので、用户在席に
+いる時に確定する。coordinator が独断で決めていない。**
+
+**あわせて見つけた欠陥**: payload と broker の要求するファイル名が一致することを
+検証する**回帰テストが存在しない**。だから A2-08 は CRITICAL のまま気付けずに残っていた。
+同じ欠陥が再び放入されても、テストは黙って green を返す。
+
 ## 未解決・未検証（隠さない）
 
 
