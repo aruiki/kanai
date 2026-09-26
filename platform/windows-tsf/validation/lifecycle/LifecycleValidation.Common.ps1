@@ -1649,7 +1649,12 @@ function Release-KanaAiLifecycleCom {
 }
 
 function Invoke-KanaAiLifecycleMsiCom {
-    <# A thin, uniform wrapper over the WindowsInstaller.Installer IDispatch. #>
+    <#
+        A thin, uniform wrapper over Windows Installer IDispatch objects.  The
+        parameter is named Installer for history, but any Windows Installer
+        automation object may be passed: the Database object is passed here for
+        SummaryInformation, which the Installer object does not have.
+    #>
     param(
         [Parameter(Mandatory = $true)]$Installer,
         [Parameter(Mandatory = $true)][string]$Method,
@@ -1669,7 +1674,7 @@ function Get-KanaAiLifecycleMsiPropertyMap {
     $database = $null
     try {
         $database = Invoke-KanaAiLifecycleMsiCom -Installer $installer -Method 'OpenDatabase' -Arguments @($Path, 0)
-        return (Get-KanaAiLifecycleMsiTableMap -Installer $installer -Database $database -Query 'SELECT ``Property``,``Value`` FROM ``Property``')
+        return (Get-KanaAiLifecycleMsiTableMap -Installer $installer -Database $database -Query 'SELECT `Property`,`Value` FROM `Property`')
     }
     finally {
         Release-KanaAiLifecycleCom -ComObject $database
@@ -1712,8 +1717,16 @@ function Get-KanaAiLifecycleMsiTemplatePlatform {
     $summary = $null
     try {
         $database = Invoke-KanaAiLifecycleMsiCom -Installer $installer -Method 'OpenDatabase' -Arguments @($Path, 0)
-        $summary = Invoke-KanaAiLifecycleMsiCom -Installer $installer -Method 'SummaryInformation' -Arguments @($database, 0)
-        return [string]$summary.GetType().InvokeMember('Property', 'GetProperty', $null, $summary, @(7))
+        # SummaryInformation belongs to the Database object, not to the
+        # Installer, and neither it nor its Property accessor can be reached
+        # through Type.InvokeMember.  Measured against the real candidate:
+        # InvokeMember raised DISP_E_MEMBERNOTFOUND (0x80020003) both on the
+        # Installer and on the Database, while the PowerShell call adapter
+        # resolved both and returned the template "x64;1041".  OpenView,
+        # Execute, Fetch and StringData do work through InvokeMember, so this is
+        # specific to these two accessors.
+        $summary = $database.SummaryInformation(0)
+        return [string]$summary.Property(7)
     }
     finally {
         Release-KanaAiLifecycleCom -ComObject $summary
@@ -1742,7 +1755,7 @@ function Get-KanaAiLifecycleMsiFilePlan {
 
         $directoryParent = @{}
         $directoryLeaf = @{}
-        foreach ($row in @(Get-KanaAiLifecycleMsiTableMap -Installer $installer -Database $database -Query 'SELECT ``Directory``,``Directory_Parent``,``DefaultDir`` FROM ``Directory``')) {
+        foreach ($row in @(Get-KanaAiLifecycleMsiTableMap -Installer $installer -Database $database -Query 'SELECT `Directory`,`Directory_Parent`,`DefaultDir` FROM `Directory`')) {
             $id = [string]$row[0]
             $directoryParent[$id] = [string]$row[1]
             $default = [string]$row[2]
@@ -1754,7 +1767,7 @@ function Get-KanaAiLifecycleMsiFilePlan {
         }
 
         $componentDirectory = @{}
-        foreach ($row in @(Get-KanaAiLifecycleMsiTableMap -Installer $installer -Database $database -Query 'SELECT ``Component``,``Directory_`` FROM ``Component``')) {
+        foreach ($row in @(Get-KanaAiLifecycleMsiTableMap -Installer $installer -Database $database -Query 'SELECT `Component`,`Directory_` FROM `Component`')) {
             $componentDirectory[[string]$row[0]] = [string]$row[1]
         }
 
@@ -1786,7 +1799,7 @@ function Get-KanaAiLifecycleMsiFilePlan {
 
         $files = New-Object System.Collections.Generic.List[object]
         $seen = @()
-        foreach ($row in @(Get-KanaAiLifecycleMsiTableMap -Installer $installer -Database $database -Query 'SELECT ``File``,``Component_``,``FileName`` FROM ``File``')) {
+        foreach ($row in @(Get-KanaAiLifecycleMsiTableMap -Installer $installer -Database $database -Query 'SELECT `File`,`Component_`,`FileName` FROM `File`')) {
             $fileId = [string]$row[0]
             $component = [string]$row[1]
             $fileName = [string]$row[2]
@@ -1825,7 +1838,7 @@ function Get-KanaAiLifecycleMsiDirectoryMap {
     <# Directory table -> ordered map of id -> @{ parent; leaf }. #>
     param([Parameter(Mandatory = $true)]$Installer, [Parameter(Mandatory = $true)]$Database)
     $map = @{}
-    foreach ($row in @(Get-KanaAiLifecycleMsiTableMap -Installer $Installer -Database $Database -Query 'SELECT ``Directory``,``Directory_Parent``,``DefaultDir`` FROM ``Directory``')) {
+    foreach ($row in @(Get-KanaAiLifecycleMsiTableMap -Installer $Installer -Database $Database -Query 'SELECT `Directory`,`Directory_Parent`,`DefaultDir` FROM `Directory`')) {
         $id = [string]$row[0]
         $default = [string]$row[2]
         if ($default.Contains(':')) { $default = $default.Substring(0, $default.IndexOf(':')) }
@@ -1896,10 +1909,15 @@ function Get-KanaAiLifecycleExpectedInstallPath {
             $parent = [string]$map[$id].parent
             if ([string]::IsNullOrWhiteSpace($parent) -or $parent -eq 'TargetDir') { break }
             $id = $parent
-            $parentLeaf = [string]$map[$id].leaf
-            if (-not [string]::IsNullOrWhiteSpace($parentLeaf) -and
-                -not [string]::IsNullOrWhiteSpace((Resolve-KanaAiLifecycleStandardDirectory -ShortName $parentLeaf))) {
-                $rootShortName = $parentLeaf
+            # A StandardDirectory is identified by its directory id, for example
+            # 'ProgramFilesFolder', not by its DefaultDir leaf, which on the very
+            # same row is 'PFiles'.  Resolving the leaf returned an empty root and
+            # made the whole chain unresolvable in a measured run against the real
+            # candidate, even though ProgramFilesFolder maps to C:\Program Files
+            # in a 64-bit process.  Breaking here also keeps the parent's leaf out
+            # of the chain, so the relative part is just 'KanaAI'.
+            if (-not [string]::IsNullOrWhiteSpace((Resolve-KanaAiLifecycleStandardDirectory -ShortName $id))) {
+                $rootShortName = $id
                 break
             }
         }

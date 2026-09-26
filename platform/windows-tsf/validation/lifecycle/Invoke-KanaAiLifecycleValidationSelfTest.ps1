@@ -842,6 +842,43 @@ Invoke-Test -Id 'ST-62' -Name 'the -Execute path unseals with Open-, never with 
     $text = [System.IO.File]::ReadAllText($runPath)
     Assert-True ($text.Contains('Open-KanaAiLifecycleActionLedger -Ledger $script:Ledger -Reason ''unsealed by -Execute')) 'the -Execute path must unseal the ledger through Open-'
     Assert-True (-not $text.Contains('Close-KanaAiLifecycleActionLedger -Ledger $script:Ledger -Reason ''unsealed by -Execute')) 'the -Execute path must not seal its own ledger with Close-'
+Invoke-Test -Id 'ST-63' -Name 'MSI SQL identifiers use one backtick, never two' -Body {
+    # A single-quoted PowerShell string does not treat the backtick as an escape
+    # character, so a doubled backtick reaches Windows Installer as two of them
+    # and OpenView fails.  Measured against the real candidate: six backticks in
+    # the Property query opened the view and fetched ALLUSERS, while twelve
+    # raised the very "OpenView,Sql" InvokeMember failure that the first elevated
+    # W2 run reported.
+    $text = [System.IO.File]::ReadAllText($commonPath)
+    $bt = [string][char]96
+    Assert-True (-not $text.Contains($bt + $bt)) 'the common file must not contain a doubled backtick'
+    $expected = 'SELECT ' + $bt + 'Property' + $bt + ',' + $bt + 'Value' + $bt + ' FROM ' + $bt + 'Property' + $bt
+    Assert-True ($text.Contains($expected)) 'the Property query must quote its identifiers with a single backtick'
+}
+
+Invoke-Test -Id 'ST-64' -Name 'the install path walk resolves a StandardDirectory by id, not by its leaf' -Body {
+    # Measured defect: the walk tested the parent row's DefaultDir leaf, which for
+    # ProgramFilesFolder is 'PFiles'.  Resolve- returned empty for it, so the whole
+    # chain was reported unresolvable even though the id maps to C:\Program Files.
+    $text = [System.IO.File]::ReadAllText($commonPath)
+    Assert-True ($text.Contains('Resolve-KanaAiLifecycleStandardDirectory -ShortName $id')) 'the walk must test the directory id against the StandardDirectory map'
+    Assert-True (-not $text.Contains('-ShortName $parentLeaf')) 'the walk must not test the DefaultDir leaf'
+    $expectedRoot = if ([System.Environment]::Is64BitProcess) { [System.Environment]::GetEnvironmentVariable('ProgramW6432') } else { [System.Environment]::GetEnvironmentVariable('ProgramFiles(x86)') }
+    Assert-Equal $expectedRoot ([string](Resolve-KanaAiLifecycleStandardDirectory -ShortName 'ProgramFilesFolder')) 'ProgramFilesFolder must resolve to the real program files root'
+    Assert-Equal '' ([string](Resolve-KanaAiLifecycleStandardDirectory -ShortName 'PFiles')) 'a DefaultDir leaf must not resolve, which is exactly why the id has to be used'
+}
+
+Invoke-Test -Id 'ST-65' -Name 'SummaryInformation is read from the Database through the call adapter' -Body {
+    # Measured defect: Type.InvokeMember raised DISP_E_MEMBERNOTFOUND (0x80020003)
+    # for SummaryInformation both on the Installer and on the Database, while the
+    # PowerShell call adapter resolved it and returned the template x64;1041.
+    $text = [System.IO.File]::ReadAllText($commonPath)
+    Assert-True ($text.Contains('$database.SummaryInformation(0)')) 'SummaryInformation must be called on the Database object'
+    Assert-True (-not $text.Contains("-Method 'SummaryInformation'")) 'SummaryInformation must not be reached through InvokeMember'
+    Assert-True ($text.Contains('[string]$summary.Property(7)')) 'the template must be read with the Property accessor'
+}
+
+
 }
 
 
