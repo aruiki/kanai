@@ -1667,6 +1667,16 @@ function Get-KanaAiLifecycleMsiPropertyMap {
     <#
         Read the candidate MSI's Property table.  Read-only, through the Windows
         Installer automation interface, never by parsing the file.
+
+        Returns a dictionary of property name -> value.  Measured defect this
+        replaces: the function returned the raw table rows, an array of
+        two-element arrays, and Get-KanaAiLifecycleOptionalProperty finds neither
+        an IDictionary nor a PSObject property on that shape, so every identity
+        field came back empty and the gate refused a candidate that was in fact
+        correct:
+          CANDIDATE-PID: the candidate MSI has no brace-delimited ProductCode
+          CANDIDATE-PID: ProductName '' is not 'KanaAI Development Preview'
+          CANDIDATE-SCOPE: ... the candidate's ALLUSERS property is ''
     #>
     param([Parameter(Mandatory = $true)]$Ledger, [Parameter(Mandatory = $true)][string]$Path)
     [void](Enter-KanaAiLifecycleAction -Ledger $Ledger -Kind 'msi-database' -Detail $Path)
@@ -1674,7 +1684,15 @@ function Get-KanaAiLifecycleMsiPropertyMap {
     $database = $null
     try {
         $database = Invoke-KanaAiLifecycleMsiCom -Installer $installer -Method 'OpenDatabase' -Arguments @($Path, 0)
-        return (Get-KanaAiLifecycleMsiTableMap -Installer $installer -Database $database -Query 'SELECT `Property`,`Value` FROM `Property`')
+        $map = @{}
+        foreach ($row in @(Get-KanaAiLifecycleMsiTableMap -Installer $installer -Database $database -Query 'SELECT `Property`,`Value` FROM `Property`')) {
+            $fields = @($row)
+            if ($fields.Count -lt 1) { continue }
+            $name = [string]$fields[0]
+            if ([string]::IsNullOrWhiteSpace($name)) { continue }
+            $map[$name] = $(if ($fields.Count -ge 2) { [string]$fields[1] } else { '' })
+        }
+        return $map
     }
     finally {
         Release-KanaAiLifecycleCom -ComObject $database

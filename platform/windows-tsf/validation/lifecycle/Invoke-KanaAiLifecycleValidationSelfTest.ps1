@@ -876,6 +876,37 @@ Invoke-Test -Id 'ST-65' -Name 'SummaryInformation is read from the Database thro
     Assert-True ($text.Contains('$database.SummaryInformation(0)')) 'SummaryInformation must be called on the Database object'
     Assert-True (-not $text.Contains("-Method 'SummaryInformation'")) 'SummaryInformation must not be reached through InvokeMember'
     Assert-True ($text.Contains('[string]$summary.Property(7)')) 'the template must be read with the Property accessor'
+Invoke-Test -Id 'ST-66' -Name 'the candidate identity gate reads a property dictionary, not raw table rows' -Body {
+    # Measured defect: Get-KanaAiLifecycleMsiPropertyMap returned the raw rows, an
+    # array of two-element arrays.  Get-KanaAiLifecycleOptionalProperty finds
+    # neither an IDictionary nor a PSObject property on that shape, so every field
+    # came back empty and the gate refused a candidate that was in fact correct.
+    $pinned = [pscustomobject]@{
+        upgradeCode = '{381B4CC9-ABAA-4AB2-9DC8-FCA54CE3B964}'
+        packageName = 'KanaAI Development Preview'
+        scope       = 'perMachine'
+    }
+    $rows = @(
+        @('ProductCode', '{FBDCE95B-46CA-4959-8D36-26ABEE793117}'),
+        @('UpgradeCode', '{381B4CC9-ABAA-4AB2-9DC8-FCA54CE3B964}'),
+        @('ProductName', 'KanaAI Development Preview'),
+        @('ProductVersion', '0.1.0'),
+        @('ALLUSERS', '1'),
+        @('Manufacturer', 'KanaAI Project')
+    )
+    # The old shape must fail; that is what makes this regression non-vacuous.
+    $fromRows = Test-KanaAiLifecycleCandidateIdentity -PropertyMap $rows -TemplatePlatform 'x64;1041' -Pinned $pinned
+    Assert-True (-not [bool]$fromRows.Ok) 'raw table rows must not satisfy the identity gate'
+    $map = @{}
+    foreach ($row in $rows) { $map[[string]$row[0]] = [string]$row[1] }
+    $fromMap = Test-KanaAiLifecycleCandidateIdentity -PropertyMap $map -TemplatePlatform 'x64;1041' -Pinned $pinned
+    Assert-True ([bool]$fromMap.Ok) ('a property dictionary must satisfy the identity gate: ' + (@($fromMap.Errors) -join ' | '))
+    Assert-Equal '{FBDCE95B-46CA-4959-8D36-26ABEE793117}' ([string]$fromMap.ProductCode) 'the ProductCode must come through the gate'
+    Assert-Equal '1' ([string]$fromMap.AllUsers) 'ALLUSERS must come through the gate'
+    Assert-True ($map -is [System.Collections.IDictionary]) 'the shape the reader now returns must be the shape the gate reads'
+}
+
+
 }
 
 
