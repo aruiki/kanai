@@ -346,7 +346,7 @@ Status: NOT COMPLETE / public beta NOT RELEASED / `.goal-complete` 未作成
    `RuntimeFiles` コンポーネントグループを `INSTALLFOLDER` に生成する。
    staged runtime 実体も `.local/tsf-runtime-v5/mozc_server.exe` = 22,333,440 bytes。
    結果として**実際のMozcサーバーが全面的に拒否**され、パイプライン認証は全TSF通信をgateしている
-   ためMozc baseline経路ごと落ちるaire。子のunit testは誤った名前 그대로assertしていて
+   ためMozc baseline経路ごと落ちる。子のunit testは誤った名前そのままassertしていて
    「vaquousに通っていた」。`MOZC_CLIENT_IMAGE_FILE_NAME` 定数へ切り出し、実装 names を正し、
    `mozc_server_win.exe` を明示的に拒否する回帰testを追加した。
 2. **HIGH — `Cargo.lock` が manifest より古く、`--locked` ビルドが全滅**
@@ -418,7 +418,7 @@ Status: NOT COMPLETE / public beta NOT RELEASED / `.goal-complete` 未作成
   `-PlanOnly`  desktops に触れない。**child にはデスクトップを一切操作させず**、
   実 run は coordinator が連絡して行う。
 
-## R-AI（reviewer、read-only）監査結果 — coordinator が2件を独립再確認
+## R-AI（reviewer、read-only）監査結果 — coordinator が2件を独立再確認
 
 監査範囲: A2-06集成（`installed_ai.rs` / `bin/kanai-broker.rs` windows_listener）、
 A2-02/05（`ai_runtime.rs` / `runtime_process_windows.rs` / `runtime_supervisor.rs`）。
@@ -501,7 +501,7 @@ CRITICAL 1 / HIGH 3 / MEDIUM 4 / LOW 5。**coordinator が実コードで再確�
 - canary は `kanaai`（6キー）→ `かなあい`。それ以外の入力は plan validator が拒否。
 - 較正は対称トグル（toggle→commit→toggle→commit）で IME-on 方向を仮定せず、
   収束しなければ方向依存ステップは全て `blocked`（never passed）。
-- INJ-00 で injector 自身の loopback window に 먼저送达確認し、injector 破損時は
+- INJ-00 で injector 自身の loopback window にまず送达確認し、injector 破損時は
   「IMEのせい」にせず injector 破損として記録する。
 
 **未検証（隠さない）**

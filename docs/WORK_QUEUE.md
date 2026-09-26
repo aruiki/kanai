@@ -46,7 +46,7 @@ AI付き完成品と、Mozc主体の先行ベータを混同しない。未回�
 - **R-AI（reviewer、read-only）完了。** A2-06集成とA2-02/05を監査。
   CRITICAL 1件（H-1の前提となるC-1）、HIGH 3件、MEDIUM 4件、LOW 5件。
   **C-1（manifest/receipt未ship）とH-1（verify_connectionがdead code）は
-  coordinator が独립に実コードで再確認済み。** → A2-08。
+  coordinator が独立に実コードで再確認済み。** → A2-08。
   「AI統合が完了」は不正確だった。成功経路は実装机で一度も実行されていない。
 - **D-DESK（implementer）**: `platform/windows-tsf/validation/desktop/` のみを排他割当。
   W1自動化のための自己検証型デスクトップ機構。**デスクトップ操作は
@@ -83,7 +83,7 @@ AI付き完成品と、Mozc主体の先行ベータを混同しない。未回�
   - 現状: **P0 のブロッカーは #1（W1 実アプリ入力）と #2（W2 ライフサイクル）で、どちらも未実行**。
     W1 は desktop 実行の事前連絡待ち、W2 は W1 完了と昇格権限が必要
   - 参考: `gh project item-edit` は `--project-id` に**プロジェクト番号ではなくグローバル node ID**を
-     요구する（`PVT_...`）。番号を渡すと GraphQL が global id を解決できず失敗する
+     要求する（`PVT_...`）。番号を渡すと GraphQL が global id を解決できず失敗する
 
 
 ### 公開範囲の変更（ユーザー決定 D-1 / D-2、2026-09-26）
