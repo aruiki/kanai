@@ -481,7 +481,9 @@ if ($gateRefusals.Count -gt 0) {
 }
 
 # From here on the machine may be observed and modified.  Unseal the ledger.
-$script:Ledger = Close-KanaAiLifecycleActionLedger -Ledger $script:Ledger -Reason 'unsealed by -Execute after every gate passed'
+# This must be Open-, not Close-: Close- sets Sealed = $true, and a measured run
+# sealed itself here and was then refused by its own gate on the next helper.
+$script:Ledger = Open-KanaAiLifecycleActionLedger -Ledger $script:Ledger -Reason 'unsealed by -Execute after every gate passed'
 
 $msiPath = ''
 $setupPath = ''

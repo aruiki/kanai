@@ -816,6 +816,35 @@ Invoke-Test -Id 'ST-60' -Name 'the entry point contains no install or uninstall 
     # The only msiexec in the entry point must come from the plan-driven template.
     Assert-True ($text.Contains('msiexecPath')) 'the msiexec path must be a value, not a literal command'
 }
+Invoke-Test -Id 'ST-61' -Name 'Close seals and Open unseals the same ledger, preserving its counters' -Body {
+    # Regression for a measured -Execute defect: the entry point called Close-
+    # where it meant to unseal, so the run sealed its own ledger and the next
+    # machine-touching helper was refused by its own gate.  Both directions are
+    # asserted here so that mistake cannot silently come back.
+    $ledger = New-KanaAiLifecycleActionLedger
+    Assert-True (-not [bool]$ledger.Sealed) 'a new ledger must start unsealed'
+    [void](Enter-KanaAiLifecycleAction -Ledger $ledger -Kind 'registry-read')
+    $sealed = Close-KanaAiLifecycleActionLedger -Ledger $ledger -Reason 'test seal'
+    Assert-True ([bool]$sealed.Sealed) 'Close must seal the ledger'
+    Assert-Equal 'test seal' ([string]$sealed.SealedReason) 'Close must record its reason'
+    Assert-Throws 'LIFECYCLE-GATE-SEALED' { [void](Enter-KanaAiLifecycleAction -Ledger $sealed -Kind 'msi-database') } 'a sealed ledger must refuse every machine-touching helper'
+    $opened = Open-KanaAiLifecycleActionLedger -Ledger $sealed -Reason 'test unseal'
+    Assert-True (-not [bool]$opened.Sealed) 'Open must unseal the ledger'
+    Assert-Equal 'test unseal' ([string]$opened.SealedReason) 'Open must record why it was unsealed'
+    Assert-Equal 1 ([int]$opened.RegistryOpens) 'unsealing must preserve the counters already recorded'
+    [void](Enter-KanaAiLifecycleAction -Ledger $opened -Kind 'msi-database')
+    Assert-Equal 1 ([int]$opened.MsiDatabaseOpens) 'an unsealed ledger must accept the helper that was refused while sealed'
+}
+
+Invoke-Test -Id 'ST-62' -Name 'the -Execute path unseals with Open-, never with Close-' -Body {
+    # The defect was a one-word call in the entry point, so assert the call site
+    # itself and not only the helper behaviour.
+    $text = [System.IO.File]::ReadAllText($runPath)
+    Assert-True ($text.Contains('Open-KanaAiLifecycleActionLedger -Ledger $script:Ledger -Reason ''unsealed by -Execute')) 'the -Execute path must unseal the ledger through Open-'
+    Assert-True (-not $text.Contains('Close-KanaAiLifecycleActionLedger -Ledger $script:Ledger -Reason ''unsealed by -Execute')) 'the -Execute path must not seal its own ledger with Close-'
+}
+
+
 
 # ---------------------------------------------------------------------------
 # report

@@ -234,6 +234,26 @@ function Close-KanaAiLifecycleActionLedger {
     return $Ledger
 }
 
+function Open-KanaAiLifecycleActionLedger {
+    <#
+        The only way to unseal a ledger, and the exact counterpart of Close-.
+        -Execute calls this once, after every gate has passed; every other mode
+        leaves the ledger sealed for its whole life.
+
+        Measured defect this replaces: -Execute called Close- at this point
+        intending to unseal, so the run sealed its own ledger and the very next
+        helper - reading the candidate MSI through the Windows Installer
+        automation interface - was refused with LIFECYCLE-GATE-SEALED carrying a
+        sealedReason that had just been written to claim the opposite.  The
+        counters are preserved so a receipt still accounts for the whole run.
+    #>
+    param([Parameter(Mandatory = $true)]$Ledger, [Parameter(Mandatory = $true)][string]$Reason)
+    if ($null -eq $Ledger) { throw 'LIFECYCLE-GATE-UNSET: a ledger was unsealed without a ledger.' }
+    $Ledger.Sealed = $false
+    $Ledger.SealedReason = $Reason
+    return $Ledger
+}
+
 function Enter-KanaAiLifecycleAction {
     <#
         The single gate every machine-touching helper must pass.  A sealed
