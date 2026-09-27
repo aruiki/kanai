@@ -1,10 +1,33 @@
-# 最新の引き継ぎ — 2026-09-27 未明 **ベータを GitHub prerelease として公開した（W1 の機械検証は未取得のまま、逸脱を明記）**
+# 最新の引き継ぎ — 2026-09-27 未明 **W1 の根本原因判明：キーボードレイアウト未登録**
 
 Status: NOT COMPLETE / `.goal-complete` 未作成 / 公開 = GitHub prerelease **`v0.1.0-beta.1`**
 W2: **VERIFIED**（機械検証 receipt / 11 phase pass / MSI `2B2C3B3D…` / Setup `B0BCD073…` / 1 台のみ）
-W1: **機械検証 receipt 未取得**。オペレータ実機確認のみ（「問題ありません。IMEとしては機能しています」）。
+W1: **機械検証 receipt 未取得**。根本原因判明：KanaAI のキーボードレイアウトが未登録。
 
-基準 HEAD: `95a4ff5`（tree clean、`origin/main` と同一）。tag `v0.1.0-beta.1` → `2dda3d9`（成果物のビルド元、`repositoryDirty=false`）。
+基準 HEAD: `8616145`（tree clean）。tag `v0.1.0-beta.1` → `2dda3d9`（成果物のビルド元、`repositoryDirty=false`）。
+
+---
+
+## 0. この区切りの結論
+
+**W1 の根本原因が判明した。** KanaAI の TIP は登録されているが、**キーボードレイアウトが存在しない**。
+
+- `HKLM\SYSTEM\CurrentControlSet\Control\Keyboard Layouts` に KanaAI のエントリなし
+- `HKCU\Keyboard Layout\Preload` は `00000411`（日本語キーボード）のみ
+- TIP は登録されている（`HKLM\SOFTWARE\Microsoft\CTF\TIP\{7E7B5C1E-...}`）
+- しかし、キーボードレイアウトがないため、ターゲットプロセスのアクティブ IME を KanaAI に設定できない
+- TSF が TIP をロードしない → `TIP-DLL-NOT-LOADED` の critical finding は**誤検出ではない**
+
+**解決策：**
+1. KanaAI のキーボードレイアウトを登録する（`HKLM\SYSTEM\CurrentControlSet\Control\Keyboard Layouts\00000c11`）
+2. Preload に追加する（`HKCU\Keyboard Layout\Preload`）
+
+**ただし、HKLM への書き込みは管理者権限が必要。** 現在のセッションは非管理者。
+
+**次のアクション：**
+1. `.local/register-kanaai-layout.ps1` を管理者権限で実行
+2. キーボードレイアウト登録後、W1 ハーネスを再実行
+3. W1 通過後、固定コミット + 再ビルド + W2 再実行
 
 ---
 

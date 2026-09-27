@@ -23,3 +23,6 @@ platform/windows-tsf/validation/*/runs/
 # rewritten on every run and would otherwise make `git status` dirty, which is
 # part of the staging manifest's repositoryStatusLines source identity.
 .playwright-mcp/
+
+# Root-level build output (duplicate of platform/windows-tsf/validation/desktop/bin/)
+bin/
