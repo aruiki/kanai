@@ -13,10 +13,12 @@
 </div>
 
 > [!IMPORTANT]
-> **Status: public beta published — unsigned, Mozc-baseline only, no local AI.**
+> **Status: public beta published - unsigned, with a bundled local AI that now
+> actually starts.**
 >
-> Download: [v0.1.0-beta.1](https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.1)
-> (`KanaAI-0.1.0-Setup.exe` / `KanaAI-0.1.0-x64.msi`, Windows x64).
+> Download: [v0.1.0-beta.2](https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2)
+> (`KanaAI-0.1.0-Setup.exe` / `KanaAI-0.1.0-x64.msi`, Windows x64, **about
+> 1.1 GB** - the model is in the package).
 >
 > This repository is the public source and engineering record for KanaAI, and
 > this README plus the GitHub Release body are the only published product
@@ -25,19 +27,22 @@
 > Workbench/CLI demo. Do not treat a local build, a DLL load, a source test, or
 > a loopback model mock as proof that the end-user IME is ready.
 >
-> Two scope decisions are fixed for this beta (2026-09-26):
-> it is **Mozc-baseline only, with no local AI model or runtime included**,
-> and it is **unsigned**. Neither changes the product requirements in
-> [docs/PRODUCT_REQUIREMENTS.md](docs/PRODUCT_REQUIREMENTS.md); local AI remains
-> a completion requirement, it is simply not in the first beta.
+> **What beta.2 established, and what it did not.** The installer lifecycle is
+> machine-verified by receipt for the published hash (11/11 phases), Japanese
+> input is operator-confirmed with the text service observed loaded in eleven
+> real processes, and the bundled AI is measured starting **from the package's
+> own opt-in** on the product path - a 1.1 GB model loaded into a child process
+> at a 1.6 GB working set, with byte-hash verification and a completed
+> inference. What is **not** established is that any of that improves a
+> conversion: the AI-on/AI-off candidate difference is unmeasured, and the last
+> recorded model-quality evaluation in [STATE.md](STATE.md) was **not shippable
+> in any of its six roles**. Read the Release body before installing.
 >
-> **Read the Release body before installing.** The installer lifecycle is
-> machine-verified by receipt for this exact hash; real-application Japanese
-> input is **operator-confirmed only, without a machine-verified receipt**. That
-> gap is a documented deviation from
-> [docs/PRODUCT_RELEASE_CONTRACT.md](docs/PRODUCT_RELEASE_CONTRACT.md) and is
-> stated in the Release body. This beta is not a completed product and
-> `.goal-complete` has not been created.
+> Everything still runs offline. The runtime listens on loopback only, behind a
+> per-process key, and performs no network access.
+>
+> This beta is not a completed product and `.goal-complete` has not been
+> created.
 
 [Windows release contract](docs/PRODUCT_RELEASE_CONTRACT.md) ·
 [Product requirements](docs/PRODUCT_REQUIREMENTS.md) ·

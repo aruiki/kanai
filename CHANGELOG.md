@@ -58,8 +58,24 @@ pressing a key to open the IME.
   branch the repository mutation fingerprint silently hashed no file bytes at
   all while still producing a hash.
 
+- **The bundled AI never started on the path the product actually uses.** Mozc
+  runs its IME server at low integrity (integrity SID S-1-16-4096) and the
+  broker inherits it, and a low-integrity process cannot create a directory
+  under `%TEMP%` - which was the only key-root candidate. The probe failed, the
+  AI path was abandoned, and nothing recorded why, because the text service
+  gives the broker no console and no redirected handles. The key root now falls
+  back to `AppData\LocalLow\KanaAI`, and startup lines are written to
+  `broker-startup.log` with the same fallback.
+
 ### Changed
 
+- **Patch 0007 is a behaviour change, not a defect fix**, and an earlier
+  description of it in this project was wrong. It makes a freshly installed
+  profile start with the IME on. The claim it replaced - that a new install
+  "could not type Japanese" - confused the IME's on/off state with the
+  kana/alphanumeric conversion mode. A new application starting with the IME off
+  and committing romaji as ASCII is ordinary behaviour in Microsoft IME and ATOK
+  alike. A stored value still wins, so the effect is limited to the first use.
 - The broker digest re-pin procedure. Two builds from identical source produce
   different bytes, so the "fixed point" the previous procedure described does
   not exist. The pinned digest now names one built executable, which is the one
