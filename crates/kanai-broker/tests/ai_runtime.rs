@@ -1,10 +1,16 @@
 //! Tests for the optional local AI runtime composition.
 //!
-//! Nothing here starts `llama-server` and nothing here needs the 1.1 GB pinned
-//! weight. The process adapter is replaced by a fake that behaves like a live
-//! child, and the readiness endpoint is replaced by a socket that answers
-//! whatever status the test needs. The one test that would need the real runtime
-//! is `#[ignore]`d at the bottom, with its prerequisites in the reason.
+//! Nothing here needs the 1.04 GiB pinned weight to exercise the composition: the
+//! process adapter is replaced by a fake that behaves like a live child, and the
+//! readiness endpoint is replaced by a socket that answers whatever status the
+//! test needs.
+//!
+//! One test at the bottom does need the real runtime, and it is gated by
+//! `KANAI_AI_EVIDENCE=1` rather than `#[ignore]`d. An ignored test reports
+//! "ignored", which reads like a result and is not one, and it cannot carry a
+//! reason; a gated test prints `KANAI_AI_EVIDENCE=NOT-PERFORMED ...` or
+//! `KANAI_AI_EVIDENCE=PERFORMED ...`, so a log states which happened. See
+//! `tests/evidence`.
 //!
 //! These tests are Windows-only because the properties they assert are
 //! Windows-specific: the key file's access control list, and the key's absence
@@ -12,6 +18,8 @@
 //! and are covered here for that reason as well.
 
 #![cfg(windows)]
+
+mod evidence;
 
 use std::net::{Ipv4Addr, SocketAddr};
 use std::os::windows::ffi::OsStrExt;
@@ -1461,26 +1469,27 @@ fn a_missing_key_file_is_a_typed_refusal() {
 }
 
 // ---------------------------------------------------------------------------
-// The one test that needs the real pinned runtime
+// The tests that need the real pinned runtime
 // ---------------------------------------------------------------------------
 
-/// Requires a staged pinned runtime: the 1.1 GB weight, `llama-server.exe`, and
-/// the staging receipt that `scripts/stage-tsf-runtime.ps1` writes. Point
-/// `KANAI_AI_STAGED_ROOT` at the staged directory and `KANAI_AI_STAGING_RECEIPT`
-/// at its `STAGING-RECEIPT.json`; the pinned manifest is read from the
-/// repository. Ignored by default because it starts a real process and loads the
-/// model, so it cannot be part of the ordinary suite.
+/// Requires a staged pinned runtime: the 1.04 GiB weight, `llama-server.exe`,
+/// and the staging receipt that `scripts/fetch-stage-pinned-ai-runtime.ps1`
+/// writes. The pinned manifest is read from the repository.
+///
+/// This is opt-in through `KANAI_AI_EVIDENCE=1` rather than `#[ignore]`. An
+/// ignored test reports "ignored", which reads like a result and is not one, and
+/// it cannot carry a reason. A gated test prints the reason, so a log can be
+/// read either way without guessing which happened.
 #[tokio::test]
-#[ignore = "needs a staged 1.1 GB model, a real llama-server.exe, and a staging receipt"]
 async fn the_pinned_runtime_becomes_ready_against_a_staged_install() {
-    let root = PathBuf::from(
-        std::env::var("KANAI_AI_STAGED_ROOT")
-            .expect("KANAI_AI_STAGED_ROOT must point at the staged runtime root"),
-    );
-    let receipt = PathBuf::from(
-        std::env::var("KANAI_AI_STAGING_RECEIPT")
-            .expect("KANAI_AI_STAGING_RECEIPT must point at the staged STAGING-RECEIPT.json"),
-    );
+    if !crate::evidence::real_runtime_evidence_enabled() {
+        crate::evidence::evidence_not_performed(
+            "the_pinned_runtime_becomes_ready_against_a_staged_install",
+            "KANAI_AI_EVIDENCE is not set to 1",
+        );
+        return;
+    }
+    let (root, receipt) = crate::evidence::staged_runtime_and_receipt();
     let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../platform/windows-tsf/ai-runtime/manifest-v1.json");
     let manifest_json = std::fs::read(&manifest_path).expect("the pinned manifest");
@@ -1582,6 +1591,140 @@ async fn the_pinned_runtime_becomes_ready_against_a_staged_install() {
         key_path.starts_with(ascii_keys.path()),
         "the key file must live under the writable root, not the install root: {key_path:?}"
     );
+    runtime.shutdown().await.expect("a confirmed stop");
+    assert!(!key_path.exists(), "shutdown must remove the key file");
+}
+
+/// The evidence that was missing: the **installed** payload started on the
+/// **embedded** path, with no manifest and no staging receipt anywhere.
+///
+/// Everything the staged test above proves was proved through
+/// `start_pinned_ai_runtime`, which is handed a manifest and a receipt. That is
+/// the pre-D-7 entry point. D-7 exists precisely because an installed product
+/// cannot have those two files - the installer refuses to ship them - so the
+/// shipped broker starts through `start_embedded_ai_runtime`, which derives its
+/// plan from the pinned constants in `local_runtime`. No real-runtime evidence
+/// had ever been taken through that entry point, which means the D-7 path itself
+/// was unmeasured against the real 1.04 GiB model even though the D-7 unit tests
+/// passed.
+///
+/// So this test is the one that matters for the claim "the installed product
+/// starts the AI". It points at `<install root>\ai`, refuses to run if a
+/// staging receipt is present there, and never reads the pinned manifest: the
+/// absence of the manifest is the point, so the test proves the start succeeded
+/// without it rather than merely not needing it by accident.
+#[tokio::test]
+async fn the_installed_payload_starts_on_the_embedded_path_without_manifest_or_receipt() {
+    if !crate::evidence::real_runtime_evidence_enabled() {
+        crate::evidence::evidence_not_performed(
+            "the_installed_payload_starts_on_the_embedded_path_without_manifest_or_receipt",
+            "KANAI_AI_EVIDENCE is not set to 1",
+        );
+        return;
+    }
+    let root = crate::evidence::installed_payload_root();
+    let started = std::time::Instant::now();
+
+    // The payload must be reached through an ASCII path for the same reason the
+    // staged test gives: the runtime refuses to start when its own command line
+    // is not ASCII, and this repository lives under a Japanese path. A junction
+    // is used rather than a copy so the measurement is of the installed bytes and
+    // not of a duplicate that could differ.
+    let ascii_install = tempfile::tempdir().expect("a temporary ASCII install root");
+    let installed_root = ascii_install.path().join("kanai-ai");
+    let _junction = AsciiJunction::create(&installed_root, &root);
+    let ascii_keys = tempfile::tempdir().expect("a temporary ASCII key root");
+
+    let port = reserve_loopback_port().expect("a reserved loopback port");
+    // No manifest, no receipt. This is the whole difference from the staged test
+    // and it is what D-7 changed.
+    let runtime = kanai_broker::ai_runtime::start_embedded_ai_runtime(
+        &installed_root,
+        ascii_keys.path(),
+        port,
+        SUGGESTED_READINESS_DEADLINE,
+        &CancellationToken::new(),
+    )
+    .await
+    .unwrap_or_else(|error| {
+        panic!(
+            "the installed payload must start on the embedded path with no manifest and no \
+             receipt; it returned {error:?}. A D-7 regression here means the shipped broker \
+             went back to reading a file the installer does not ship."
+        )
+    });
+    let ready_after = started.elapsed();
+
+    assert_eq!(runtime.port(), port);
+    assert_eq!(runtime.snapshot().state, RuntimeSupervisorState::Running);
+    let key_path = runtime
+        .api_key_file()
+        .expect("the embedded path writes a key file too")
+        .to_path_buf();
+    assert!(key_path.is_file(), "the key file must exist: {key_path:?}");
+    assert!(
+        key_path.starts_with(ascii_keys.path()),
+        "the key file must live under the writable root, not the install root: {key_path:?}"
+    );
+    let key = runtime.api_key().expose();
+    assert!(key.len() >= 32, "the key must be at least 32 characters");
+
+    // A completion, not just readiness. Readiness is answered by /health without
+    // a token, so it cannot show that the key this process generated is the one
+    // the runtime accepts. The rerank is a real request over real Japanese
+    // candidates through the product's own backend.
+    let backend = kanai_broker::LocalOpenAiBackend::new_with_api_key(
+        runtime.base_url(),
+        runtime.pinned_model_id(),
+        key.to_owned(),
+    )
+    .expect("a loopback backend for the installed runtime");
+
+    let request_started = std::time::Instant::now();
+    let decision = tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        EnhancementBackend::rerank(
+            &backend,
+            realistic_rerank_request(),
+            CancellationToken::new(),
+        ),
+    )
+    .await
+    .expect("the completion must not hang")
+    .expect("the installed runtime must answer an authenticated completion");
+    let completion_after = request_started.elapsed();
+
+    if decision.adopted {
+        let submitted: Vec<u64> = realistic_rerank_request()
+            .candidates
+            .iter()
+            .map(|candidate| candidate.id)
+            .collect();
+        for candidate in &decision.candidates {
+            assert!(
+                submitted.contains(&candidate.id),
+                "the model invented candidate id {}, which was never submitted",
+                candidate.id
+            );
+        }
+    }
+
+    crate::evidence::evidence_performed(
+        "the_installed_payload_starts_on_the_embedded_path_without_manifest_or_receipt",
+        &format!(
+            "install_root={root:?} port={} ready_after_ms={} completion_ms={} \
+             adopted={} candidates={} key_len={} manifest_read=none receipt_read=none \
+             metrics={:?}",
+            runtime.port(),
+            ready_after.as_millis(),
+            completion_after.as_millis(),
+            decision.adopted,
+            decision.candidates.len(),
+            key.len(),
+            decision.metrics
+        ),
+    );
+
     runtime.shutdown().await.expect("a confirmed stop");
     assert!(!key_path.exists(), "shutdown must remove the key file");
 }

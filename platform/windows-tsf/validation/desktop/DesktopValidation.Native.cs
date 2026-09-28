@@ -154,6 +154,7 @@ namespace KanaAI.DesktopValidation
             "CreateLoopbackWindow", "PumpMessages", "GetLoopbackText", "DestroyLoopbackWindow",
             "ShowLoopback", "ShowLoopbackAndFocusEdit", "ForceForeground", "GetForegroundRecord",
             "SendWindowTextRequest", "CloseWindowIfOwned", "IsWindowAlive",
+            "RequestStateRefresh",
             "GetVirtualKeyForToken", "GetManifestUiAccessFlag", "GetLoopbackEditHwnd"
         };
 
@@ -165,8 +166,9 @@ namespace KanaAI.DesktopValidation
             "VK_TAB", "VK_BACK", "VK_A", "VK_B", "VK_C", "VK_D", "VK_E", "VK_F",
             "VK_G", "VK_H", "VK_I", "VK_J", "VK_K", "VK_L", "VK_M", "VK_N", "VK_O",
             "VK_P", "VK_Q", "VK_R", "VK_S", "VK_T", "VK_U", "VK_V", "VK_W", "VK_X",
-            "VK_Y", "VK_Z", "VK_F6", "VK_CAPITAL", "VK_HANKAKU", "VK_ZENKAKU",
-            "VK_CONVERT", "VK_NONCONVERT", "VK_OEM_3"
+            "VK_Y", "VK_Z", "VK_0", "VK_1", "VK_2", "VK_3", "VK_4",
+            "VK_5", "VK_6", "VK_7", "VK_8", "VK_9", "VK_F6", "VK_CAPITAL",
+            "VK_HANKAKU", "VK_ZENKAKU", "VK_CONVERT", "VK_NONCONVERT", "VK_OEM_3"
         };
 
         // ------------------------------------------------------------------
@@ -190,7 +192,13 @@ namespace KanaAI.DesktopValidation
         private const uint LIST_MODULES_ALL = 0x03;
         private const int GWL_EXSTYLE = -20;
         private const uint GW_OWNER = 4;
-        private const uint WM_GETTEXT = 0x000D;
+        // Must match the probe host's own constant exactly. A mismatch would not throw:
+// the target would simply not recognise the message, so the state file would
+// never be rewritten and the harness would read the state written before any
+// keystroke while believing it was a live readback. RequestStateRefresh checks
+// the returned write counter, which turns that silent mismatch into a failure.
+private const uint WM_KANAAI_REPORT_STATE = 0x8001;
+private const uint WM_GETTEXT = 0x000D;
         private const uint WM_GETTEXTLENGTH = 0x000E;
         private const uint WM_CLOSE = 0x0010;
         private const uint SMTO_ABORTIFHUNG = 0x0002;
@@ -403,6 +411,15 @@ namespace KanaAI.DesktopValidation
         [DllImport("user32.dll", SetLastError = true)]
         internal static extern IntPtr SendMessageTimeoutW(IntPtr hWnd, uint msg, IntPtr wParam, StringBuilder lParam, uint flags, uint timeout, out IntPtr result);
 
+        // SendMessageTimeoutW is one function, not two, but P/Invoke needs a
+        // distinct declaration per lParam shape. A message that carries no data -
+        // WM_CLOSE, and the probe host's state-write request - passes a raw
+        // pointer, and it cannot be sent through the StringBuilder declaration:
+        // the marshaller would treat a null StringBuilder as a null buffer to
+        // write into, which is not the same thing as passing lParam = 0.
+        [DllImport("user32.dll", SetLastError = true, EntryPoint = "SendMessageTimeoutW")]
+        internal static extern IntPtr SendMessageTimeoutNoDataW(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+
         [DllImport("user32.dll")]
         internal static extern IntPtr GetParent(IntPtr hWnd);
 
@@ -472,6 +489,34 @@ namespace KanaAI.DesktopValidation
 
         [DllImport("psapi.dll", SetLastError = true)]
         internal static extern bool EnumProcessModulesEx(IntPtr processHandle, [Out] IntPtr[] modules, uint cb, uint filter, out uint needed);
+
+        // The non-Ex sibling, and the one that actually works here.
+        //
+        // Measured on the implementation host, enumerating this process itself and
+        // a child, with PROCESS_QUERY_INFORMATION|PROCESS_VM_READ and with
+        // PROCESS_QUERY_LIMITED_INFORMATION|PROCESS_VM_READ, at 8 and 2048 slots,
+        // with LIST_MODULES_ALL and LIST_MODULES_NORMAL:
+        //
+        //   EnumProcessModulesEx            -> failed, error 87 (ERROR_INVALID_PARAMETER)
+        //   kernel32!K32EnumProcessModulesEx -> failed, error 87
+        //   EnumProcessModules              -> succeeded: 101 modules on self, 45 on the child
+        //
+        // All four access/size/filter combinations fail identically, and it fails on
+        // the calling process as well, so it is not a rights problem, not a
+        // cross-process problem, and not an argument problem: the Ex entry point is
+        // simply not usable on this build. The comment this replaces claimed the
+        // limited access right was what Windows 10+ wants, and that claim was never
+        // tested in isolation - which is why `error 87` kept being reported as a red
+        // step while the code claimed it had been fixed.
+        //
+        // What is given up: the Ex variant's LIST_MODULES_ALL view, which also spans
+        // a WOW64 target's 32-bit module list. For the question this harness asks -
+        // is the KanaAI TIP loaded into the process that owns the focused window -
+        // the normal Win32 module list is the right answer, because a TSF text
+        // service is an ordinary Win32 DLL in that process. The Ex call is still
+        // attempted first, so a build where it works is not made worse.
+        [DllImport("psapi.dll", SetLastError = true)]
+        internal static extern bool EnumProcessModules(IntPtr processHandle, [Out] IntPtr[] modules, uint cb, out uint needed);
 
         [DllImport("psapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         internal static extern uint GetModuleFileNameExW(IntPtr processHandle, IntPtr module, StringBuilder name, int maxLength);
@@ -639,9 +684,25 @@ namespace KanaAI.DesktopValidation
                 case "VK_OEM_3": return 0xC0;
                 default: break;
             }
-            if (token.Length == 3 && token[0] == 'V' && token[1] == 'K' && token[2] >= 'A' && token[2] <= 'Z')
+            // Letters and digits are `VK_` + one character, so the token is FOUR
+            // characters long and the character is at index 3.
+            //
+            // This guard used to ask for `Length == 3` and to read the letter from
+            // `token[2]`, which is the underscore. No `VK_<letter>` token can
+            // satisfy it, so all 26 letters resolved to 0 and every one of them
+            // was rejected as "unknown key token" - while `KeyTokenMap` above
+            // advertised all 26, the PowerShell plan validator held a matching
+            // list of names, and the self test asserted that those two lists
+            // agreed. 61 self test cases passed with the injector unable to type
+            // a single letter. Agreeing on names is not resolving a key, so parity
+            // is now measured against this method and not against a list.
+            if (token.Length == 4
+                && token[0] == 'V'
+                && token[1] == 'K'
+                && token[2] == '_'
+                && ((token[3] >= 'A' && token[3] <= 'Z') || (token[3] >= '0' && token[3] <= '9')))
             {
-                return (ushort)token[2];
+                return (ushort)token[3];
             }
             return 0;
         }
@@ -702,6 +763,56 @@ namespace KanaAI.DesktopValidation
             outcome.ApiOk = (sent == 2);
             outcome.TickCount = (long)Environment.TickCount;
             outcome.Detail = "virtualKey=" + virtualKey + ";extended=" + extended + ";scanCode=" + scanCode + ";scan=" + scan;
+            return outcome;
+        }
+
+        // A chord needs a modifier that is HELD, and SendKeyPair cannot hold one.
+        //
+        // Measured: SendKeyPair queues the down event and the up event in a single
+        // SendInput call, so the target sees "Ctrl down, Ctrl up" and only then the
+        // key. SendKeyChord used it for both the modifier's press and its release
+        // with a delay of zero, which added nothing. Every chord therefore arrived
+        // as a bare key press: Ctrl+A typed a literal "a" instead of selecting all,
+        // and the plan's direction toggles - Ctrl+Space, Alt, Ctrl+Shift - did
+        // nothing at all. `imeCalibration` could not be determined for a reason
+        // inside the instrument rather than inside KanaAI.
+        //
+        // These two send ONE event each, so a modifier can be down before the key
+        // and up after it. Windows does not carry modifier state across separate
+        // SendInput calls any other way, which is why this cannot be a flag on the
+        // existing pair.
+        private static KeyOutcome SendKeySingle(ushort virtualKey, bool extended, bool scanCode, bool keyUp, string phase)
+        {
+            int size = Marshal.SizeOf(typeof(INPUT));
+            INPUT input = new INPUT();
+
+            ushort scan = 0;
+            uint flags = 0;
+            if (scanCode)
+            {
+                scan = MapVirtualKeyW(virtualKey, MAPVK_VK_TO_VSC);
+                flags = KEYEVENTF_SCANCODE;
+            }
+            if (extended) { flags |= KEYEVENTF_EXTENDEDKEY; }
+            if (keyUp) { flags |= KEYEVENTF_KEYUP; }
+
+            input.type = INPUT_KEYBOARD;
+            input.u.ki.wVk = scanCode ? (ushort)0 : virtualKey;
+            input.u.ki.wScan = scan;
+            input.u.ki.dwFlags = flags;
+            input.u.ki.time = 0;
+            input.u.ki.dwExtraInfo = IntPtr.Zero;
+
+            uint sent = SendInput(1, new INPUT[] { input }, size);
+            int error = LastErrorCode();
+
+            KeyOutcome outcome = new KeyOutcome();
+            outcome.RequestedEvents = 1;
+            outcome.SentEvents = (int)sent;
+            outcome.LastError = error;
+            outcome.ApiOk = (sent == 1);
+            outcome.TickCount = (long)Environment.TickCount;
+            outcome.Detail = phase + ";virtualKey=" + virtualKey + ";extended=" + extended + ";scanCode=" + scanCode + ";scan=" + scan;
             return outcome;
         }
 
@@ -770,30 +881,57 @@ namespace KanaAI.DesktopValidation
         // per physical key event so the receipt can show exactly what was queued.
         public static KeyOutcome[] SendKeyChord(string[] tokens, int delayMs, bool scanCode)
         {
+            // Modifiers first, final token is the key itself. One outcome is
+            // returned per physical key event, so the receipt shows exactly what
+            // was queued.
+            //
+            // Each modifier is pressed and released as SEPARATE single-event
+            // sends with a real gap around the key. SendKeyPair sends down and up
+            // together, so using it here released every modifier before the key
+            // was pressed and the chord degenerated into a bare key press.
             List<KeyOutcome> results = new List<KeyOutcome>();
             if (tokens == null || tokens.Length == 0) { return results.ToArray(); }
             int lastIndex = tokens.Length - 1;
 
+            List<ushort> held = new List<ushort>();
             for (int index = 0; index < lastIndex; index++)
             {
                 ushort modifier = GetVirtualKeyForToken(tokens[index]);
                 if (modifier == 0)
                 {
+                    // Abort before pressing anything, and release whatever is
+                    // already held: a chord that failed halfway must not leave a
+                    // modifier stuck down for the rest of the session.
+                    for (int heldIndex = held.Count - 1; heldIndex >= 0; heldIndex--)
+                    {
+                        KeyOutcome release = SendKeySingle(held[heldIndex], false, scanCode, true, "modifier release after abort");
+                        release.Token = tokens[heldIndex];
+                        results.Add(release);
+                    }
                     KeyOutcome rejected = new KeyOutcome();
                     rejected.Token = tokens[index];
                     rejected.Detail = "unknown modifier token; chord aborted before any key was pressed";
                     results.Add(rejected);
                     return results.ToArray();
                 }
-                results.Add(SendKeyPair(modifier, false, scanCode, 0));
+                KeyOutcome press = SendKeySingle(modifier, false, scanCode, false, "modifier down");
+                press.Token = tokens[index];
+                results.Add(press);
+                held.Add(modifier);
             }
+
+            // The gap. Without it the key can be dispatched before the target has
+            // processed the modifier's down event.
+            int holdMs = (delayMs > 0) ? delayMs : 30;
+            System.Threading.Thread.Sleep(holdMs);
 
             results.Add(PressKey(tokens[lastIndex], delayMs, scanCode));
 
-            for (int index = lastIndex - 1; index >= 0; index--)
+            for (int index = held.Count - 1; index >= 0; index--)
             {
-                ushort modifier = GetVirtualKeyForToken(tokens[index]);
-                results.Add(SendKeyPair(modifier, false, scanCode, 0));
+                KeyOutcome release = SendKeySingle(held[index], false, scanCode, true, "modifier up");
+                release.Token = tokens[index];
+                results.Add(release);
             }
             return results.ToArray();
         }
@@ -1059,10 +1197,14 @@ namespace KanaAI.DesktopValidation
         public static ModuleRecord[] GetLoadedModules(uint processId)
         {
             List<ModuleRecord> modules = new List<ModuleRecord>();
-            // PROCESS_QUERY_LIMITED_INFORMATION is required on Windows 10+;
-            // PROCESS_QUERY_INFORMATION alone causes EnumProcessModulesEx to fail
-            // with error 87 (ERROR_INVALID_PARAMETER) when the target is protected.
-            IntPtr process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, false, processId);
+            // Both rights are requested together. Neither is sufficient on its own
+            // and the difference is not theoretical: with the limited right alone
+            // the non-Ex enumeration fails with error 5 (access denied), while
+            // query-information plus VM_READ succeeds. Measured on this host.
+            IntPtr process = OpenProcess(
+                PROCESS_QUERY_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ,
+                false,
+                processId);
             if (process == IntPtr.Zero)
             {
                 ModuleRecord failure = new ModuleRecord();
@@ -1075,14 +1217,48 @@ namespace KanaAI.DesktopValidation
             {
                 IntPtr[] buffer = new IntPtr[2048];
                 uint needed = 0;
-                if (!EnumProcessModulesEx(process, buffer, (uint)(buffer.Length * IntPtr.Size), LIST_MODULES_ALL, out needed))
+                // Ex first, then the non-Ex entry point. Which one answered is
+                // recorded as the first module record's path prefix is not
+                // available, so the channel is named here and the caller can see
+                // which reading it is looking at - a module list that came from the
+                // fallback does not include a WOW64 target's 32-bit modules, and a
+                // reader who assumes it does would draw the wrong conclusion from a
+                // 32-bit process.
+                string channel;
+                bool enumerated;
+                if (EnumProcessModulesEx(process, buffer, (uint)(buffer.Length * IntPtr.Size), LIST_MODULES_ALL, out needed))
                 {
-                    ModuleRecord failure = new ModuleRecord();
-                    failure.Name = "<EnumProcessModulesEx failed>";
-                    failure.Path = "error " + LastErrorCode();
-                    modules.Add(failure);
-                    return modules.ToArray();
+                    channel = "EnumProcessModulesEx";
+                    enumerated = true;
                 }
+                else
+                {
+                    int extendedError = LastErrorCode();
+                    needed = 0;
+                    enumerated = EnumProcessModules(process, buffer, (uint)(buffer.Length * IntPtr.Size), out needed);
+                    channel = "EnumProcessModules";
+                    if (!enumerated)
+                    {
+                        ModuleRecord failure = new ModuleRecord();
+                        failure.Name = "<module enumeration failed>";
+                        // Both errors are reported. Reporting only the second loses
+                        // the fact that the extended call failed first, which is the
+                        // fact that explains why the fallback exists at all.
+                        failure.Path = "EnumProcessModules error " + LastErrorCode() + " after EnumProcessModulesEx error " + extendedError;
+                        modules.Add(failure);
+                        return modules.ToArray();
+                    }
+                }
+                // The channel is reported on stderr rather than as a pseudo-module in
+                // the returned array. Callers already treat any name beginning with
+                // '<' as an enumeration failure, so a record here would be read as a
+                // failure that did not happen - and a module list whose origin is
+                // unknown is exactly the thing a reader needs to be told about,
+                // because the fallback's list omits a WOW64 target's 32-bit modules.
+                Console.Error.WriteLine(
+                    "KANAI_MODULE_ENUMERATION channel=" + channel
+                    + " pid=" + processId
+                    + " count=" + (needed / (uint)IntPtr.Size));
                 int count = (int)(needed / (uint)IntPtr.Size);
                 if (count > buffer.Length) { count = buffer.Length; }
                 for (int index = 0; index < count; index++)
@@ -1288,6 +1464,28 @@ namespace KanaAI.DesktopValidation
             IntPtr answered = SendMessageTimeoutW(new IntPtr(hwnd), WM_GETTEXT, (IntPtr)capacity, buffer, SMTO_ABORTIFHUNG, (uint)timeoutMs, out result);
             if (answered == IntPtr.Zero) { return string.Empty; }
             return buffer.ToString();
+        }
+
+        // WM_KANAAI_REPORT_STATE is the probe host's on-demand state write. The
+        // harness needs it because the composition string only exists while a
+        // composition is open: by the time the target exits, everything is
+        // committed and the preedit is gone, so waiting for exit observes only
+        // what WM_GETTEXT already showed. The return value is the target's
+        // state-write counter, which lets the caller prove the write happened
+        // rather than assuming a successful send means a successful write - the
+        // host deliberately swallows its own write failures so that it never
+        // dies, and a swallowed failure would otherwise read as fresh data.
+        public static long RequestStateRefresh(long hwnd, int timeoutMs, out long reportedWriteCount)
+        {
+            reportedWriteCount = 0;
+            if (hwnd == 0) { return 0; }
+            IntPtr result;
+            IntPtr answered = SendMessageTimeoutNoDataW(
+                new IntPtr(hwnd), WM_KANAAI_REPORT_STATE, IntPtr.Zero, IntPtr.Zero,
+                SMTO_ABORTIFHUNG, (uint)timeoutMs, out result);
+            if (answered == IntPtr.Zero) { return 0; }
+            reportedWriteCount = result.ToInt64();
+            return reportedWriteCount;
         }
 
         // ------------------------------------------------------------------

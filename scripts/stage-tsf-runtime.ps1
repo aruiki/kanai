@@ -27,6 +27,7 @@ $requiredPatchNames = @(
     '0004-windows-python-toolchain.patch'
     '0005-windows-runtime-identity.patch'
     '0006-windows-installer-runtime-path.patch'
+    '0007-kanai-ime-open-by-default.patch'
 )
 $mutationPrefixes = @('platform\windows-tsf\', 'scripts\', 'patches\')
 

@@ -525,7 +525,16 @@ std::optional<RerankRequest> KanaAiSupplementalModel::MakeRerankRequest(
     rerank.context_before = TakeScalars(request.key(), kMaxContextScalars, true);
   }
   rerank.policy_version = "v1";
-  rerank.deadline_ms = 250;
+  // The named constant, not a literal. This line assigned 250 ms while the
+  // struct's own default was already 1500 ms, so the deadline that reached the
+  // broker was the 250 and the default was dead code. The measured p99 against
+  // the pinned runtime is about 1.14 s, so a 250 ms request always timed out and
+  // the rerank was always discarded as a timeout - the AI contributed nothing to
+  // any candidate list while appearing to be wired up. One constant now, and the
+  // assignment is left in place rather than deleted so the value being sent is
+  // visible at the point it is sent instead of inherited from a default nobody
+  // reads.
+  rerank.deadline_ms = static_cast<std::uint32_t>(kBrokerRerankDeadlineMs);
   return rerank;
 }
 

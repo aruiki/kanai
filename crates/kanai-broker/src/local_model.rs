@@ -13,13 +13,16 @@
 //! validated here and sent only as a bearer token on the request.
 
 use std::fmt;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use reqwest::{Client, Url};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 
 use crate::{
     CancellationToken, CandidateRerankRequest, EnhancementBackend, EnhancementError,
@@ -28,10 +31,39 @@ use crate::{
 };
 
 const MAX_RESPONSE_BYTES: usize = 64 * 1024;
+/// Bound on the response head. A server that sends an unbounded head would
+/// otherwise be able to make this adapter allocate without limit.
+const MAX_RESPONSE_HEAD_BYTES: usize = 16 * 1024;
+/// Bound on the single write of a request. A request is one header block plus a
+/// bounded JSON body, so this only catches a transport that has gone wrong.
+const MAX_REQUEST_BYTES: usize = 256 * 1024;
 const MAX_CONTEXT_CHARS: usize = 512;
 const MAX_CANDIDATES: usize = 9;
 const MAX_DEADLINE: Duration = Duration::from_secs(2);
 const MAX_API_KEY_BYTES: usize = 512;
+/// Longest the connect itself may take, inside [`MAX_DEADLINE`].
+const CONNECT_DEADLINE: Duration = Duration::from_millis(500);
+
+/// The prompt a warm-up sends: a fixed ASCII word, not user text and not a real
+/// reading. The goal is to make the runtime execute one inference, and that is the
+/// least it takes.
+pub(crate) const WARM_UP_PROMPT: &str = "warm";
+
+/// Proof that a particular connection is answered by the child this broker
+/// started.
+///
+/// # Why this is a trait and not a callback
+///
+/// The production proof is a lookup in the operating system's TCP connection
+/// table, which lives in `ai_runtime`. Expressing it as a trait keeps this
+/// module free of that dependency and lets a test stand in a peer that is
+/// *not* the child, which is the only way to show the guard actually refuses.
+#[async_trait]
+pub trait EndpointOwnership: Send + Sync + fmt::Debug {
+    /// Prove the server end of the `local` to `peer` connection belongs to the
+    /// child this broker started. `false` means refuse; it never means retry.
+    async fn verify_connection(&self, local: SocketAddr, peer: SocketAddr) -> bool;
+}
 
 #[derive(Clone)]
 pub struct LocalOpenAiBackend {
@@ -41,6 +73,10 @@ pub struct LocalOpenAiBackend {
     provider_id: String,
     /// Never printed, never logged, never placed in the URL or the payload.
     api_key: Option<String>,
+    /// When present, every request is sent over a connection whose server end
+    /// this proof has already accepted. When absent the backend is a plain
+    /// loopback client, which is what a caller with no child of its own wants.
+    ownership: Option<Arc<dyn EndpointOwnership>>,
 }
 
 /// Diagnostics expose that a key exists, never its material.
@@ -110,7 +146,7 @@ impl LocalOpenAiBackend {
 
     /// Construct a local backend that sends no `Authorization` header.
     pub fn new(base_url: impl AsRef<str>, model: impl Into<String>) -> Result<Self, String> {
-        Self::build(base_url.as_ref(), model.into(), None)
+        Self::build(base_url.as_ref(), model.into(), None, None)
     }
 
     /// Construct a local backend that authenticates with `api_key`.
@@ -125,10 +161,40 @@ impl LocalOpenAiBackend {
         model: impl Into<String>,
         api_key: impl Into<String>,
     ) -> Result<Self, String> {
-        Self::build(base_url.as_ref(), model.into(), Some(api_key.into()))
+        Self::build(base_url.as_ref(), model.into(), Some(api_key.into()), None)
     }
 
-    fn build(base_url: &str, model: String, api_key: Option<String>) -> Result<Self, String> {
+    /// Construct a backend that sends every request over a connection whose
+    /// server end `ownership` has already proved belongs to this broker's own
+    /// child.
+    ///
+    /// This is the installed broker's constructor. The difference from
+    /// [`Self::new_with_api_key`] is not a faster path or a nicer error: it is
+    /// that the bearer token, the user's preedit, and the candidate text can only
+    /// be written to a socket the operating system has already attributed to the
+    /// child this process started. Verifying a *different* connection first and
+    /// then letting a client open its own leaves a window in which another
+    /// process can take the port and receive all of that instead.
+    pub fn new_with_api_key_and_ownership(
+        base_url: impl AsRef<str>,
+        model: impl Into<String>,
+        api_key: impl Into<String>,
+        ownership: Arc<dyn EndpointOwnership>,
+    ) -> Result<Self, String> {
+        Self::build(
+            base_url.as_ref(),
+            model.into(),
+            Some(api_key.into()),
+            Some(ownership),
+        )
+    }
+
+    fn build(
+        base_url: &str,
+        model: String,
+        api_key: Option<String>,
+        ownership: Option<Arc<dyn EndpointOwnership>>,
+    ) -> Result<Self, String> {
         let base = Url::parse(base_url).map_err(|error| error.to_string())?;
         if !base.username().is_empty() || base.password().is_some() {
             return Err("KANAI_AI_BASE_URL must not contain credentials".to_owned());
@@ -163,7 +229,59 @@ impl LocalOpenAiBackend {
             model,
             provider_id,
             api_key,
+            ownership,
         })
+    }
+
+    /// The loopback socket address this backend sends to.
+    ///
+    /// The constructor has already rejected any non-loopback host, and the
+    /// pinned runtime binds `127.0.0.1` specifically - the port it was given is
+    /// the only variable part. Resolving `localhost` through the resolver would
+    /// reintroduce a name lookup this transport exists to avoid.
+    fn loopback_address(&self) -> Option<SocketAddr> {
+        let host = self.endpoint.host_str()?;
+        if !is_loopback_host(Some(host)) {
+            return None;
+        }
+        Some(SocketAddr::from((
+            IpAddr::V4(Ipv4Addr::LOCALHOST),
+            self.endpoint.port()?,
+        )))
+    }
+
+    /// Run one minimal authenticated completion, for warming the runtime.
+    ///
+    /// This is deliberately the same transport a real request uses - the same
+    /// ownership-checked socket, the same bearer header, the same decoder - and
+    /// not a lighter probe, for two reasons that are the same reason:
+    ///
+    /// * a warm-up on a different path would not pay the cost the first real
+    ///   request pays, so it would warm nothing; and
+    /// * it is the only thing that proves the key generated during startup is the
+    ///   key this runtime accepts.
+    ///
+    /// `max_tokens` is 1 and the prompt is a fixed ASCII word. The generated text
+    /// is discarded: this is a capacity probe, and nothing here is a quality
+    /// observation, so returning it to a caller would invite reading one into it.
+    ///
+    /// A JSON response format is requested, matching the rerank path, because a
+    /// runtime configured for the reranker should be warmed the way it will be
+    /// used. A response that fails to decode is a failure here: a warm-up that
+    /// tolerated malformed output would report success for a runtime that cannot
+    /// serve.
+    pub async fn warm_up(&self, cancellation: &CancellationToken) -> Result<(), EnhancementError> {
+        let payload = json!({
+            "model": self.model,
+            "temperature": 0,
+            "max_tokens": 1,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": "Return JSON only."},
+                {"role": "user", "content": WARM_UP_PROMPT},
+            ]
+        });
+        self.call_model(payload, cancellation).await.map(|_| ())
     }
 
     async fn call_model(
@@ -173,6 +291,15 @@ impl LocalOpenAiBackend {
     ) -> Result<String, EnhancementError> {
         if cancellation.is_cancelled() {
             return Err(EnhancementError::Cancelled);
+        }
+        // With an ownership proof, the request goes out over a connection this
+        // call opened and this call had proved. There is no second connection and
+        // therefore no window between the proof and the bytes.
+        if let Some(ownership) = &self.ownership {
+            let bytes = self
+                .send_over_verified_connection(ownership.as_ref(), &payload, cancellation)
+                .await?;
+            return decode_completion(&bytes);
         }
         let mut builder = self.client.post(self.endpoint.clone()).json(&payload);
         if let Some(api_key) = self.api_key.as_deref() {
@@ -223,16 +350,327 @@ impl LocalOpenAiBackend {
         if cancellation.is_cancelled() {
             return Err(EnhancementError::Cancelled);
         }
-        let envelope: Value = serde_json::from_slice(&bytes)
-            .map_err(|error| EnhancementError::InvalidOutput(error.to_string()))?;
-        envelope
-            .pointer("/choices/0/message/content")
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned)
-            .ok_or_else(|| {
-                EnhancementError::InvalidOutput("model response has no message content".to_owned())
-            })
+        decode_completion(&bytes)
     }
+
+    /// Send one request over a connection this call opened and this call proved.
+    ///
+    /// The order is the whole point, and it is not negotiable:
+    ///
+    /// 1. connect to the loopback endpoint;
+    /// 2. read this socket's own `(local, peer)` pair;
+    /// 3. ask `ownership` whether the server end of *that* socket is this
+    ///    broker's child;
+    /// 4. only then write the request, which is the first moment the bearer
+    ///    token, the preedit, and the candidate text leave the process.
+    ///
+    /// A refusal at step 3 writes nothing at all, so a port that changed hands
+    /// receives no secret and no user text - which is the property a separate
+    /// verification connection could not provide.
+    async fn send_over_verified_connection(
+        &self,
+        ownership: &dyn EndpointOwnership,
+        payload: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<u8>, EnhancementError> {
+        let address = self.loopback_address().ok_or_else(|| {
+            EnhancementError::ProviderUnavailable("local AI endpoint is not loopback".to_owned())
+        })?;
+        let stream = tokio::time::timeout(CONNECT_DEADLINE, TcpStream::connect(address))
+            .await
+            .map_err(|_| EnhancementError::ProviderTimeout)?
+            .map_err(|error| EnhancementError::ProviderUnavailable(error.to_string()))?;
+        // Nagle would add a delayed-ACK stall to a request this small.
+        let _ = stream.set_nodelay(true);
+        let (Ok(local), Ok(peer)) = (stream.local_addr(), stream.peer_addr()) else {
+            return Err(EnhancementError::ProviderUnavailable(
+                "local AI socket has no address pair".to_owned(),
+            ));
+        };
+        if !ownership.verify_connection(local, peer).await {
+            return Err(EnhancementError::ProviderUnavailable(
+                "local AI runtime is unavailable".to_owned(),
+            ));
+        }
+        if cancellation.is_cancelled() {
+            return Err(EnhancementError::Cancelled);
+        }
+
+        let body = serde_json::to_vec(payload)
+            .map_err(|error| EnhancementError::InvalidOutput(error.to_string()))?;
+        let request = encode_request(&self.endpoint, self.api_key.as_deref(), &body);
+        if request.len() > MAX_REQUEST_BYTES {
+            return Err(EnhancementError::InvalidOutput(
+                "local model request is too large".to_owned(),
+            ));
+        }
+
+        let exchange = async {
+            let mut stream = stream;
+            stream
+                .write_all(&request)
+                .await
+                .map_err(|error| EnhancementError::ProviderUnavailable(error.to_string()))?;
+            stream
+                .flush()
+                .await
+                .map_err(|error| EnhancementError::ProviderUnavailable(error.to_string()))?;
+            read_response(&mut stream, cancellation).await
+        };
+        tokio::time::timeout(MAX_DEADLINE, exchange)
+            .await
+            .map_err(|_| EnhancementError::ProviderTimeout)?
+    }
+}
+
+/// The message content out of a completion response body.
+fn decode_completion(bytes: &[u8]) -> Result<String, EnhancementError> {
+    let envelope: Value = serde_json::from_slice(bytes)
+        .map_err(|error| EnhancementError::InvalidOutput(error.to_string()))?;
+    envelope
+        .pointer("/choices/0/message/content")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| {
+            EnhancementError::InvalidOutput("model response has no message content".to_owned())
+        })
+}
+
+/// The exact bytes of one HTTP/1.1 request.
+///
+/// Written by hand rather than delegated, because the property that matters here
+/// is that nothing is written before the ownership proof, and a helper that
+/// "might" add a cookie jar, a redirect, or a proxy hop is not something this
+/// path can reason about. `Connection: close` is deliberate: the proof is per
+/// connection, so the socket is not reused for a request that was not proved.
+fn encode_request(endpoint: &Url, api_key: Option<&str>, body: &[u8]) -> Vec<u8> {
+    let authority = format!(
+        "{}:{}",
+        endpoint.host_str().unwrap_or("127.0.0.1"),
+        endpoint.port().unwrap_or(80)
+    );
+    let path = endpoint.path();
+    let mut head = String::with_capacity(256);
+    head.push_str(&format!("POST {path} HTTP/1.1\r\n"));
+    head.push_str(&format!("Host: {authority}\r\n"));
+    head.push_str("Content-Type: application/json\r\n");
+    head.push_str(&format!("Content-Length: {}\r\n", body.len()));
+    head.push_str("Connection: close\r\n");
+    if let Some(key) = api_key {
+        // The key appears in exactly one place, as a bearer token header. It is
+        // not in the URL, not in the body, and never logged.
+        head.push_str(&format!("Authorization: Bearer {key}\r\n"));
+    }
+    head.push_str("\r\n");
+    let mut request = Vec::with_capacity(head.len() + body.len());
+    request.extend_from_slice(head.as_bytes());
+    request.extend_from_slice(body);
+    request
+}
+
+/// Read one HTTP/1.1 response, bounded in head, body, and time.
+///
+/// Three framings are accepted, because a loopback server may use any of them
+/// and refusing two of them would be a transport bug rather than a safety
+/// property: `Transfer-Encoding: chunked`, an explicit `Content-Length`, and end
+/// of stream.
+async fn read_response(
+    stream: &mut TcpStream,
+    cancellation: &CancellationToken,
+) -> Result<Vec<u8>, EnhancementError> {
+    let mut raw: Vec<u8> = Vec::with_capacity(4096);
+    let mut chunk = [0_u8; 8192];
+    let separator = loop {
+        if let Some(index) = find_head_end(&raw) {
+            break index;
+        }
+        if raw.len() > MAX_RESPONSE_HEAD_BYTES {
+            return Err(EnhancementError::InvalidOutput(
+                "local model response head is too large".to_owned(),
+            ));
+        }
+        if cancellation.is_cancelled() {
+            return Err(EnhancementError::Cancelled);
+        }
+        let read = stream
+            .read(&mut chunk)
+            .await
+            .map_err(|error| EnhancementError::ProviderUnavailable(error.to_string()))?;
+        if read == 0 {
+            return Err(EnhancementError::ProviderUnavailable(
+                "local model closed the connection before responding".to_owned(),
+            ));
+        }
+        raw.extend_from_slice(&chunk[..read]);
+    };
+
+    let head = String::from_utf8_lossy(&raw[..separator]).into_owned();
+    let mut lines = head.split("\r\n");
+    let status_line = lines.next().unwrap_or_default();
+    let Some(code) = status_line
+        .split_whitespace()
+        .nth(1)
+        .and_then(|value| value.parse::<u16>().ok())
+    else {
+        return Err(EnhancementError::InvalidOutput(
+            "local model sent no HTTP status".to_owned(),
+        ));
+    };
+    if !(200..300).contains(&code) {
+        return Err(EnhancementError::ProviderUnavailable(format!(
+            "local model returned HTTP {code}"
+        )));
+    }
+
+    let mut content_length: Option<usize> = None;
+    let mut chunked = false;
+    for line in lines {
+        let Some((name, value)) = line.split_once(':') else {
+            continue;
+        };
+        let name = name.trim().to_ascii_lowercase();
+        let value = value.trim();
+        match name.as_str() {
+            "content-length" => {
+                content_length = value.parse::<usize>().ok();
+            }
+            "transfer-encoding" => {
+                chunked = value.to_ascii_lowercase().contains("chunked");
+            }
+            _ => {}
+        }
+    }
+
+    let mut body = raw[separator + 4..].to_vec();
+    if chunked {
+        decode_chunked(&mut body, stream, cancellation).await?;
+    } else if let Some(expected) = content_length {
+        while body.len() < expected {
+            if cancellation.is_cancelled() {
+                return Err(EnhancementError::Cancelled);
+            }
+            let read = stream
+                .read(&mut chunk)
+                .await
+                .map_err(|error| EnhancementError::ProviderUnavailable(error.to_string()))?;
+            if read == 0 {
+                break;
+            }
+            body.extend_from_slice(&chunk[..read]);
+        }
+        body.truncate(expected);
+    } else {
+        // No framing header: the body ends when the peer closes.
+        loop {
+            if cancellation.is_cancelled() {
+                return Err(EnhancementError::Cancelled);
+            }
+            let read = stream
+                .read(&mut chunk)
+                .await
+                .map_err(|error| EnhancementError::ProviderUnavailable(error.to_string()))?;
+            if read == 0 {
+                break;
+            }
+            body.extend_from_slice(&chunk[..read]);
+            if body.len() > MAX_RESPONSE_BYTES {
+                return Err(EnhancementError::InvalidOutput(
+                    "local model response is too large".to_owned(),
+                ));
+            }
+        }
+    }
+    if body.len() > MAX_RESPONSE_BYTES {
+        return Err(EnhancementError::InvalidOutput(
+            "local model response is too large".to_owned(),
+        ));
+    }
+    Ok(body)
+}
+
+/// The index of the `\r\n\r\n` that ends the response head, if it has arrived.
+fn find_head_end(raw: &[u8]) -> Option<usize> {
+    raw.windows(4).position(|window| window == b"\r\n\r\n")
+}
+
+/// Decode `Transfer-Encoding: chunked` in place, appending whatever the peer
+/// sends after the last chunk.
+///
+/// A malformed chunk is an `InvalidOutput` rather than a best-effort guess: a
+/// body this adapter cannot frame exactly is a body it must not hand to a JSON
+/// parser as if it were complete.
+async fn decode_chunked(
+    body: &mut Vec<u8>,
+    stream: &mut TcpStream,
+    cancellation: &CancellationToken,
+) -> Result<(), EnhancementError> {
+    let mut decoded: Vec<u8> = Vec::with_capacity(body.len());
+    let mut buffer = std::mem::take(body);
+    let mut chunk = [0_u8; 8192];
+    let mut cursor = 0_usize;
+    loop {
+        let Some(line_end) = find_crlf(&buffer, cursor) else {
+            if !fill(stream, &mut buffer, &mut chunk, cancellation).await? {
+                return Err(EnhancementError::InvalidOutput(
+                    "local model chunked body ended mid-header".to_owned(),
+                ));
+            }
+            continue;
+        };
+        let size_text = String::from_utf8_lossy(&buffer[cursor..line_end]).into_owned();
+        let size_text = size_text.split(';').next().unwrap_or("").trim();
+        let size = usize::from_str_radix(size_text, 16).map_err(|_| {
+            EnhancementError::InvalidOutput("local model chunk size is not hexadecimal".to_owned())
+        })?;
+        cursor = line_end + 2;
+        if size == 0 {
+            decoded.shrink_to_fit();
+            *body = decoded;
+            return Ok(());
+        }
+        if decoded.len().saturating_add(size) > MAX_RESPONSE_BYTES {
+            return Err(EnhancementError::InvalidOutput(
+                "local model response is too large".to_owned(),
+            ));
+        }
+        while buffer.len() < cursor + size + 2 {
+            if !fill(stream, &mut buffer, &mut chunk, cancellation).await? {
+                return Err(EnhancementError::InvalidOutput(
+                    "local model chunked body ended mid-chunk".to_owned(),
+                ));
+            }
+        }
+        decoded.extend_from_slice(&buffer[cursor..cursor + size]);
+        cursor += size + 2;
+    }
+}
+
+/// Read more into `buffer`. `false` means the peer closed.
+async fn fill(
+    stream: &mut TcpStream,
+    buffer: &mut Vec<u8>,
+    chunk: &mut [u8],
+    cancellation: &CancellationToken,
+) -> Result<bool, EnhancementError> {
+    if cancellation.is_cancelled() {
+        return Err(EnhancementError::Cancelled);
+    }
+    let read = stream
+        .read(chunk)
+        .await
+        .map_err(|error| EnhancementError::ProviderUnavailable(error.to_string()))?;
+    if read == 0 {
+        return Ok(false);
+    }
+    buffer.extend_from_slice(&chunk[..read]);
+    Ok(true)
+}
+
+fn find_crlf(buffer: &[u8], from: usize) -> Option<usize> {
+    buffer
+        .get(from..)
+        .and_then(|tail| tail.windows(2).position(|window| window == b"\r\n"))
+        .map(|offset| from + offset)
 }
 
 #[derive(Debug, Deserialize)]

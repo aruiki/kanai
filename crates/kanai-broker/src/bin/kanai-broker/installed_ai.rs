@@ -86,19 +86,23 @@ pub(super) fn policy(setting: Option<&str>) -> EnhancementPolicy {
     }
 }
 
-fn read_config(path: &std::path::Path) -> std::io::Result<Vec<u8>> {
-    use std::io::Read;
-    let file = std::fs::File::open(path)?;
-    if !file.metadata()?.is_file() {
-        return Err(std::io::Error::from(std::io::ErrorKind::InvalidData));
-    }
-    let mut bytes = Vec::new();
-    file.take(kanai_broker::MAX_RUNTIME_CONFIG_BYTES as u64 + 1)
-        .read_to_end(&mut bytes)?;
-    if bytes.len() > kanai_broker::MAX_RUNTIME_CONFIG_BYTES {
-        return Err(std::io::Error::from(std::io::ErrorKind::InvalidData));
-    }
-    Ok(bytes)
+/// The installed local AI root: the `ai` directory beside this executable.
+///
+/// This deliberately reads nothing. Under user decision D-7 the launch plan is
+/// derived from the pinned constants and the installed bytes are verified
+/// against them, so the two documents this function used to require -
+/// `manifest-v1.json` and `STAGING-RECEIPT.json` - are not read at all. The
+/// installer refuses to make either one an MSI payload file, so requiring them
+/// is what kept the local AI from ever starting on a real install.
+///
+/// The directory is not required to exist here: absence is reported by the
+/// bundle verification as a typed refusal, which the caller turns into "keep
+/// the Mozc baseline", rather than being turned into a missing-file error
+/// before the AI path is even considered.
+fn installed_ai_root(exe: &std::path::Path) -> Result<std::path::PathBuf, &'static str> {
+    exe.parent()
+        .ok_or("install location unavailable")
+        .map(|parent| parent.join("ai"))
 }
 
 /// The key-bearing backend, wrapped in a per-request ownership check.
@@ -107,13 +111,20 @@ fn read_config(path: &std::path::Path) -> std::io::Result<Vec<u8>> {
 /// statement about a moment, and the port can change hands afterwards: a child
 /// that exits and a process that takes its port leaves the broker holding a
 /// backend whose next request would hand the bearer token and the user's
-/// preedit, context, and candidate text to that process. So every request asks
-/// again, on a fresh connection, whether the endpoint is still answered by the
-/// child this broker started, and a request that cannot be attributed never
-/// leaves the process.
+/// preedit, context, and candidate text to that process.
 ///
-/// The check costs one loopback connect and a connection-table lookup, bounded by
-/// `OWNERSHIP_VERIFY_TIMEOUT`, on a path that already waits on a model.
+/// So the proof is not a separate check before the request. The backend is built
+/// with the runtime's ownership handle
+/// ([`LocalOpenAiBackend::new_with_api_key_and_ownership`]), which means each
+/// request opens its own loopback connection, has *that* connection's address
+/// pair proved against the operating system's connection table, and only then
+/// writes the request. There is no second connection and therefore no window
+/// between the proof and the bytes: a port that changed hands receives neither
+/// the key nor a single character of user text.
+///
+/// The per-request cost is one loopback connect and a connection-table lookup,
+/// bounded by `OWNERSHIP_VERIFY_TIMEOUT`, on a path that already waits on a
+/// model.
 #[cfg(windows)]
 struct OwnedLocalBackend {
     inner: kanai_broker::LocalOpenAiBackend,
@@ -122,12 +133,21 @@ struct OwnedLocalBackend {
 
 #[cfg(windows)]
 impl OwnedLocalBackend {
-    /// Refuse to forward a request to an endpoint this broker cannot name.
+    /// Refuse a request whose endpoint this broker cannot name.
+    ///
+    /// The socket proof that used to live here - "open a connection, prove it,
+    /// then let the HTTP client open its own" - is gone, because it left a
+    /// window between the proof and the bytes. The proof is now inside the
+    /// backend, on the very socket the request is written to; see
+    /// [`LocalOpenAiBackend::new_with_api_key_and_ownership`].
+    ///
+    /// What remains is the half no socket can be asked: is this broker still
+    /// supposed to be talking to a runtime at all?
     async fn guard(&self, cancellation: &CancellationToken) -> Result<(), EnhancementError> {
         if cancellation.is_cancelled() {
             return Err(EnhancementError::Cancelled);
         }
-        if !self.ownership.verify_endpoint().await {
+        if !self.ownership.is_running() {
             return Err(EnhancementError::ProviderUnavailable(
                 "local AI runtime is unavailable".to_owned(),
             ));
@@ -221,6 +241,39 @@ pub(super) struct BackgroundAi {
     task: tokio::task::JoinHandle<()>,
 }
 
+/// The one line the broker prints about the local AI when it is not going to
+/// start, or `None` when the AI is starting and its own receipt will say so.
+///
+/// This exists because the disabled path used to be completely silent. Measured
+/// on the implementation host on 2026-09-28: with the opt-in unset the broker
+/// printed one line, listened on its pipe, and then did nothing for three
+/// minutes with an empty stderr and an 8 MB working set. With the same binary and
+/// the opt-in set to `local`, it verified the pinned bytes, loaded the 1.1 GB
+/// model into a child process and bound a loopback port. From outside the
+/// process those two states were nearly indistinguishable, which is most of why
+/// "the AI never starts" took so long to act on - the quiet state did not even
+/// say it was quiet.
+///
+/// The opt-in is unset in the product, not only in the lab: the text service
+/// launches this broker with an inherited environment
+/// (`pipe_broker_client.cc`, `CreateProcessW` with a null environment block) and
+/// nothing anywhere sets `KANAI_BROKER_ENHANCEMENT`. So this line is the normal
+/// startup output of the installed product until that wiring is closed.
+///
+/// Like the other startup diagnostics it carries no configuration, path, token or
+/// model text; naming the variable is the whole remedy, and a variable name is
+/// not a secret.
+#[cfg(windows)]
+fn startup_diagnostic(policy: EnhancementPolicy) -> Option<&'static str> {
+    if policy == EnhancementPolicy::Disabled {
+        return Some(
+            "kanai-broker: local AI not started (enhancement policy is disabled; \
+             set KANAI_BROKER_ENHANCEMENT=local to enable)",
+        );
+    }
+    None
+}
+
 #[cfg(windows)]
 impl BackgroundAi {
     pub(super) fn start(backend: SwitchableBackend, policy: EnhancementPolicy) -> Self {
@@ -228,7 +281,8 @@ impl BackgroundAi {
         let worker_backend = backend.clone();
         let worker_cancel = cancellation.clone();
         let task = tokio::spawn(async move {
-            if policy == EnhancementPolicy::Disabled {
+            if let Some(line) = startup_diagnostic(policy) {
+                eprintln!("{line}");
                 return;
             }
             if let Err(reason) = run(worker_backend, worker_cancel).await {
@@ -433,20 +487,19 @@ async fn run(
 ) -> Result<(), &'static str> {
     use kanai_broker::LocalOpenAiBackend;
     use kanai_broker::ai_runtime::{
-        SUGGESTED_READINESS_DEADLINE, reserve_loopback_port, start_pinned_ai_runtime,
+        SUGGESTED_READINESS_DEADLINE, reserve_loopback_port, start_embedded_ai_runtime,
     };
 
-    let (root, manifest, receipt) = tokio::task::spawn_blocking(|| {
+    // User decision D-7.  This used to read `ai\manifest-v1.json` and
+    // `ai\STAGING-RECEIPT.json` and fail when either was absent.  The installer
+    // refuses to make either one an MSI payload file, so on a real install both
+    // reads failed, the AI never started, and every conversion silently stayed on
+    // the Mozc baseline.  The launch plan is now derived from the pinned
+    // constants, and the bytes actually on this machine are verified before the
+    // runtime is allowed to answer anything.
+    let root = tokio::task::spawn_blocking(|| {
         let exe = std::env::current_exe().map_err(|_| "install location unavailable")?;
-        let root = exe
-            .parent()
-            .ok_or("install location unavailable")?
-            .join("ai");
-        let manifest = read_config(&root.join("manifest-v1.json"))
-            .map_err(|_| "manifest unavailable or oversized")?;
-        let receipt = read_config(&root.join("STAGING-RECEIPT.json"))
-            .map_err(|_| "receipt unavailable or oversized")?;
-        Ok::<_, &'static str>((root, manifest, receipt))
+        installed_ai_root(&exe)
     })
     .await
     .map_err(|_| "configuration worker failed")??;
@@ -469,12 +522,41 @@ async fn run(
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|_| "clock unavailable")?
         .as_nanos();
-    let key_root = std::env::temp_dir().join(format!("KanaAI-{}-{nonce}", std::process::id()));
+    // The root has to be ASCII, because the pinned runtime is refused rather
+    // than started when its command line is not, and the key file's path is part
+    // of that command line. A Japanese account name makes `%TEMP%` non-ASCII, so
+    // using it verbatim left the AI path permanently off on such a machine with
+    // no line in any log saying why. The 8.3 short form of the same directory is
+    // ASCII, so it is preferred; see `kanai_broker::key_root`.
+    let key_root = kanai_broker::key_root::key_root_for(
+        std::process::id(),
+        nonce,
+        &std::env::temp_dir(),
+        kanai_broker::key_root::short_path_name,
+        |candidate| {
+            // Probe by creating the real directory and taking it straight back
+            // out. Leaving it would be a security regression, not a convenience:
+            // the key writer skips any directory that already exists, so a
+            // leftover created here with an inherited DACL would be the one the
+            // key is written into, instead of a protected owner-only one. A
+            // directory that cannot be taken back out is therefore a refusal.
+            std::fs::create_dir(candidate)?;
+            if std::fs::remove_dir(candidate).is_err() {
+                let _ = std::fs::remove_dir_all(candidate);
+                return Err(std::io::Error::other(
+                    "probe directory could not be removed",
+                ));
+            }
+            Ok(candidate.to_path_buf())
+        },
+    )
+    .map_err(|error| {
+        eprintln!("kanai-broker: local AI key root unavailable ({error})");
+        "no writable ASCII key root"
+    })?;
     let _key_directory = KeyDirectory(key_root.clone());
     let port = reserve_loopback_port().map_err(|_| "loopback port unavailable")?;
-    let runtime = start_pinned_ai_runtime(
-        &manifest,
-        &receipt,
+    let runtime = start_embedded_ai_runtime(
         &root,
         &key_root,
         port,
@@ -483,22 +565,23 @@ async fn run(
     )
     .await
     .map_err(|_| "runtime startup failed")?;
-    let local = match LocalOpenAiBackend::new_with_api_key(
+    // The ownership handle carries no key, so it can be held for the life of the
+    // slot and used to prove the endpoint's owner on every request.
+    let Some(ownership) = runtime.ownership() else {
+        let _ = runtime.shutdown().await;
+        return Err("runtime ownership unavailable");
+    };
+    let local = match LocalOpenAiBackend::new_with_api_key_and_ownership(
         runtime.base_url(),
         runtime.pinned_model_id(),
         runtime.api_key().expose(),
+        Arc::new(ownership.clone()),
     ) {
         Ok(local) => local,
         Err(_) => {
             let _ = runtime.shutdown().await;
             return Err("backend configuration rejected");
         }
-    };
-    // The ownership handle carries no key, so it can be held for the life of the
-    // slot and used to re-prove the endpoint's owner on every request.
-    let Some(ownership) = runtime.ownership() else {
-        let _ = runtime.shutdown().await;
-        return Err("runtime ownership unavailable");
     };
     let owned = Arc::new(OwnedLocalBackend {
         inner: local,
@@ -621,20 +704,65 @@ mod tests {
     }
 
     #[test]
-    fn configuration_reads_are_bounded_and_missing_files_fail_soft() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("config.json");
-        assert!(read_config(&path).is_err());
-        std::fs::write(&path, b"{}").unwrap();
-        assert_eq!(read_config(&path).unwrap(), b"{}");
-        std::fs::write(
-            &path,
-            vec![b' '; kanai_broker::MAX_RUNTIME_CONFIG_BYTES + 1],
-        )
-        .unwrap();
+    fn the_disabled_policy_now_says_so_at_startup() {
+        // Before this, `BackgroundAi::start` returned before doing anything when
+        // the policy was Disabled, with no output at all. The installed product is
+        // in exactly that state, because nothing sets the opt-in, so the quiet
+        // path was the normal one and said nothing about itself.
+        let line = startup_diagnostic(EnhancementPolicy::Disabled)
+            .expect("a disabled policy must be reported");
+        assert!(
+            line.contains("KANAI_BROKER_ENHANCEMENT=local"),
+            "the line has to name the remedy, or it is only a complaint: {line}"
+        );
+        assert!(
+            !line.contains("manifest") && !line.contains("STAGING"),
+            "the line must not repeat the retired D-7 documents as causes: {line}"
+        );
+
+        // The other arm, so the test is not a constant string check: when the AI
+        // is going to start, its own receipt speaks instead and this must be
+        // silent, or the product would announce an AI that has not loaded.
         assert_eq!(
-            read_config(&path).unwrap_err().kind(),
-            std::io::ErrorKind::InvalidData
+            startup_diagnostic(EnhancementPolicy::LocalQualityOnly),
+            None
+        );
+    }
+
+    #[test]
+    fn the_installed_products_policy_is_the_one_that_gets_reported() {
+        // Ties the diagnostic to the real resolver, so the claim "the product is
+        // in the state that is now reported" is tested rather than asserted.
+        // Measured 2026-09-28: the text service starts this broker with an
+        // inherited environment and nothing sets the variable, so the broker sees
+        // an unset setting, which resolves to Disabled.
+        assert_eq!(policy(None), EnhancementPolicy::Disabled);
+        assert!(startup_diagnostic(policy(None)).is_some());
+        assert!(startup_diagnostic(policy(Some("local"))).is_none());
+    }
+
+    #[test]
+    fn the_installed_ai_root_needs_no_manifest_or_receipt() {
+        // This is the broker-side half of the fix. The installer refuses to ship
+        // `manifest-v1.json` and `STAGING-RECEIPT.json`, and the old code
+        // required both, so a real install logged one line and stayed on the Mozc
+        // baseline forever. A directory with neither file must still resolve.
+        let directory = tempfile::tempdir().unwrap();
+        let ai = directory.path().join("ai");
+        std::fs::create_dir(&ai).unwrap();
+        assert!(!ai.join("manifest-v1.json").exists());
+        assert!(!ai.join("STAGING-RECEIPT.json").exists());
+
+        let exe = directory.path().join("kanai-broker.exe");
+        std::fs::write(&exe, b"").unwrap();
+        assert_eq!(installed_ai_root(&exe).expect("root resolves"), ai);
+
+        // The directory does not have to exist either: a missing bundle is the
+        // verifier's typed refusal, not a missing-file error here.
+        let absent = directory.path().join("elsewhere");
+        assert_eq!(
+            installed_ai_root(&absent.join("kanai-broker.exe")).expect("root resolves"),
+            directory.path().join("elsewhere").join("ai")
         );
     }
 
@@ -848,19 +976,32 @@ mod tests {
             root
         }
 
-        /// A loopback endpoint that records every request and answers `200` to
-        /// `/health`, so the readiness probe and, separately, the request gate can
-        /// both be observed on the same socket.
-        pub async fn recording_endpoint() -> (SocketAddr, Arc<std::sync::Mutex<Vec<u8>>>) {
+        /// A loopback endpoint that records every connection and every request
+        /// byte, and answers `200`, so both the readiness probe and the request
+        /// path can be observed.
+        ///
+        /// Connections are counted separately from bytes because the two answer
+        /// different questions. Bytes answer "did the key or the preedit leave the
+        /// process"; connections answer "was this listener touched at all", which
+        /// is the stronger property once the request travels on the socket the
+        /// ownership proof accepted.
+        pub async fn recording_endpoint() -> (
+            SocketAddr,
+            Arc<std::sync::Mutex<Vec<u8>>>,
+            Arc<std::sync::atomic::AtomicUsize>,
+        ) {
             let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
                 .await
                 .expect("a loopback port");
             let address = listener.local_addr().expect("the endpoint address");
             let recorded = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let accepted = Arc::new(std::sync::atomic::AtomicUsize::new(0));
             tokio::spawn({
                 let recorded = Arc::clone(&recorded);
+                let accepted = Arc::clone(&accepted);
                 async move {
                     while let Ok((mut stream, _)) = listener.accept().await {
+                        accepted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         let mut request = Vec::new();
                         let mut buffer = [0_u8; 512];
                         loop {
@@ -886,13 +1027,18 @@ mod tests {
                     }
                 }
             });
-            (address, recorded)
+            (address, recorded, accepted)
         }
 
         /// Everything the recorded bytes have been asked for so far.
         pub fn requests(recorded: &Arc<std::sync::Mutex<Vec<u8>>>) -> String {
             String::from_utf8_lossy(&recorded.lock().expect("the recorded request lock"))
                 .into_owned()
+        }
+
+        /// How many connections the endpoint has accepted so far.
+        pub fn connections(accepted: &Arc<std::sync::atomic::AtomicUsize>) -> usize {
+            accepted.load(std::sync::atomic::Ordering::SeqCst)
         }
 
         /// Forget what has been recorded, so a later assertion is about the bytes
@@ -945,15 +1091,19 @@ mod tests {
     #[cfg(windows)]
     #[tokio::test]
     async fn a_request_is_never_forwarded_to_an_endpoint_the_broker_cannot_name() {
-        use runtime::{FakeChild, recording_endpoint, requests, rerank_request, start};
+        use runtime::{
+            FakeChild, connections, recording_endpoint, requests, rerank_request, start,
+        };
 
-        let (address, recorded) = recording_endpoint().await;
+        let (address, recorded, accepted) = recording_endpoint().await;
         let child = FakeChild::new(true);
         let started = start(address.port(), &child)
             .await
             .expect("a ready runtime over the fake child");
         let ownership = started.ownership().expect("an ownership handle");
-        let inner = kanai_broker::LocalOpenAiBackend::new_with_api_key(
+        // The ownership handle goes into the backend, so the proof happens on the
+        // socket the request is written to rather than on a separate one.
+        let inner = kanai_broker::LocalOpenAiBackend::new_with_api_key_and_ownership(
             format!(
                 "http://{}:{}",
                 kanai_broker::local_runtime::RUNTIME_LOOPBACK_HOST,
@@ -961,6 +1111,7 @@ mod tests {
             ),
             "test-model",
             "an-ephemeral-test-key",
+            Arc::new(ownership.clone()),
         )
         .expect("a loopback backend");
         let owned = OwnedLocalBackend { inner, ownership };
@@ -975,14 +1126,21 @@ mod tests {
             requests(&recorded).contains("/v1/chat/completions"),
             "the control request must reach the endpoint, otherwise the next assertion is vacuous"
         );
+        assert!(
+            connections(&accepted) > 0,
+            "the control request must have opened a connection, otherwise the refusal \
+             assertion below would pass for the wrong reason"
+        );
 
         // A process that won the port race, or a child that has exited, is not
-        // something this broker can name, so the request must not be sent at all:
-        // no preedit, no context, no candidate, and no bearer token. Only the
-        // bytes recorded from here on are evidence, which is why the control's
-        // request is forgotten first.
+        // something this broker can name. The request must not be sent, and - the
+        // stronger property - the unproven listener must not even be *connected
+        // to*, because the connection is where the proof happens. So a port that
+        // changed hands receives no socket, no preedit, no context, no candidate,
+        // and no bearer token.
         child.set_owns(false);
         runtime::clear(&recorded);
+        let before = connections(&accepted);
         let outcome = owned
             .rerank(rerank_request(), CancellationToken::new())
             .await;
@@ -999,6 +1157,12 @@ mod tests {
             !after.to_ascii_lowercase().contains("authorization"),
             "the bearer token must not reach an unproven endpoint: {after}"
         );
+        assert_eq!(
+            connections(&accepted),
+            before,
+            "an unproven endpoint must not be connected to at all: the proof happens on \
+             the request's own socket, so a refusal opens no socket"
+        );
         let _ = started.shutdown().await;
     }
 
@@ -1008,7 +1172,7 @@ mod tests {
         use runtime::{FakeChild, recording_endpoint, start};
         use std::time::Duration;
 
-        let (address, _recorded) = recording_endpoint().await;
+        let (address, _recorded, _accepted) = recording_endpoint().await;
         let child = FakeChild::new(true);
         let started = start(address.port(), &child)
             .await
@@ -1062,7 +1226,7 @@ mod tests {
     async fn the_watch_returns_when_the_broker_asks_to_stop() {
         use runtime::{FakeChild, recording_endpoint, start};
 
-        let (address, _recorded) = recording_endpoint().await;
+        let (address, _recorded, _accepted) = recording_endpoint().await;
         let child = FakeChild::new(true);
         let started = start(address.port(), &child)
             .await

@@ -78,6 +78,7 @@ $requiredPatchNames = @(
     '0004-windows-python-toolchain.patch'
     '0005-windows-runtime-identity.patch'
     '0006-windows-installer-runtime-path.patch'
+    '0007-kanai-ime-open-by-default.patch'
 )
 $mutationPrefixes = @('platform\windows-tsf\', 'scripts\', 'patches\')
 $runtimeSpecs = @(
@@ -135,9 +136,16 @@ $aiPinned = [ordered]@{
     # The shipped Rust broker is part of the reviewed AI bundle. Pinning it here
     # means the manifest and the builder cannot drift apart, and an arbitrary
     # non-Mozc executable can never satisfy the broker slot.
+    # Re-pinned 2026-09-27 for the D-7 build: 3,267,072 bytes /
+    # d832612e4c4158704789338585be69343b639e20b91f21573e84a882e689a0cc, from
+    # `cargo build --release --target x86_64-pc-windows-msvc -p kanai-broker
+    # --bin kanai-broker`. This, `manifest-v1.json`'s `broker` object and
+    # `local_runtime::PINNED_BROKER_SHA256` are one three-place edit; the
+    # installer's own broker-pinned-size and broker-pinned-digest negative cases
+    # fail if they disagree.
     brokerFileName = 'kanai-broker.exe'
-    brokerBytes = 2817024
-    brokerSha256 = '85f4930d5976b5339de10216d53c20bea4d68d3bae6d25e2668ed24de101dac4'
+    brokerBytes = 3267072
+    brokerSha256 = 'd832612e4c4158704789338585be69343b639e20b91f21573e84a882e689a0cc'
     brokerMachine = '0x8664'
     brokerOptionalMagic = '0x020B'
     brokerArchitecture = 'x64'

@@ -8,8 +8,10 @@
 
 pub mod ai_runtime;
 pub mod broker;
+pub mod bundle_verify;
 pub mod enhancement;
 pub mod frame;
+pub mod key_root;
 pub mod local_model;
 pub mod local_runtime;
 pub mod mozc_session;
@@ -28,6 +30,7 @@ pub use broker::{
     BackendError, Broker, BrokerBackend, BrokerConfig, BrokerError, CancellationError,
     CancellationRegistry, CancellationToken, DeterministicBackend, FallbackPolicy, GenerationToken,
 };
+pub use bundle_verify::{BundleVerifyError, PinnedBundleVerification, verify_pinned_bundle};
 pub use enhancement::{
     EnhancementBackend, EnhancementCoordinator, EnhancementError, RerankOutput,
     SemanticAssistOutput,
@@ -45,9 +48,12 @@ pub use local_runtime::{
     PINNED_MODEL_REVISION, PINNED_MODEL_SHA256, PINNED_RUNTIME_BYTES, PINNED_RUNTIME_ENTRY_COUNT,
     PINNED_RUNTIME_ENTRY_NAMES_SHA256, PINNED_RUNTIME_ID, PINNED_RUNTIME_RELEASE,
     PINNED_RUNTIME_REPOSITORY, PINNED_RUNTIME_REVISION, PINNED_RUNTIME_SHA256,
-    RUNTIME_LOOPBACK_HOST, RelativeInstalledPath, RuntimeConfigError, RuntimeLaunchConfig,
-    RuntimeLaunchOptions, RuntimeLaunchPlan, TokenReference, build_runtime_launch_plan,
-    build_runtime_launch_plan_from_json,
+    PinnedInstalledRuntimePaths, RUNTIME_LOOPBACK_HOST, RelativeInstalledPath, RuntimeConfigError,
+    RuntimeLaunchConfig, RuntimeLaunchOptions, RuntimeLaunchPlan, TokenReference,
+    ValidatedRuntimeConfiguration, build_embedded_runtime_launch_plan, build_runtime_launch_plan,
+    build_runtime_launch_plan_from_json, entry_names_sha256, generate_runtime_launch_plan,
+    pinned_bundle_layout, pinned_installed_runtime_paths, validate_runtime_configuration,
+    validate_runtime_configuration_values,
 };
 pub use mozc_session::MozcSessionBackend;
 #[cfg(windows)]

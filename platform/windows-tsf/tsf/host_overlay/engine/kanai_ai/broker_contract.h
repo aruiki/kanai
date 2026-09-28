@@ -28,6 +28,12 @@ inline constexpr std::size_t kBrokerMaxClientIdBytes = 128;
 inline constexpr std::size_t kBrokerMaxContextBytes = 512;
 inline constexpr std::size_t kBrokerMaxRerankCandidateBytes = 64 * 1024;
 inline constexpr std::size_t kBrokerMaxEnhancementDeadlineMs = 2000;
+
+// The budget a rerank request asks for. Kept as its own constant, and below the
+// protocol cap above, so that the request builder, the request validator and the
+// broker's own default all read one number. See BrokerRerankRequest::deadline_ms
+// for the measurement behind it.
+inline constexpr std::size_t kBrokerRerankDeadlineMs = 1500;
 inline constexpr std::size_t kNativeMaxRerankedCandidates = 5;
 inline constexpr char kBrokerPipeNamePrefix[] =
     "\\\\.\\pipe\\KanaAI.TsfBroker.v1.";
@@ -89,7 +95,23 @@ struct RerankRequest {
   std::string context_before;
   std::string context_after;
   std::string policy_version = "v1";
-  std::uint32_t deadline_ms = 250;
+  // The budget for a model-backed rerank. Use the named constant rather than a
+  // literal: the value lives in exactly one place now, because it previously did
+  // not. The struct default below was already 1500 ms while
+  // kanai_supplemental_model.cc overwrote it with 250 ms on the way out, so the
+  // default was never the value that reached the broker and changing only the
+  // default would have changed nothing on the key path.
+  //
+  // 1500 ms is measured, not chosen. crates/kanai-broker/tests/rerank_deadline.rs
+  // records p50 and p99 against the pinned Qwen2.5-1.5B CPU runtime on the
+  // implementation host and fails if the observed p99 stops fitting inside this.
+  // It was 250 ms, which is a key-path budget; the real runtime needs about 1.3 s,
+  // so every request paid the full cost and the broker discarded the answer as a
+  // timeout. The rerank is dispatched as an async job and applied only while the
+  // session, generation and epoch still match, so a longer budget costs a
+  // background wait rather than a stalled key handler. It stays under the
+  // protocol cap kBrokerMaxEnhancementDeadlineMs.
+  std::uint32_t deadline_ms = kBrokerRerankDeadlineMs;
   std::uint64_t baseline_latency_micros = 0;
 };
 

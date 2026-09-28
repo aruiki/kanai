@@ -467,6 +467,22 @@ pub struct CandidateRerankRequest {
 }
 
 impl CandidateRerankRequest {
+    /// The default deadline for a model-backed rerank.
+    ///
+    /// This was 250 ms, which is a key-path budget, and it was the wrong number
+    /// for this request. The pinned Qwen2.5-1.5B weight on the implementation
+    /// host's CPU answers a rerank in around 1.3 s, so every request paid the
+    /// whole cost - inference, the bearer token, the user's preedit and candidate
+    /// text - and the coordinator's timeout then discarded the answer and
+    /// returned the Mozc baseline. A rerank that can never arrive is not a fast
+    /// path; it is a cost with no result.
+    ///
+    /// The value is a measurement, and the measurement is a test:
+    /// `tests/rerank_deadline.rs` runs the real runtime, takes a distribution, and
+    /// fails if the observed p99 stops fitting inside this number. It stays under
+    /// [`MAX_ENHANCEMENT_DEADLINE_MS`], the protocol's hard cap.
+    pub const DEFAULT_RERANK_DEADLINE_MS: u32 = 1_500;
+
     #[must_use]
     pub fn new(session_id: SessionId, generation: Generation, candidates: Vec<Candidate>) -> Self {
         Self {
@@ -476,7 +492,7 @@ impl CandidateRerankRequest {
             context_before: String::new(),
             context_after: String::new(),
             policy_version: "v1".to_owned(),
-            deadline_ms: 250,
+            deadline_ms: Self::DEFAULT_RERANK_DEADLINE_MS,
             baseline_latency_micros: 0,
         }
     }

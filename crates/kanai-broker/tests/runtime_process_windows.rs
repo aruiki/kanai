@@ -9,6 +9,8 @@
 //! pass, and a machine without the payload reports that rather than a
 //! fabricated success.
 
+mod evidence;
+
 use std::path::{Path, PathBuf};
 
 use kanai_broker::local_runtime::{
@@ -465,34 +467,21 @@ fn the_adapter_binds_loopback_and_a_caller_chosen_port() {
     assert!(!rendered.contains("0.0.0.0"), "{rendered}");
 }
 
-/// The newest staged AI payload, selected rather than hard-coded.
-///
-/// The staging directory gains a new name every time the pinned manifest
-/// changes, so pinning one here would make this evidence test fail with a
-/// "payload is absent" message that reads like a runtime failure instead of a
-/// stale path. Directories are ordered by name and the newest one that actually
-/// contains the runtime wins, so an older stage is never silently preferred.
-fn newest_staged_ai_payload() -> Option<PathBuf> {
-    let parent = repo_root().join(".local/ai-runtime");
-    let mut stages: Vec<PathBuf> = std::fs::read_dir(&parent)
-        .ok()?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.is_dir())
-        .filter(|path| path.join("runtime").join("llama-server.exe").is_file())
-        .filter(|path| path.join("STAGING-RECEIPT.json").is_file())
-        .collect();
-    stages.sort();
-    stages.pop()
-}
+/// The newest staged AI payload now comes from `tests/evidence`, because both
+/// real-runtime tests must agree on which stage they are talking about: two
+/// independent lookups could pick two different stages and produce two
+/// contradictory receipts.
 
 #[tokio::test]
-#[ignore = "requires the 1.1 GB staged AI payload; run with --ignored"]
 async fn the_supervisor_owns_and_terminates_the_real_runtime() {
-    let stage = newest_staged_ai_payload().expect(
-        "no staged AI payload with a runtime and a staging receipt exists under .local/ai-runtime; \
-         run scripts/fetch-stage-pinned-ai-runtime.ps1 -Stage first",
-    );
+    if !crate::evidence::real_runtime_evidence_enabled() {
+        crate::evidence::evidence_not_performed(
+            "the_supervisor_owns_and_terminates_the_real_runtime",
+            "KANAI_AI_EVIDENCE is not set to 1",
+        );
+        return;
+    }
+    let (stage, _) = crate::evidence::staged_runtime_and_receipt();
     // The repository lives under a Japanese path and the adapter refuses a
     // non-ASCII command line, so this test reaches the real bytes through a
     // directory junction. A junction is used rather than a symbolic link

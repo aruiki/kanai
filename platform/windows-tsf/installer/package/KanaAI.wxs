@@ -12,17 +12,140 @@
     </StandardDirectory>
     <Feature Id="Core" Title="KanaAI" Level="1">
       <ComponentGroupRef Id="RuntimeFiles" />
+      <ComponentRef Id="EnableKanaAiForCurrentUser" />
     </Feature>
     <Binary Id="Registrar" SourceFile="$(var.HelperPath)" />
     <SetProperty Id="RegisterTIP" Value="[INSTALLFOLDER]" Before="RegisterTIP" Sequence="execute" />
     <SetProperty Id="UnregisterRollback" Value="[INSTALLFOLDER]" Before="UnregisterRollback" Sequence="execute" />
+    <!--
+      EnableTipProfile is handed the install root, the way RegisterTIP already
+      was; it previously had no SetProperty and so ran with empty CustomActionData.
+
+      Why this line is here, stated honestly: it is a consistency fix, **not** a
+      fix for a measured failure. Adding it, rebuilding, and reinstalling moved
+      nothing: the per-user `TIP\...\LanguageProfile\0x00000411\...\Enable`
+      record that Microsoft IME has is still absent for KanaAI, and
+      `EnableTipProfile` still returns success without writing it to the
+      installing user's hive. The per-user record is written by the HKCU
+      component below instead, for the reason given there.
+
+      A correction to what this comment used to say
+      =============================================
+      An earlier revision of this comment recorded an activation defect as
+      measured fact: that `IClassFactory::CreateInstance` faults with
+      0xC0000005 in `mozc_tip64.dll`, that the DLL is loaded in zero
+      processes, and that this is a defect in the TIP build.
+
+      **That was wrong, and it was wrong because the probe was wrong.**
+      Re-measured on 2026-09-28 against the installed DLL (SHA-256
+      5BE0B94FBCD0816771E76509AEBCC2CE3C9533BE7AD84F1E5632F0F9CFDFA47D),
+      loading the DLL by absolute path and asking that DLL for its own class
+      object:
+
+        DllGetClassObject                      S_OK
+        IClassFactory::CreateInstance          S_OK   (with a real IID_IUnknown)
+        instance pointer                        non-null
+        IUnknown::QueryInterface               S_OK
+        reference count after QI               2      (CreateInstance made one)
+        verdict: the class factory returned a live IUnknown; the TIP is
+                 constructible
+
+      The 0xC0000005 was an artefact of the probe's own declaration. It
+      declared
+
+        HRESULT CreateInstance(IntPtr rclsid, IntPtr pUnkOuter, out object ppv)
+
+      and called it with two nulls. The first parameter is `pUnkOuter`, not an
+      IID, so `NULL` was passed as the `riid` and the TIP's own `IsIIDOf` did
+      `memcmp(NULL, &IID, 16)`. The fault belonged to the measurement.
+
+      Two related cautions, kept because they are easy to get wrong again:
+
+        * A fault address inside a DLL names a routine, not a caller. Offsets
+          are not stable across compilation modes either: 0x17E580 and 0xCAB6
+          were both observed in this same installed DLL, in different
+          measurements. An RVA measured in one build cannot be carried into
+          another build's image and treated as the same function.
+        * This SDK's msctf.idl declares `ITfCompartment` as
+          `SetValue(TfClientId, const VARIANT*)` + `GetValue(VARIANT*)`, which
+          is not the `GetCurrentValue`/`GetCurrentValueString` pair the older
+          documentation shows, and `ITfThreadMgr::GetGlobalCompartment` takes
+          no GUID at all. An interop written from the older documentation
+          calls the wrong vtable slots, which is a fault in the caller and
+          looks exactly like a fault in the server.
+
+      The composition failure is still real and still unexplained, and none of
+      the above explains it. What is measured about it: the TIP does load in
+      the target, MSCTF loads, the TSF calls return S_OK, the layout is
+      0x4110411, focus is held, six of six keys reach the text service, and
+      `ImmGetOpenStatus` reports the IME open - and the text still commits as
+      ASCII with no preedit and no candidate window. The leading remaining
+      candidate is that the session is in alphanumeric (direct input) mode
+      rather than kana, which has not been read yet because the
+      `TF_CONVERSIONMODE` compartment GUID is absent from this SDK's msctf.h
+      and msctf.idl, and guessing a GUID is how the last three rounds of
+      diagnosis went wrong.
+
+      The line below is kept because giving an action that reads CustomActionData
+      the same argument its sibling already receives is right on its own terms, and
+      it is measurably harmless: the candidate built with it installs, and every
+      installer test passes. It is kept **without** a claim that it repairs
+      anything, because a change justified by a diagnosis that measurement then
+      refuted is worse than no change - it hides the real defect.
+    -->
+    <SetProperty Id="EnableProfile" Value="[INSTALLFOLDER]" Before="EnableProfile" Sequence="execute" />
     <CustomAction Id="RegisterTIP" BinaryRef="Registrar" DllEntry="RegisterTIP" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="RegisterRollback" BinaryRef="Registrar" DllEntry="RegisterTIPRollback" Execute="rollback" Impersonate="no" Return="check" />
     <CustomAction Id="UnregisterTIP" BinaryRef="Registrar" DllEntry="UnregisterTIP" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="UnregisterRollback" BinaryRef="Registrar" DllEntry="UnregisterTIPRollback" Execute="rollback" Impersonate="no" Return="check" />
+    <!--
+      Impersonate="yes" is kept. It is what makes the commit run as the interactive
+      user, which is the only account whose HKCU can record an input method as
+      available. It was not the cause of anything measured in this area - the
+      earlier belief that it was came from decoding the ActionType with the flag
+      positions off by one, and that belief was wrong.
+    -->
     <CustomAction Id="EnableProfile" BinaryRef="Registrar" DllEntry="EnableTipProfile" Execute="commit" Impersonate="yes" Return="check" />
     <CustomAction Id="RestoreUserIME" BinaryRef="Registrar" DllEntry="RestoreUserIMEEnvironment" Impersonate="yes" Return="ignore" />
     <CustomAction Id="ShutdownProcesses" BinaryRef="Registrar" DllEntry="ShutdownServer" Impersonate="yes" Return="ignore" />
+    <!--
+      Per-user input method enablement, written by the installer itself.
+
+      Measured on the implementation host on 2026-09-28, after the AI-bundled
+      MSI had been installed: the record that EnableTipProfile writes through
+      InstallLayoutOrTip existed under HKU\S-1-5-18 (LOCAL SERVICE) and
+      HKU\.DEFAULT, and NOT in the interactive user's own hive. The custom action
+      is Execute="commit" with Impersonate="yes", the same shape upstream Mozc
+      uses, but the account it ran under was not the installing user's account.
+      The user who installed KanaAI therefore never had the input method enabled
+      for their own session.
+
+      This component writes the record itself, rooted at HKCU, so the client
+      process writes it into the hive of the account that is installing. It is
+      the difference between "the input method is installed" and "the input method
+      is available to the person who installed it", which is what a one-click
+      install has to deliver.
+
+      KeyPath is on the value, so removing the component removes the record.
+      The text service and profile GUIDs are the ones the product registers:
+      they are TsfProfile::GetTextServiceGuid() / GetProfileGuid() as compiled
+      after patch 0002, and the CLSID that the COM server writes.
+
+      One thing that is easy to get wrong and is therefore written down. In the
+      MSI Registry table, `Root` is an integer, and 1 means
+      HKEY_CURRENT_USER - not HKEY_LOCAL_MACHINE, which is 2. WiX 5 accepts
+      Root values HKMU, HKCR, HKCU, HKLM, HKU and compiles them to -1, 0, 1, 2,
+      3 in that order. This was measured rather than recalled, because getting it
+      backwards would have rejected a correct fix and shipped the defect: a
+      per-user MSI built with `Root="HKCU"` compiles to a row with `Root=1`, and a
+      real per-user install of it logs `RegOpenKey(Root=-2147483647)` and lands
+      the value under HKCU with nothing under HKLM.
+    -->
+    <Component Id="EnableKanaAiForCurrentUser" Guid="{6C447513-63DE-411D-8A76-E29910CD5941}" Directory="TARGETDIR">
+      <RegistryKey Root="HKCU" Key="Software\Microsoft\CTF\TIP\{7E7B5C1E-6D3A-4F2C-9A0E-3F4B5D6C7E81}\LanguageProfile\0x00000411\{F3C2B7A1-6D54-4E8B-9A10-2C7D8E9F0A12}">
+        <RegistryValue Name="Enable" Type="integer" Value="1" KeyPath="yes" />
+      </RegistryKey>
+    </Component>
     <InstallExecuteSequence>
       <Custom Action="ShutdownProcesses" Before="InstallInitialize" />
       <Custom Action="RestoreUserIME" Before="ShutdownProcesses" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />

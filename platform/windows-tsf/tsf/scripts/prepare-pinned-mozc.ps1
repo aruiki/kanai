@@ -106,7 +106,8 @@ try {
         [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0003-session-generation-binding.patch')),
         [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0004-windows-python-toolchain.patch')),
         [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0005-windows-runtime-identity.patch')),
-        [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0006-windows-installer-runtime-path.patch'))
+        [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0006-windows-installer-runtime-path.patch')),
+        [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\patches\0007-kanai-ime-open-by-default.patch'))
     )
     foreach ($patchPath in $patchPaths) {
         Invoke-Native -FilePath 'git' -WorkingDirectory $sourceDirectory -ArgumentList @(
@@ -139,7 +140,10 @@ finally {
         'src/win32/base/tsf_profile.cc',
         'src/win32/custom_action/custom_action.cc',
         'src/win32/tip/tip_keyevent_handler.cc',
-        'src/win32/tip/tip_resource.rc'
+        'src/win32/tip/tip_resource.rc',
+        'src/win32/tip/tip_status.cc',
+        'src/win32/tip/tip_status.h',
+        'src/win32/tip/tip_text_service.cc'
     )
     AddedOverlay = 'src/engine/kanai_ai'
     PublicBeta = $false

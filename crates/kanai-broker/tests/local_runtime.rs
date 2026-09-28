@@ -2,7 +2,9 @@ use kanai_broker::{
     MAX_RUNTIME_CONTEXT_SIZE, PINNED_BROKER_BYTES, PINNED_BROKER_FILE, PINNED_BROKER_SHA256,
     PINNED_MANIFEST_SHA256, PINNED_MODEL_FILE, PINNED_MODEL_SHA256,
     PINNED_RUNTIME_ENTRY_NAMES_SHA256, PINNED_RUNTIME_SHA256, RUNTIME_LOOPBACK_HOST,
-    RuntimeConfigError, RuntimeLaunchOptions, RuntimeLaunchPlan, build_runtime_launch_plan,
+    RuntimeConfigError, RuntimeLaunchOptions, RuntimeLaunchPlan,
+    build_embedded_runtime_launch_plan, build_runtime_launch_plan, generate_runtime_launch_plan,
+    pinned_installed_runtime_paths, validate_runtime_configuration,
 };
 use serde_json::{Value, json};
 
@@ -378,6 +380,117 @@ fn pinned_manifest_and_receipt_produce_a_deterministic_cpu_plan() {
     );
     assert!(arguments.iter().any(|argument| argument == "--no-ui"));
     assert_eq!(launch_plan.launch_arguments(), arguments);
+}
+
+#[test]
+fn the_pinned_derivation_agrees_with_the_json_path() {
+    // The two installed paths are the only plan items a document used to supply.
+    // The embedded (D-7) path derives them from constants instead, so this is
+    // the assertion that keeps the two routes from becoming two different
+    // launches.  If the JSON path ever changes where it looks for the model or
+    // the server, this fails rather than the embedded plan quietly diverging.
+    let from_json = plan(manifest_value(), receipt_value(), options()).expect("valid pinned plan");
+    let derived = pinned_installed_runtime_paths().expect("pinned paths derive");
+
+    assert_eq!(
+        derived.model_relative.as_str(),
+        from_json.model_path.as_str()
+    );
+    assert_eq!(
+        derived.server_relative.as_str(),
+        from_json.server_path.as_str()
+    );
+    assert_eq!(
+        derived.model_relative.as_str(),
+        "model/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+    );
+    assert_eq!(derived.server_relative.as_str(), "runtime/llama-server.exe");
+}
+
+#[test]
+fn validation_and_generation_are_separable() {
+    // Validation on its own establishes the bundle without emitting a plan, and
+    // generation reuses exactly what validation established.  This is the seam
+    // that lets a broker without a manifest or receipt validate and generate
+    // independently.
+    let configuration = validate_runtime_configuration(
+        &serde_json::to_vec(&manifest_value()).expect("manifest serializes"),
+        &serde_json::to_vec(&receipt_value()).expect("receipt serializes"),
+        PINNED_BROKER_BYTES,
+        PINNED_BROKER_SHA256,
+        PINNED_MANIFEST_SHA256,
+    )
+    .expect("the pinned bundle validates");
+
+    assert_eq!(
+        configuration.broker_identity(),
+        (PINNED_BROKER_BYTES, PINNED_BROKER_SHA256)
+    );
+    assert_eq!(
+        configuration.model_relative().as_str(),
+        "model/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+    );
+    assert_eq!(
+        configuration.server_relative().as_str(),
+        "runtime/llama-server.exe"
+    );
+
+    // The same configuration generates the same plan as the fused entry point.
+    let generated =
+        generate_runtime_launch_plan(&configuration, options()).expect("plan generates");
+    let fused = plan(manifest_value(), receipt_value(), options()).expect("valid pinned plan");
+    assert_eq!(generated, fused);
+}
+
+#[test]
+fn the_embedded_plan_needs_no_manifest_and_no_receipt() {
+    // This is the defect the AI path was blocked on: the broker required
+    // `ai/manifest-v1.json` and `ai/STAGING-RECEIPT.json`, and the installer
+    // refuses to ship either, so the AI never started on a real install.  With
+    // no document in scope at all, the plan is still derivable and is the plan
+    // the JSON path would have produced.
+    let embedded = build_embedded_runtime_launch_plan(options()).expect("embedded plan builds");
+
+    let fused = plan(manifest_value(), receipt_value(), options()).expect("valid pinned plan");
+    assert_eq!(embedded, fused);
+    assert_eq!(embedded.host, RUNTIME_LOOPBACK_HOST);
+    assert!(embedded.no_ui);
+    assert_eq!(embedded.parallel, 1);
+    assert_eq!(embedded.gpu_layers, 0);
+    assert_eq!(embedded.device, "none");
+}
+
+#[test]
+fn the_embedded_plan_still_honours_every_bounded_option() {
+    // Deriving the plan from constants must not weaken the caller's bounds: the
+    // fixed launch policy is applied on top of validated options, not instead
+    // of them.
+    let mut wrong_port = RuntimeLaunchOptions::new(0, "runtime/api-key-file.txt", "process-slot-1");
+    wrong_port.port = 0;
+    assert_eq!(
+        build_embedded_runtime_launch_plan(wrong_port).unwrap_err(),
+        RuntimeConfigError::InvalidPort
+    );
+
+    assert_eq!(
+        build_embedded_runtime_launch_plan(RuntimeLaunchOptions::new(
+            43127,
+            "model/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+            "process-slot-1"
+        ))
+        .unwrap_err(),
+        RuntimeConfigError::UnsafePath
+    );
+
+    assert_eq!(
+        build_embedded_runtime_launch_plan(RuntimeLaunchOptions::new(
+            43127,
+            "runtime/api-key-file.txt",
+            "not a legal reference"
+        ))
+        .unwrap_err(),
+        RuntimeConfigError::InvalidTokenReference
+    );
 }
 
 #[test]

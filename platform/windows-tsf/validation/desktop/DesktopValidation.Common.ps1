@@ -89,16 +89,23 @@ $script:KanaAiValidationKnownPredicates = @(
 
 $script:KanaAiValidationKnownAssertions = @('assert', 'record_only')
 
-# Virtual-key tokens the run script is allowed to name in a plan. The C# side
-# owns the real mapping; this list exists so plan validation can reject typos in
-# pure logic, and so Test-KanaAiValidationKeyTokenParity can prove the two
-# lists agree without loading any native code.
+# Virtual-key tokens that carry no alphanumeric part. The C# side owns the real
+# mapping; this list exists so plan validation can reject a typo in pure logic,
+# without loading any native code.
+#
+# The alphanumeric tokens are deliberately NOT listed here. This list used to name
+# all 41 tokens, which meant a token had to be added in two places, and the second
+# copy was a list of NAMES - so two lists could agree completely while the resolver
+# behind them resolved 26 of those names to 0. Measured: GetVirtualKeyForToken
+# asked for a three-character token and read the letter out of the underscore, so
+# every letter a plan asked for was rejected as an "unknown key token" while both
+# name lists matched and all 61 self test cases were green.
+#
+# Letters and digits are therefore derived, from the same KeyTokenMap the injector
+# advertises, by Get-KanaAiValidationKnownKeyTokens below. There is now one list.
 $script:KanaAiValidationKnownKeyTokens = @(
     'VK_SHIFT', 'VK_CONTROL', 'VK_MENU', 'VK_SPACE', 'VK_RETURN', 'VK_ESCAPE',
-    'VK_TAB', 'VK_BACK', 'VK_A', 'VK_B', 'VK_C', 'VK_D', 'VK_E', 'VK_F',
-    'VK_G', 'VK_H', 'VK_I', 'VK_J', 'VK_K', 'VK_L', 'VK_M', 'VK_N', 'VK_O',
-    'VK_P', 'VK_Q', 'VK_R', 'VK_S', 'VK_T', 'VK_U', 'VK_V', 'VK_W', 'VK_X',
-    'VK_Y', 'VK_Z', 'VK_F6', 'VK_CAPITAL', 'VK_HANKAKU', 'VK_ZENKAKU',
+    'VK_TAB', 'VK_BACK', 'VK_F6', 'VK_CAPITAL', 'VK_HANKAKU', 'VK_ZENKAKU',
     'VK_CONVERT', 'VK_NONCONVERT', 'VK_OEM_3'
 )
 
@@ -125,7 +132,56 @@ function Get-KanaAiValidationCanaryKanaCodePoints {
     return @($script:KanaAiValidationCanaryKanaCodePoints)
 }
 
-function Get-KanaAiValidationKnownKeyTokens { return @($script:KanaAiValidationKnownKeyTokens) }
+function Get-KanaAiValidationNativeKeyTokenMap {
+    <#
+        .SYNOPSIS
+        Read the advertised key-token map out of the C# source, by parsing only.
+
+        .DESCRIPTION
+        The self test must never load the native type, so the map is read from the
+        source text instead of from a loaded assembly. A missing or unreadable
+        source yields an empty list rather than an exception, so that a caller
+        which requires tokens gets a reported failure instead of a thrown error
+        that would abort a self test run mid-way.
+    #>
+    param([string]$NativeSourcePath)
+    if ([string]::IsNullOrWhiteSpace($NativeSourcePath)) { return @() }
+    if (-not (Test-Path -LiteralPath $NativeSourcePath -PathType Leaf)) { return @() }
+    try { $text = [System.IO.File]::ReadAllText($NativeSourcePath) } catch { return @() }
+    $block = [regex]::Match($text, 'KeyTokenMap\s*=\s*new\s+string\[\]\s*\{(?<body>[^}]*)\}')
+    if (-not $block.Success) { return @() }
+    $found = New-Object System.Collections.Generic.List[string]
+    foreach ($match in [regex]::Matches($block.Groups['body'].Value, '"([A-Z0-9_]+)"')) {
+        [void]$found.Add($match.Groups[1].Value)
+    }
+    return $found.ToArray()
+}
+
+function Get-KanaAiValidationKnownKeyTokens {
+    <#
+        .SYNOPSIS
+        Every key token a plan may name: the non-alphanumeric base list, plus every
+        VK_<letter> and VK_D<digit> the native source advertises.
+
+        .DESCRIPTION
+        Deriving the alphanumeric tokens is what makes the token set single-sourced.
+        Adding VK_4 to the native KeyTokenMap is then enough - there is no second
+        list to forget, so the failure this replaced (a plan that validated and then
+        injected nothing) cannot come back through the same door.
+    #>
+    param([string]$NativeSourcePath)
+    $tokens = New-Object System.Collections.Generic.List[string]
+    foreach ($token in $script:KanaAiValidationKnownKeyTokens) { [void]$tokens.Add($token) }
+    $source = $NativeSourcePath
+    if ([string]::IsNullOrWhiteSpace($source)) {
+        $source = Join-Path $PSScriptRoot 'DesktopValidation.Native.cs'
+    }
+    $default = Get-KanaAiValidationNativeKeyTokenMap -NativeSourcePath $source
+    foreach ($token in $default) {
+        if ($token -match '^VK_[A-Z0-9]$') { [void]$tokens.Add($token) }
+    }
+    return @($tokens.ToArray() | Select-Object -Unique)
+}
 
 # Pure character to key-token mapping for the canary. The native injector owns
 # the real virtual-key table; this exists so plan-only and the self-test can
@@ -155,7 +211,8 @@ function ConvertTo-KanaAiValidationKeyTokens {
 
 function Test-KanaAiValidationCanaryKeyTokens {
     $tokens = @(ConvertTo-KanaAiValidationKeyTokens -Text $script:KanaAiValidationCanaryRomaji)
-    $missing = @($tokens | Where-Object { $script:KanaAiValidationKnownKeyTokens -notcontains $_ })
+    $known = @(Get-KanaAiValidationKnownKeyTokens)
+    $missing = @($tokens | Where-Object { $known -notcontains $_ })
     return [pscustomobject]@{
         Ok         = ($missing.Count -eq 0)
         Tokens     = $tokens
@@ -466,6 +523,14 @@ function Compare-KanaAiValidationReadback {
         the comparison is a non-match with a reason, never a silent pass.
         This function knows nothing about any injection API return value; the API
         return value is recorded as metadata only and can never make a step pass.
+
+        An equality whose expected value is the empty string is refused by
+        default. Two empty strings agree, and an unobserved target and an
+        observed-empty target both read as empty, so such a match asserts
+        nothing. -AllowVacuousEmptyMatch lifts the refusal only for a caller that
+        holds a separate, positive readback proving the target was read, and
+        -ObservedSource must then name that observation so the receipt says what
+        the pass rested on.
     #>
     param(
         [Parameter(Mandatory = $true)][string]$Match,
@@ -474,14 +539,45 @@ function Compare-KanaAiValidationReadback {
         [bool]$Available = $true,
         [AllowNull()]$BooleanObservation = $null,
         [string]$Predicate = '',
-        [switch]$Ordinal
+        [switch]$Ordinal,
+        [switch]$AllowVacuousEmptyMatch,
+        [string]$ObservedSource = ''
     )
+    if ($AllowVacuousEmptyMatch -and [string]::IsNullOrWhiteSpace($ObservedSource)) {
+        # A lift of the refusal with nothing named is exactly the hole the
+        # refusal was cut for, so it is refused here instead of silently
+        # accepted and reported as an ordinary pass.
+        return [pscustomobject]@{ Match = $false; Reason = 'refused: -AllowVacuousEmptyMatch was given without -ObservedSource, so the pass would rest on an unnamed observation. Name the readback that proves the target was read.'; MatchMode = $Match; NormalizedExpected = ''; NormalizedObserved = $null; VacuousEmptyRefused = $true }
+    }
     if (-not $Available) {
         return [pscustomobject]@{ Match = $false; Reason = 'readback was not available; no observation exists'; MatchMode = $Match; NormalizedExpected = ''; NormalizedObserved = $null }
     }
 
     $expectedNorm = ConvertTo-KanaAiValidationNormalizedText -Text ([string]$Expected)
     $observedNorm = ConvertTo-KanaAiValidationNormalizedText -Text ([string]$Observed)
+
+    # A vacuous-pass guard, and it exists because of what CAL-04 and CAL-08 did.
+    # Those steps expected the empty string. If nothing had been typed yet, or if
+    # the readback had silently returned nothing at all, the observation was also
+    # the empty string, the comparison of two empties succeeded, and the step
+    # passed while having observed nothing whatsoever. A green step that tested
+    # nothing is worse than a red step: it is a claim of evidence.
+    #
+    # So: an equality against an empty expected value is a positive claim that
+    # the target was observed and found to hold nothing. If no readback channel
+    # answered, that claim cannot be true and is refused. `-AllowVacuousEmptyMatch`
+    # exists only for the one case where emptiness genuinely is the whole point
+    # and the caller has a separate, positive observation proving the target was
+    # read - and a caller passing it has to say which one.
+    if (($Match -eq 'equals') -and ($expectedNorm.Length -eq 0) -and (-not $AllowVacuousEmptyMatch)) {
+        $readbackProducedNothing = ($observedNorm.Length -gt 0)
+        if ($readbackProducedNothing) {
+            return [pscustomobject]@{ Match = $false; Reason = 'the step expects the empty string but the readback produced content, so this is a mismatch rather than an empty match'; MatchMode = $Match; NormalizedExpected = ''; NormalizedObserved = $observedNorm }
+        }
+        # Available=$true with an empty observation is exactly the case that used
+        # to pass vacuously. Refuse it and say what would make it legitimate.
+        return [pscustomobject]@{ Match = $false; Reason = 'refused: the step expects the empty string and the observation is also empty, which on its own cannot tell an observed-empty target from an unobserved one. A caller that has a separate positive readback proving the target was read may pass -AllowVacuousEmptyMatch and name that observation in ObservedSource.'; MatchMode = $Match; NormalizedExpected = ''; NormalizedObserved = $observedNorm; VacuousEmptyRefused = $true }
+    }
 
     switch ($Match) {
         'equals' {
@@ -773,8 +869,9 @@ function Test-KanaAiValidationPlan {
         $input = Get-KanaAiValidationProperty -Object $step -Name 'input'
         if ($null -ne $input) {
             $keys = Get-KanaAiValidationArrayProperty -Object $input -Name 'keys'
+            $knownKeys = @(Get-KanaAiValidationKnownKeyTokens)
             foreach ($key in $keys) {
-                if ($script:KanaAiValidationKnownKeyTokens -notcontains [string]$key) {
+                if ($knownKeys -notcontains [string]$key) {
                     & $addError 'PLAN-STEP-KEY-UNKNOWN' ("step '{0}' names key token '{1}' which the native injector does not implement" -f $id, $key)
                 }
             }
@@ -881,6 +978,14 @@ function Get-KanaAiValidationNativeSymbols {
     foreach ($match in [regex]::Matches($text, 'public\s+static\s+[A-Za-z0-9_<>\[\]\.]+\s+([A-Za-z0-9_]+)\s*\(')) {
         [void]$names.Add($match.Groups[1].Value)
     }
+    # Public static readonly FIELDS as well as methods. The run script reads
+    # Native::KeyTokenMap to ask the resolver about every token the injector
+    # advertises, and a static-scan wiring check that only knows about methods
+    # reports that legitimate read as a call to a member that does not exist -
+    # which is how a check intended to catch a missing member ends up crying wolf.
+    foreach ($match in [regex]::Matches($text, 'public\s+static\s+readonly\s+[A-Za-z0-9_<>\[\]\.]+\s+([A-Za-z0-9_]+)\s*[;=]')) {
+        [void]$names.Add($match.Groups[1].Value)
+    }
     return ($names.ToArray() | Select-Object -Unique)
 }
 
@@ -925,7 +1030,7 @@ function Test-KanaAiValidationNativeWiring {
     else {
         [void]$missing.Add('the native source does not declare a KeyTokenMap array, so key-token parity cannot be checked')
     }
-    $scriptTokens = @($script:KanaAiValidationKnownKeyTokens)
+    $scriptTokens = @(Get-KanaAiValidationKnownKeyTokens -NativeSourcePath $NativeSourcePath)
     $onlyInScript = @($scriptTokens | Where-Object { $nativeTokens -notcontains $_ })
     $onlyInNative = @($nativeTokens | Where-Object { $scriptTokens -notcontains $_ })
     foreach ($token in $onlyInScript) { [void]$missing.Add(('key token {0} is accepted by the plan validator but is not in the native KeyTokenMap' -f $token)) }
@@ -951,6 +1056,67 @@ function Test-KanaAiValidationNativeWiring {
         DeclaredMemberCount = @($declared).Count
         KeyTokenCount       = $nativeTokens.Count
         CanaryTokens        = $canaryCheck.Tokens
+    }
+}
+
+function Test-KanaAiValidationKeyTokenParity {
+    <#
+        .SYNOPSIS
+        Ask the injector's own resolver for every token it advertises, and name the
+        ones it cannot resolve.
+
+        .DESCRIPTION
+        The static token parity in Test-KanaAiValidationNativeWiring compares two
+        lists of NAMES. Measured failure: those two lists agreed on all 41 tokens
+        while GetVirtualKeyForToken resolved 26 of them to 0, because its letter
+        guard asked for a three-character token and then read the letter out of the
+        underscore position. Every keystroke a plan asked for was rejected as an
+        "unknown key token", no romaji ever reached the IME, no composition was
+        ever opened, and all 61 self test cases were green.
+
+        Agreeing on names is not resolving a key. This function asks the resolver
+        itself, one advertised token at a time, and names every token that comes
+        back unresolved. The resolver arrives as a script block so the self test
+        can drive this function - and prove it is not vacuous - without loading the
+        native type, which the self test deliberately never does.
+
+        A zero-length token list is a failure, not a pass. An empty parity check
+        that reports success has established nothing.
+    #>
+    param(
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$Tokens,
+        [Parameter(Mandatory = $true)][scriptblock]$Resolve
+    )
+    $unresolved = New-Object System.Collections.Generic.List[string]
+    $probeErrors = New-Object System.Collections.Generic.List[string]
+    $checked = 0
+
+    foreach ($token in $Tokens) {
+        $checked++
+        try {
+            $virtualKey = [int](& $Resolve $token)
+        }
+        catch {
+            [void]$probeErrors.Add(("{0}: the resolver threw: {1}" -f $token, $_.Exception.Message))
+            continue
+        }
+        if ($virtualKey -eq 0) { [void]$unresolved.Add($token) }
+    }
+
+    $reasons = New-Object System.Collections.Generic.List[string]
+    if ($checked -eq 0) {
+        [void]$reasons.Add('the injector advertised no key tokens, so its token parity could not be established')
+    }
+    foreach ($token in $unresolved) {
+        [void]$reasons.Add(("the injector advertises key token '{0}' but resolves it to 0, so a plan that asks for it injects nothing" -f $token))
+    }
+    foreach ($problem in $probeErrors) { [void]$reasons.Add($problem) }
+
+    return [pscustomobject]@{
+        Ok         = ($reasons.Count -eq 0)
+        Checked    = $checked
+        Unresolved = $unresolved.ToArray()
+        Reasons    = $reasons.ToArray()
     }
 }
 

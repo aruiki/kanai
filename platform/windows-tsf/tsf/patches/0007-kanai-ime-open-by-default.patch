@@ -1,0 +1,112 @@
+--- a/win32/tip/tip_status.cc
++++ b/win32/tip/tip_status.cc
+@@ -56,6 +56,33 @@ bool TipStatus::IsOpen(ITfThreadMgr* thread_mgr) {
+   return var->vt == VT_I4 && var->lVal != FALSE;
+ }
+ 
++HResultOr<bool> TipStatus::GetAndEnsureIMEOpen(ITfThreadMgr* thread_mgr,
++                                               TfClientId client_id,
++                                               bool default_open) {
++  wil::unique_variant default_var;
++  default_var.vt = VT_I4;
++  default_var.lVal = default_open ? TRUE : FALSE;
++
++  // GetAndEnsureDataExists writes |default_var| only when the compartment holds
++  // no data yet, and returns the stored value otherwise. That is what keeps a
++  // user who has closed the IME from having it reopened on every activation.
++  HResultOr<wil::unique_variant> var =
++      TipCompartmentUtil::GetAndEnsureDataExists(
++          thread_mgr, GUID_COMPARTMENT_KEYBOARD_OPENCLOSE, client_id,
++          std::move(default_var));
++  if (!var.has_value()) {
++    return HResultFail();
++  }
++  if (var->vt != VT_I4) {
++    return HResultFail();
++  }
++  // HResultOk, not a bare bool: hresultor.h documents that direct
++  // initialisation of an HResultOr from a type convertible to HRESULT is
++  // ambiguous, and bool is. A bare `return expr;` here is error C2440, which
++  // this build reported before HResultOk was used.
++  return HResultOk(var->lVal != FALSE);
++}
++
+ bool TipStatus::IsDisabledContext(ITfContext* context) {
+   // Retrieve the compartment manager from the |context|, which contains the
+   // configuration of this context.
+--- a/win32/tip/tip_status.h
++++ b/win32/tip/tip_status.h
+@@ -33,6 +33,8 @@
+ #include <msctf.h>
+ #include <windef.h>
+ 
++#include "base/win32/hresultor.h"
++
+ namespace mozc {
+ namespace win32 {
+ namespace tsf {
+@@ -48,6 +50,27 @@ class TipStatus {
+   // Returns true if the keyboard state specified by |thread_mgr| is open.
+   static bool IsOpen(ITfThreadMgr* thread_mgr);
+ 
++  // Returns the keyboard open/closed state, seeding the compartment with
++  // |default_open| when the text service has never stored one.
++  //
++  // Why this exists: a profile that has just been installed has no
++  // open/close compartment at all, and a plain read of an absent compartment
++  // reports the IME as closed. Measured on the implementation host on
++  // 2026-09-28, KanaAI installed that way left the user unable to type
++  // Japanese: romaji committed as ASCII, no preedit, no candidate window, while
++  // the TIP was loaded, the TSF calls were succeeding and every keystroke was
++  // arriving. The one input-mode toggle turned the IME on and romaji then
++  // composed to kana correctly, which locates the fault in the initial state
++  // and nowhere else.
++  //
++  // This mirrors what GetInputModeConversion already does for the conversion
++  // mode, which seeds a Hiragana default the same way. A stored value always
++  // wins, so a user who has deliberately closed the IME keeps it closed; only a
++  // profile that has never been given a state is changed.
++  static HResultOr<bool> GetAndEnsureIMEOpen(ITfThreadMgr* thread_mgr,
++                                             TfClientId client_id,
++                                             bool default_open);
++
+   // Returns true if the context state specified by |context| is disabled.
+   static bool IsDisabledContext(ITfContext* context);
+ 
+--- a/win32/tip/tip_text_service.cc
++++ b/win32/tip/tip_text_service.cc
+@@ -614,11 +614,32 @@ class TipTextServiceImpl
+     }
+ 
+     // Copy the initial mode.
++    //
++    // A profile that has just been installed owns no open/close compartment, and
++    // a plain read of an absent compartment reports the IME as closed. Measured
++    // on the implementation host on 2026-09-28: with the compartment absent,
++    // romaji committed as ASCII with no preedit and no candidate window even
++    // though the TIP was loaded, the TSF calls were succeeding and every
++    // keystroke was arriving. Seed the state to open instead, so a one-click
++    // install can type Japanese without the user having to discover a toggle
++    // first. A stored value always wins, so this does not reopen an IME the user
++    // has deliberately closed.
++    bool ime_open = false;
++    HResultOr<bool> seeded_open =
++        TipStatus::GetAndEnsureIMEOpen(thread_mgr, client_id,
++                                       /*default_open=*/true);
++    if (seeded_open.has_value()) {
++      ime_open = seeded_open.value();
++    } else {
++      LOG(WARNING) << "GetAndEnsureIMEOpen failed: " << seeded_open.error();
++      ime_open = TipStatus::IsOpen(thread_mgr);
++    }
++
+     DWORD native_mode = 0;
+     if (TipStatus::GetInputModeConversion(thread_mgr, client_id,
+                                           &native_mode)) {
+-      GetThreadContext()->GetInputModeManager()->OnInitialize(
+-          TipStatus::IsOpen(thread_mgr), native_mode);
++      GetThreadContext()->GetInputModeManager()->OnInitialize(ime_open,
++                                                              native_mode);
+     }
+ 
+     // Emulate document changed event against the current document manager.

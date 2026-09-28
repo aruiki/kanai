@@ -347,9 +347,9 @@ try {
     $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     if ([string]$manifest.sourceIdentity.status -notin @('verified', 'verified-dirty') -or
         [string]$manifest.sourceIdentity.hostOverlayFingerprint -notmatch '^[0-9A-Fa-f]{64}$' -or
-        @($manifest.sourceIdentity.patches).Count -ne 6 -or
+        @($manifest.sourceIdentity.patches).Count -ne 7 -or
         [string]$manifest.sourceIdentity.artifactBuildLinkage.status -ne 'unverified') { throw ("Staged manifest is missing required provenance identity (status={0}, overlay={1}, patches={2}, reasons={3})." -f $manifest.sourceIdentity.status, $manifest.sourceIdentity.hostOverlayFingerprint, @($manifest.sourceIdentity.patches).Count, (@($manifest.sourceIdentity.reasons) -join ' || ')) }
-    $expectedPatchNames = @('0001-install-kanai-supplemental-model.patch', '0002-kanai-tsf-identity.patch', '0003-session-generation-binding.patch', '0004-windows-python-toolchain.patch', '0005-windows-runtime-identity.patch', '0006-windows-installer-runtime-path.patch')
+    $expectedPatchNames = @('0001-install-kanai-supplemental-model.patch', '0002-kanai-tsf-identity.patch', '0003-session-generation-binding.patch', '0004-windows-python-toolchain.patch', '0005-windows-runtime-identity.patch', '0006-windows-installer-runtime-path.patch', '0007-kanai-ime-open-by-default.patch')
     $actualPatchNames = @($manifest.sourceIdentity.patches | ForEach-Object { [string]$_.name })
     if ((($actualPatchNames -join '|') -ne ($expectedPatchNames -join '|')) -or @($manifest.sourceIdentity.patches | Where-Object { [string]$_.sha256 -notmatch '^[0-9A-Fa-f]{64}$' }).Count -gt 0) { throw 'Staged manifest does not name and hash the exact required patch set.' }
 
@@ -357,7 +357,7 @@ try {
     if ($validated.Validated -ne $true -or $validated.SnapshotValidation -ne 'passed' -or
         $validated.RuntimeManifestSha256 -ne $manifestHash -or $validated.RuntimeManifestSelfHashEmbedded -ne $false -or
         $validated.SourceCommit -notmatch '^[0-9a-f]{40}$' -or $validated.MozcCommit -notmatch '^[0-9a-f]{40}$' -or
-        $validated.PatchCount -ne 6 -or $validated.HostOverlayFingerprint -notmatch '^[0-9A-Fa-f]{64}$') {
+        $validated.PatchCount -ne 7 -or $validated.HostOverlayFingerprint -notmatch '^[0-9A-Fa-f]{64}$') {
         throw 'Installer ValidateOnly did not return the expected immutable-input receipt.'
     }
     # The traditional invocation is still the exact non-AI path.

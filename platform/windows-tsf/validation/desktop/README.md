@@ -95,10 +95,11 @@ caught a real error in this repository's own plan file.
 | `Invoke-KanaAIDesktopValidation.ps1` | entry point: plan-only, self-test, cleanup-only, real run |
 | `DesktopValidation.Common.ps1` | pure logic only: hashing, JSON, plan validation, verdict rule, comparison, privacy scan, cleanup planning, native wiring scan |
 | `DesktopValidation.Native.cs` | P/Invoke layer: window station/desktop, session, integrity, DPI, focus, caret, enumeration, loaded modules, `SendInput`, the harness loopback window |
-| `DesktopValidation.ProbeHost.cs` | the target application the harness launches: a real separate Win32 process with a real multiline `EDIT` |
-| `Invoke-KanaAIDesktopValidationSelfTest.ps1` | 53 synthetic-data test cases, no desktop, no process launch |
+| `DesktopValidation.ProbeHost.cs` | the target application the harness launches: a real separate Win32 process with a real multiline edit control (`--edit plain|rich`) |
+| `Invoke-KanaAIDesktopValidationSelfTest.ps1` | 69 synthetic-data test cases, no desktop, no process launch |
+| `Invoke-KanaAiImeReadbackSelfTest.ps1` | 5 cases that need a desktop: proves the target-side preedit/candidate readback is a real reading and not a constant. Gated on `-AllowDesktop -LockConfirmed -LockName machine` |
 | `desktop-validation-plan.json` | the run manifest: 36 steps with their action, expected observable and readback method |
-| `runs/` | generated output (receipts, plan copies, self-test report). Safe to delete. |
+| `runs/` | generated output (receipts, plan copies, self-test reports). Safe to delete. |
 
 ## 5. Commands
 
@@ -112,8 +113,29 @@ change the window station.
 powershell -NoProfile -ExecutionPolicy Bypass -File platform\windows-tsf\validation\desktop\Invoke-KanaAIDesktopValidationSelfTest.ps1
 ```
 
-Exit `0` when all 53 cases pass, `1` otherwise. Last report:
+Exit `0` when all cases pass, `1` otherwise (69 cases at the time of writing). Last report:
 `platform\windows-tsf\validation\desktop\runs\self-test-last.json`.
+
+### 5.1a IME readback self-test (needs the desktop, gated)
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File platform\windows-tsf\validation\desktop\Invoke-KanaAiImeReadbackSelfTest.ps1 -AllowDesktop -LockConfirmed -LockName machine
+```
+
+The preedit and the candidate list cannot be read across a process boundary, so
+the target process reads them from its own IMM context and the harness asks for
+that reading on demand (`WM_KANAAI_REPORT_STATE` = `0x8001`). A readback that
+always answers "no context, no preedit" is indistinguishable from one that was
+never wired up, and would look exactly like a working IME that has not yet been
+given any input. This test proves the channel is live: the target's state-write
+counter must advance, the reported context answer must be consistent with the
+sources it claims to have read, and the committed document and the preedit must
+be present together as independent channels.
+
+It creates a real window and takes the keyboard focus, so it is gated exactly
+like a validation run. On a host with no installed IME binary it records that no
+real composition was demonstrated rather than passing silently. Last report:
+`platform\windows-tsf\validation\desktop\runs\ime-readback-selftest-last.json`.
 
 ### 5.2 Plan-only (no desktop interaction, safe at any time)
 
@@ -150,7 +172,37 @@ unless all of the following hold:
 * `-LockConfirmed` is present — the operator asserts the coordinator granted the
   go-ahead;
 * `-LockName` is exactly `machine`;
-* the plan validates and the native wiring check passes.
+* the plan validates and the native wiring check passes;
+* **measured key-token parity holds** — see below.
+
+### The key-token parity gate
+
+The wiring check compares the PowerShell call sites and the C# surface by
+*name*. Measured failure: those names agreed on every token while
+`GetVirtualKeyForToken` resolved 26 of the 41 it advertised to `0`, because the
+letter branch asked for a three-character token and read the letter out of the
+underscore position. Every keystroke a plan asked for was then rejected as an
+"unknown key token" with `sentEvents=0`, no romaji ever reached the IME, no
+composition was ever opened, the IME direction could never be calibrated, and
+the twelve IME-on candidate steps were all correctly reported `blocked` — while
+all 61 self-test cases were green at the time. A blocked-step receipt reads like a product
+fault; it was a broken instrument.
+
+So the run now asks the **resolver**, not a list, and refuses before it touches
+the desktop:
+
+* every token in `Native::KeyTokenMap` is passed to
+  `Native::GetVirtualKeyForToken`, and the returned virtual key must be non-zero;
+* an empty token list is a failure, not a pass — a parity check over nothing has
+  established nothing;
+* a resolver that throws is a failure, not a silent pass;
+* the refusal names every unresolved token, and the receipt records
+  `keyTokenParity` (`checked`, `ok`, `unresolved`, `method`).
+
+The token set is single-sourced: `Get-KanaAiValidationKnownKeyTokens` derives
+the `VK_[A-Z0-9]` tokens from the same `KeyTokenMap` the injector advertises, so
+adding a token in one place is enough. The two hand-maintained name lists that
+made the silent failure possible are gone.
 
 The harness cannot verify that `scripts\with-development-lock.ps1 -Name machine`
 is actually held. It records only that the operator asserted it
@@ -194,6 +246,28 @@ non-gating in the plan and reported as observations.
 
 ## 7. How to read a receipt
 
+### Who decides a text verdict
+
+A `contains` / `equals` / `not-contains` verdict comes from **the step's own
+comparison against the observation that step actually read**. `true`, `false` and
+`predicate` take a boolean as *input* and are decided by the shared tail, which
+is correct for them because they never read the observation text.
+
+Measured failure of the previous arrangement: the shared tail re-ran the
+comparison with an **empty** observation — the text lives in `$observation` and
+was not passed in — so the empty string was compared against the expected text,
+the result was `false`, and it replaced a correct match. `INJ-00` typed the canary
+into the harness's own window, read back `kanaai` (bytes `6b 61 6e 61 61 69`),
+and was reported `failed` with the reason `contains`: the reason from the correct
+comparison sitting next to a verdict from the wrong one. Every text assertion in
+the plan was structurally unable to pass.
+
+A step that observes a true match and is reported as a failure is not evidence of
+a product fault; it is the harness losing its own observation. When you read a
+failed text step, check `readback.value` and `readback.sha256` against
+`expected.value` first: if they agree, the verdict did not come from the
+observation.
+
 Top-level fields:
 
 | field | what to look at |
@@ -207,6 +281,7 @@ Top-level fields:
 | `environmentStatic` | OS version, architecture, host PowerShell — collected with no desktop access |
 | `machineInspection` | OS build, installed `ProductCode`, TIP DLL path and SHA-256, or an explicit reason why it was skipped |
 | `wiring` | static source scan proving the PowerShell call sites and the C# surface agree |
+| `keyTokenParity` | every advertised token was passed to the resolver; `checked`, `ok`, `unresolved`, `method` |
 | `planValidation` | `ok`, step count, every error code and warning |
 | `imeCalibration` | which toggle direction committed kana, and how many toggles were needed |
 | `targetSelfReport` | the text and module list the target process recorded about itself at exit |
@@ -315,6 +390,52 @@ Enforcement is not just intent:
   falls back to the in-process `Add-Type` compiler when no `csc.exe` is found.
   `-SkipCompile` turns a missing binary into an error instead.
 
+### Which edit control the target uses, and why neither of them works yet
+
+`DesktopValidation.ProbeHost.cs` takes `--edit plain|rich`. `rich` loads
+`Msftedit.dll` and creates `RICHEDIT50W`; `plain` creates the ordinary `EDIT`.
+The state file reports `editClassRequested`, `editLoadNote` and — read back from
+the window with `GetClassNameW` — `editClass`, so a run states which control
+Windows actually gave it rather than which one it asked for. `editClass` used to
+be the hardcoded string `"EDIT"`, which would have reported an intention.
+
+Measured, same machine, same six injected keys, same build:
+
+| | `--edit plain` | `--edit rich` |
+|---|---|---|
+| `Msftedit.dll` | n/a | loaded at `0x7ff8a9fd0000` |
+| actual control class | `Edit` | `RICHEDIT50W` |
+| keys delivered | 6 of 6 | 6 of 6 |
+| samples with a non-empty preedit | **0 of 30** | **0 of 30** |
+| samples with `ime.open` | all `False` | all `False` |
+| committed text after Enter | `rkanaai\r\n` | `kanaai   \r\n` |
+| committed text contains kana | **no** | **no** |
+
+So the control class is not the variable. Both controls behave identically, and
+in both cases the romaji is committed as plain ASCII. The remaining explanation
+is that the thread has **no TSF text service at all**: a TSF-only text service is
+never handed those keystrokes. The probe host therefore has to host a text service
+itself, and that is the next piece of work — `ITfThreadMgr`, `ITfDocumentMgr` and
+`ITfContext`, whose method order is taken from `msctf.idl` rather than guessed.
+
+### `bin\` staleness is decided by timestamp, and a restored source keeps the old one
+
+`Initialize-NativeLayer` recompiles when the DLL is missing **or older than its
+source**. That is an mtime comparison, and a source file restored by
+`Copy-Item` — or by any tool that carries a timestamp across — comes back with
+its **old** mtime. A stale, defective DLL then looks newer than its source and is
+loaded as-is.
+
+Measured: after fixing the key-token resolver, restoring the source left
+`bin\DesktopValidation.Native.dll` newer than it, so the run refused again with
+the same 36 unresolved tokens *from the corrected code*. The gate was right and
+the binary was wrong.
+
+If a run behaves as though a change did not take, touch the source
+(`(Get-Item <path>).LastWriteTime = Get-Date`) or delete `bin\`, then re-run. This
+is a known, unfixed hazard; the honest fix is to compare a recorded source digest
+rather than a timestamp, and that has not been done.
+
 ## 12. Status — read this before trusting any run
 
 **No real input test has been run. Nothing in this directory has touched the
@@ -329,7 +450,9 @@ What *has* been executed and verified, with these exact results:
 | check | command | result |
 |---|---|---|
 | PowerShell 5.1 parser over all three `.ps1` files | `[System.Management.Automation.Language.Parser]::ParseFile` | 0 errors, 0 parse errors |
-| self-test | `Invoke-KanaAIDesktopValidationSelfTest.ps1` | 53 cases, 53 passed, exit `0` |
+| self-test | `Invoke-KanaAIDesktopValidationSelfTest.ps1` | 69 cases, 69 passed, exit `0` |
+| vacuous-pass guard is non-vacuous | `.local\ai6\prove-vacuous-guard-red.ps1` | guard removed from a scratch copy → 60 passed / **1 failed** (`ST-33`); real tree 61/61 |
+| IME readback self-test | `Invoke-KanaAiImeReadbackSelfTest.ps1` | **not run** — needs the desktop and a machine lock |
 | plan-only | `Invoke-KanaAIDesktopValidation.ps1 -PlanOnly` | 36 steps validated, 0 warnings, exit `0` |
 | plan-only + machine inspection | `... -PlanOnly -AllowMachineInspection` | exit `0`; see below |
 | gate refusal (no desktop) | `Invoke-KanaAIDesktopValidation.ps1` | refused both gates, exit `3` |

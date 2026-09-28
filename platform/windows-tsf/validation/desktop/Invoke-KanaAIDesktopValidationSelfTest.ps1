@@ -396,6 +396,58 @@ Invoke-Test -Id 'ST-31' -Name 'an unknown predicate fails closed' -Body {
     Assert-True ($comparison.Reason -like '*unknown predicate*') 'an unknown predicate must say so'
 }
 
+Invoke-Test -Id 'ST-33' -Name 'two empty strings must not decide an equals comparison on their own (the vacuous-pass defect)' -Body {
+    # The defect, in the exact shape it had. CAL-04 and CAL-08 expect the empty
+    # string, so an untyped run produced an empty observation, the comparison of
+    # two empties succeeded, and the step passed having observed nothing. A green
+    # step that tested nothing is a claim of evidence, which is worse than a red
+    # step, so the refusal is the behaviour under test here.
+    $refused = Compare-KanaAiValidationReadback -Match 'equals' -Expected '' -Observed '' -Available $true
+    Assert-True (-not $refused.Match) 'an empty expectation meeting an empty observation must not match by default'
+    Assert-True ($refused.Reason -like '*unobserved*') 'the refusal must say that it cannot tell observed-empty from unobserved'
+    Assert-True ([bool]$refused.VacuousEmptyRefused) 'the refusal must be marked as such so a receipt can count it'
+
+    # The complement: content where the plan expected nothing is a mismatch, not
+    # a loophole through the refusal.
+    $content = Compare-KanaAiValidationReadback -Match 'equals' -Expected '' -Observed 'kanaai' -Available $true
+    Assert-True (-not $content.Match) 'an empty expectation against real content must fail'
+    Assert-True ($content.Reason -like '*readback produced content*') 'that case must be reported as a mismatch'
+
+    # And the only way to legitimately assert emptiness: name the readback that
+    # proves the target was actually read. This is the CAL-04 shape - the
+    # document held the committed canary a moment earlier, so an empty result is
+    # a clearing rather than an absence.
+    $cleared = Compare-KanaAiValidationReadback -Match 'equals' -Expected '' -Observed '' -Available $true `
+        -AllowVacuousEmptyMatch -ObservedSource 'the document held 6 character(s) immediately before these keys'
+    Assert-True $cleared.Match 'a named positive readback must make an empty match legitimate'
+    Assert-True ($cleared.Reason -like '*equals*') 'the pass must still report the match mode, not the refusal'
+
+    # Lifting the refusal without naming the evidence is the hole the refusal was
+    # cut for, so it is refused.
+    $unnamed = Compare-KanaAiValidationReadback -Match 'equals' -Expected '' -Observed '' -Available $true -AllowVacuousEmptyMatch
+    Assert-True (-not $unnamed.Match) '-AllowVacuousEmptyMatch without a named source must not pass'
+    Assert-True ($unnamed.Reason -like '*ObservedSource*') 'that refusal must name the missing argument'
+
+    # The guard is scoped to equality against nothing. An empty expectation
+    # against real content, a non-empty expectation, and the other match modes
+    # are all unaffected, or steps with empty expectations could never run.
+    Assert-True ((Compare-KanaAiValidationReadback -Match 'equals' -Expected 'kanaai' -Observed 'kanaai').Match) 'a non-empty equality is unaffected'
+    Assert-True ((Compare-KanaAiValidationReadback -Match 'true' -Expected '' -Observed '' -Available $true -BooleanObservation $true).Match) 'a boolean match is unaffected'
+    Assert-True ((Compare-KanaAiValidationReadback -Match 'contains' -Expected '' -Observed 'kanaai' -Available $true).Match) 'contains against an empty needle is unaffected'
+}
+
+Invoke-Test -Id 'ST-34' -Name 'the vacuous-pass guard is reached only through its own parameter, not through the plan' -Body {
+    # The plan must not be able to turn the guard off: the lift is a switch on the
+    # comparison function, so a plan author cannot smuggle a pass by declaring an
+    # expectation in a way that reaches it. The plan schema is the only place a
+    # plan states expectations, and it has no such field.
+    $parameters = @((Get-Command -Name 'Compare-KanaAiValidationReadback').Parameters.Keys)
+    Assert-True ($parameters -contains 'AllowVacuousEmptyMatch') 'the lift must exist as an explicit parameter'
+    Assert-True ($parameters -contains 'ObservedSource') 'the evidence must be nameable'
+    $planText = [System.IO.File]::ReadAllText((Join-Path $PSScriptRoot 'desktop-validation-plan.json'))
+    Assert-True ($planText -notmatch 'VacuousEmpty') 'the plan must not reference the vacuous-match lift at all'
+}
+
 Invoke-Test -Id 'ST-32' -Name 'the kana and ascii predicates separate the two input directions' -Body {
     $kana = Get-KanaAiValidationCanaryKana
     Assert-True ((Test-KanaAiValidationPredicate -Name 'kana-present' -Text $kana).Result) 'kana must be detected'
@@ -576,6 +628,188 @@ namespace KanaAI.DesktopValidation {
     Assert-True (($wiring.Missing -join ' ') -like '*VK_RETURN*') 'the tokens the canary needs must be named'
 }
 
+
+# ---------------------------------------------------------------------------
+# 10a. Key-token parity is measured against the resolver, not against a list
+#     of names.
+#
+#     Measured defect this exists for: the static wiring check compared two
+#     lists of token NAMES and they agreed on all 41 tokens, while
+#     GetVirtualKeyForToken resolved 26 of them to 0. Its letter guard asked
+#     for a three-character token and read the letter out of index 2, which is
+#     the underscore of "VK_K". Every letter the plan asked for was therefore
+#     rejected as an "unknown key token", no romaji reached the IME, no
+#     composition opened, the IME direction never calibrated, the twelve AI-on
+#     candidate steps were all correctly reported blocked - and all 61 self
+#     test cases were green. A blocked-step receipt reads like a product
+#     problem. It was a broken instrument.
+# ---------------------------------------------------------------------------
+Invoke-Test -Id 'ST-60' -Name 'a resolver that drops an advertised token is named' -Body {
+    # Non-vacuity: this resolver answers 0 for exactly one token, the way the
+    # defective letter guard did, and the check must name it.
+    $parity = Test-KanaAiValidationKeyTokenParity -Tokens @('VK_K', 'VK_A', 'VK_RETURN') -Resolve {
+        param([string]$Token)
+        if ($Token -eq 'VK_K') { return 0 }
+        if ($Token -eq 'VK_RETURN') { return 0x0D }
+        return [int][char]$Token[3]
+    }
+    Assert-True (-not $parity.Ok) 'a token the resolver cannot resolve must fail the parity check'
+    Assert-Equal 3 $parity.Checked 'the parity check must count every token it was given'
+    Assert-Equal 'VK_K' (@($parity.Unresolved) -join ' ') 'the unresolved token must be named, not merely counted'
+    Assert-True ((@($parity.Reasons) -join ' ') -like '*VK_K*') 'the reason must name the token a plan would have asked for'
+}
+
+Invoke-Test -Id 'ST-61' -Name 'an empty token list is a parity failure, not a pass' -Body {
+    $parity = Test-KanaAiValidationKeyTokenParity -Tokens @() -Resolve { param([string]$Token) 0x41 }
+    Assert-True (-not $parity.Ok) 'a parity check over no tokens has established nothing and must not report success'
+    Assert-Equal 0 $parity.Checked 'nothing was checked'
+    Assert-True ((@($parity.Reasons) -join ' ') -like '*advertised no key tokens*') 'the reason must say that no token was checked'
+}
+
+Invoke-Test -Id 'ST-62' -Name 'a resolver that throws is a parity failure, not a silent pass' -Body {
+    $parity = Test-KanaAiValidationKeyTokenParity -Tokens @('VK_A') -Resolve {
+        param([string]$Token)
+        throw 'the native layer is not loaded'
+    }
+    Assert-True (-not $parity.Ok) 'a resolver that throws must fail the parity check'
+    Assert-True ((@($parity.Reasons) -join ' ') -like '*not loaded*') 'the reason must carry the resolver error'
+}
+
+Invoke-Test -Id 'ST-63' -Name "the native letter guard indexes the letter, not the token's underscore" -Body {
+    # The off-by-one itself, read out of the source rather than asserted as a
+    # literal, so the test keeps meaning something if the code is rewritten.
+    # Both the declared length and the letter index are derived from a real
+    # advertised token, so a guard that disagrees with the token form fails here
+    # even when it looks plausible.
+    $native = [System.IO.File]::ReadAllText($nativePath)
+    $start = $native.IndexOf('public static ushort GetVirtualKeyForToken')
+    Assert-True ($start -ge 0) 'GetVirtualKeyForToken must exist'
+    $tail = $native.Substring($start)
+    $nextPublic = $tail.IndexOf('public static', 1)
+    $nextPrivate = $tail.IndexOf('private static', 1)
+    $cut = @($nextPublic, $nextPrivate) | Where-Object { $_ -gt 0 } | Measure-Object -Minimum
+    $body = if ($cut.Minimum) { $tail.Substring(0, $cut.Minimum) } else { $tail }
+
+    $lengthGuard = [regex]::Match($body, 'token\.Length\s*==\s*(\d+)')
+    $letterGuard = [regex]::Match($body, "token\[(\d+)\]\s*>=\s*'A'")
+    Assert-True ($lengthGuard.Success) 'the resolver must declare a token length guard for letters'
+    Assert-True ($letterGuard.Success) 'the resolver must compare an indexed character against A'
+
+    # "VK_K": the underscore sits at index 2 and the letter at index 3.
+    $probe = 'VK_K'
+    Assert-Equal $probe.Length ([int]$lengthGuard.Groups[1].Value) ("the length guard must match the real token length of '{0}'" -f $probe)
+    Assert-Equal 3 ([int]$letterGuard.Groups[1].Value) ("the letter must be read from the index the letter actually occupies in '{0}'" -f $probe)
+}
+
+Invoke-Test -Id 'ST-64' -Name 'the real run gates on measured key-token parity before it touches the desktop' -Body {
+    $run = [System.IO.File]::ReadAllText($runPath)
+    Assert-True ($run -like '*Test-KanaAiValidationKeyTokenParity*') 'the run must measure key-token parity'
+    Assert-True ($run -like '*Native]::KeyTokenMap*') 'the parity check must cover every token the injector advertises'
+    Assert-True ($run -like '*Native]::GetVirtualKeyForToken*') 'the parity check must ask the resolver, not a list of names'
+    $parityAt = $run.IndexOf('Test-KanaAiValidationKeyTokenParity')
+    $refusedAt = $run.IndexOf('run-refused')
+    Assert-True ($parityAt -ge 0 -and $parityAt -lt $refusedAt) 'the parity check must run before the refusal path, or a broken injector is never reported'
+}
+
+# ---------------------------------------------------------------------------
+# 10b. A text verdict must come from the observation the step recorded.
+#
+#     Measured defect: the shared step tail re-ran the comparison with an EMPTY
+#     observation and took that answer over the step's own. INJ-00 typed the
+#     canary into the harness's own window, read back "kanaai", and was reported
+#     failed with the reason "contains" - the reason from the correct comparison
+#     sitting next to a verdict from the wrong one. Every text assertion in the
+#     plan was structurally unable to pass.
+# ---------------------------------------------------------------------------
+Invoke-Test -Id 'ST-65' -Name 'a contains match on a real observation decides the verdict' -Body {
+    # The comparison the step performs, against the text it really read.
+    $observed = 'kanaai'
+    $comparison = Compare-KanaAiValidationReadback -Match 'contains' -Expected 'kanaai' -Observed $observed -Available $true
+    Assert-True ($comparison.Match) ("'kanaai' must contain 'kanaai'; the comparison said '{0}'" -f $comparison.Reason)
+    # And the verdict the step's own result must produce.
+    $verdict = Resolve-KanaAiValidationStepVerdict -Assertion 'assert' -Executed $true -ReadbackAvailable $true -Match $comparison.Match -Reason $comparison.Reason
+    Assert-Equal 'passed' $verdict 'a step that observed a true match must not be reported as a failure'
+}
+
+Invoke-Test -Id 'ST-66' -Name 'the run script does not re-decide a text match against an empty observation' -Body {
+    $run = [System.IO.File]::ReadAllText($runPath)
+    # The exact defective call handed an empty observation while a text mode was
+    # in force. It must be gone, and the text modes must be named as the ones the
+    # step decides for itself.
+    Assert-True ($run -notlike '*-Observed''''''*BooleanObservation $booleanObservation*') 'the empty-observation re-comparison must not remain for a step that already compared'
+    Assert-True ($run -like '*textMatchModes*') 'the run script must name the modes a step decides for itself'
+    foreach ($mode in @('equals', 'contains', 'not-contains')) {
+        Assert-True ($run -like ("*'{0}'*" -f $mode)) ("the text match mode '{0}' must be listed" -f $mode)
+    }
+}
+
+Invoke-Test -Id 'ST-67' -Name 'a text mode still fails when the real observation does not match' -Body {
+    # The fix must not turn every text step green. A real mismatch stays a failure.
+    $comparison = Compare-KanaAiValidationReadback -Match 'contains' -Expected 'kanaai' -Observed 'kanna' -Available $true
+    Assert-True (-not $comparison.Match) 'a real mismatch must stay a mismatch'
+    $verdict = Resolve-KanaAiValidationStepVerdict -Assertion 'assert' -Executed $true -ReadbackAvailable $true -Match $comparison.Match -Reason $comparison.Reason
+    Assert-Equal 'failed' $verdict 'a real mismatch must be reported as a failure'
+}
+
+# ---------------------------------------------------------------------------
+# 10c. An unreadable observation is not an empty one.
+#
+#     Measured: once cleanup began actually terminating the probe host, the
+#     end-of-run module read ran against a dead process, returned
+#     `EnumProcessModules error 299 after EnumProcessModulesEx error 87` with
+#     moduleCount 1, and the receipt raised a CRITICAL finding asserting the
+#     KanaAI TIP "was never the active input processor" - about a process that
+#     had been observed holding mozc_tip64.dll. The same class of defect as the
+#     vacuous pass: converting the absence of a reading into evidence.
+# ---------------------------------------------------------------------------
+Invoke-Test -Id 'ST-68' -Name 'a module list that could not be read never claims the module is absent' -Body {
+    $run = [System.IO.File]::ReadAllText($runPath)
+    # The finding must be gated on the enumeration having succeeded, and the
+    # unreadable case must have its own finding that says the claim was not made.
+    Assert-True ($run -like '*TARGET-MODULES-UNAVAILABLE*') 'an unreadable module list must be reported as unreadable, by name'
+    Assert-True ($run -like '*moduleEnumerationFailed*') 'the gate must ask whether the enumeration failed'
+    Assert-True ($run -like '*CANNOT say whether the KanaAI TIP was loaded*') 'the unreadable case must say explicitly that no claim is made'
+    # And the absent case must say the list WAS read, so the two cannot be
+    # confused by a reader who only sees the message.
+    Assert-True ($run -like '*module list WAS read successfully*') 'the absent case must state that the read succeeded'
+    # Locate the FINDING RAISES, not the bare id. The explanatory comment above the
+    # branch names TIP-DLL-NOT-LOADED too, and matching the bare name found the
+    # comment first and reported a correct ordering as wrong.
+    $unavailableAt = $run.IndexOf('TARGET-MODULES-UNAVAILABLE')
+    $tipFindingAt = $run.IndexOf("'TIP-DLL-NOT-LOADED' -Severity")
+    Assert-True ($unavailableAt -ge 0 -and $tipFindingAt -gt $unavailableAt) 'the unreadable case must be decided before the absent case'
+}
+
+Invoke-Test -Id 'ST-69' -Name 'cleanup publishes live state under the ledger own ids' -Body {
+    # Measured: Invoke-CleanupPass published a single 'probehost' key while the
+    # ledger records 'probehost-<pid>', so every process entry missed the lookup,
+    # was planned as `verify-absent` - "assume already gone and verify only" - and
+    # a run that launched two hosts produced zero `terminate-by-pid` actions and
+    # twenty `verify-absent` ones. Both processes survived every run.
+    $run = [System.IO.File]::ReadAllText($runPath)
+    Assert-True ($run -like '*LaunchedProbeHostPids*') 'every launched host pid must be remembered, not only the current target'
+    Assert-True ($run -like "*('probehost-' + `$pidLaunched)*") 'the live state must be keyed by the id the ledger used'
+    $common = [System.IO.File]::ReadAllText($commonPath)
+    Assert-True ($common -like "*Get-KanaAiValidationProperty -Object `$LiveState -Name `$id*") 'the plan resolves live state by the ledger id, so the keys have to match it'
+}
+
+Invoke-Test -Id 'ST-70' -Name 'a boolean observation is the raw fact, not the expectation applied twice' -Body {
+    # `match: 'false'` is applied by Compare-KanaAiValidationReadback as
+    # `(-not [bool]$BooleanObservation)`. A step that hands it `(-not $alive)`
+    # applies the expectation twice.
+    # Measured: RST-01 expected `false` and reported "failed - the target window is
+    # gone" while the window was indeed gone, and CLN-01/CLN-02 expected `false` and
+    # reported "passed - the target window survived cleanup" while the window was
+    # still there because cleanup had never terminated a process.
+    $run = [System.IO.File]::ReadAllText($runPath)
+    Assert-True ($run -notlike '*booleanObservation = (-not $alive*)') 'a negated observation must not be handed to the shared comparison'
+    # And the shared tail must still negate for a `false` expectation, or the fix
+    # would have simply moved the double negation.
+    # `.Contains`, not `-like`: in a PowerShell wildcard `[bool]` is a character
+    # class, so the pattern matched nothing and the case failed on a correct file.
+    $common = [System.IO.File]::ReadAllText($commonPath)
+    Assert-True ($common.Contains('(-not [bool]$BooleanObservation)')) 'the comparison must still negate the boolean for a false expectation'
+}
 Invoke-Test -Id 'ST-48' -Name 'the canary text in the shipped plan is the documented canary' -Body {
     $plan = Read-KanaAiValidationJson -Path $planPath
     Assert-Equal (Get-KanaAiValidationCanaryRomaji) (Get-KanaAiValidationStringProperty -Object $plan.canary -Name 'romaji') 'plan romaji canary'

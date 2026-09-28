@@ -68,10 +68,21 @@ pub const PINNED_RUNTIME_ENTRY_COUNT: u64 = 51;
 /// The shipped Rust broker is part of the reviewed AI bundle, so the launch
 /// policy pins its bytes as well. A runtime that starts a different executable
 /// is not the reviewed build.
+/// Re-pinned on 2026-09-27 for the D-7 build. The value is the SHA-256 of
+/// `cargo build --release --target x86_64-pc-windows-msvc -p kanai-broker
+/// --bin kanai-broker`, which is the executable the installer stages. Re-pinning
+/// is a three-place edit - this constant, `manifest-v1.json`'s `broker` object,
+/// and `$aiPinned` in `scripts/build-windows-installer.ps1` - and all three must
+/// name the same build or the installer refuses the bundle it is given.
+///
+/// This is the digest of the *reviewed* build, not of whatever the broker hashes
+/// about itself at run time. The broker cannot pin its own digest: that would need
+/// a hash fixed point. See `crate::bundle_verify` for what is and is not verified
+/// on the machine the product runs on.
 pub const PINNED_BROKER_FILE: &str = "kanai-broker.exe";
-pub const PINNED_BROKER_BYTES: u64 = 2_817_024;
+pub const PINNED_BROKER_BYTES: u64 = 3_267_072;
 pub const PINNED_BROKER_SHA256: &str =
-    "85f4930d5976b5339de10216d53c20bea4d68d3bae6d25e2668ed24de101dac4";
+    "d832612e4c4158704789338585be69343b639e20b91f21573e84a882e689a0cc";
 pub const PINNED_RUNTIME_ENTRY_NAMES_SHA256: &str =
     "68da91a595ea841f87c7f7f34aff23bdf0a9910f129cf0fd3a06264205b61f0c";
 
@@ -84,6 +95,10 @@ const PINNED_NOTICE_SHA256: &str =
     "2fa9a4c66b97ca5ae42de7f9372514d866c3e824f4f27ef08ebd07adf76dbae4";
 const PINNED_STAGING_MODEL_DIRECTORY: &str = "model";
 const PINNED_STAGING_RUNTIME_DIRECTORY: &str = "runtime";
+/// The reviewed b11146 archive's inference server, by pinned name.  The JSON
+/// path and the embedded path both derive their `server_relative` from this one
+/// constant, so the two cannot drift apart.
+const PINNED_STAGING_SERVER_FILE: &str = "llama-server.exe";
 const PINNED_STAGING_LICENSE_DIRECTORY: &str = "licenses";
 const PINNED_STAGING_RECEIPT_FILE: &str = "STAGING-RECEIPT.json";
 const PINNED_STAGING_LAYOUT: &str = "flat files in declared directories";
@@ -604,22 +619,173 @@ pub fn build_installed_runtime_launch_plan(
     )
 }
 
-fn build_from_values_with_identity(
-    manifest: Value,
-    receipt: Value,
-    options: RuntimeLaunchOptions,
+/// The two installed paths every launch plan needs, derived from the pinned
+/// staging layout alone.
+///
+/// This is the pure half of the plan: it takes no JSON, opens nothing, and is
+/// the only source of `model_relative` and `server_relative` for a broker that
+/// starts without a manifest or a staging receipt.  The JSON path derives the
+/// same two values from a document, and a test asserts the two agree, so the
+/// embedded plan cannot quietly become a different launch.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PinnedInstalledRuntimePaths {
+    /// Relative path of the pinned model weight inside the installed AI root.
+    pub model_relative: RelativeInstalledPath,
+    /// Relative path of the pinned inference server inside the installed AI root.
+    pub server_relative: RelativeInstalledPath,
+}
+
+/// Derive the installed model and server paths from the pinned staging
+/// constants.  Deterministic, total, and independent of any document.
+pub fn pinned_installed_runtime_paths() -> Result<PinnedInstalledRuntimePaths, RuntimeConfigError> {
+    Ok(PinnedInstalledRuntimePaths {
+        model_relative: RelativeInstalledPath::new(join_relative(
+            PINNED_STAGING_MODEL_DIRECTORY,
+            PINNED_MODEL_FILE,
+        )?)?,
+        server_relative: RelativeInstalledPath::new(join_relative(
+            PINNED_STAGING_RUNTIME_DIRECTORY,
+            PINNED_STAGING_SERVER_FILE,
+        )?)?,
+    })
+}
+
+/// What validating a manifest and staging receipt establishes.
+///
+/// This is deliberately *not* a plan.  Validation answers "does this bundle
+/// match the pinned policy"; generation answers "what should be launched".
+/// Fusing the two made it impossible to validate a bundle without also emitting
+/// a launch, which is why the broker could not obtain either half on its own.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ValidatedRuntimeConfiguration {
+    model_relative: RelativeInstalledPath,
+    server_relative: RelativeInstalledPath,
+    broker_bytes: u64,
+    broker_sha256: String,
+}
+
+impl ValidatedRuntimeConfiguration {
+    /// The installed model path validation established.
+    #[must_use]
+    pub fn model_relative(&self) -> &RelativeInstalledPath {
+        &self.model_relative
+    }
+
+    /// The installed server path validation established.
+    #[must_use]
+    pub fn server_relative(&self) -> &RelativeInstalledPath {
+        &self.server_relative
+    }
+
+    /// The broker identity validation established, as `(bytes, sha256)`.
+    ///
+    /// This is what a caller records when it has to state which executable was
+    /// accepted: validation compared the caller's own bytes against the
+    /// manifest and kept the result here rather than discarding it.
+    #[must_use]
+    pub fn broker_identity(&self) -> (u64, &str) {
+        (self.broker_bytes, self.broker_sha256.as_str())
+    }
+}
+
+/// Validate a manifest and staging receipt against the pinned policy and return
+/// what was established, without producing a launch plan.
+///
+/// `broker_bytes` and `broker_sha256` are the identity of the executable that
+/// will run this code.  They are supplied by the caller because an executable
+/// cannot pin its own digest; see [`build_installed_runtime_launch_plan`].
+/// `manifest_sha256` is the manifest digest the receipt is required to
+/// self-report.  As documented on [`PINNED_MANIFEST_SHA256`], this compares the
+/// receipt's claim; it does not hash the manifest bytes.
+pub fn validate_runtime_configuration(
+    manifest_json: &[u8],
+    receipt_json: &[u8],
     broker_bytes: u64,
     broker_sha256: &str,
     manifest_sha256: &str,
-) -> Result<RuntimeLaunchPlan, RuntimeConfigError> {
-    validate_embedded_host(&manifest)?;
-    validate_embedded_host(&receipt)?;
-    let validated_manifest = validate_manifest(&manifest, broker_bytes, broker_sha256)?;
-    validate_receipt(&receipt, &validated_manifest, manifest_sha256)?;
-    options.validate()?;
+) -> Result<ValidatedRuntimeConfiguration, RuntimeConfigError> {
+    if broker_bytes == 0
+        || broker_sha256.len() != 64
+        || !broker_sha256.bytes().all(|b| b.is_ascii_hexdigit())
+    {
+        return Err(RuntimeConfigError::IdentityMismatch);
+    }
+    let manifest = parse_bounded_value(manifest_json)?;
+    let receipt = parse_bounded_value(receipt_json)?;
+    validate_runtime_configuration_values(
+        &manifest,
+        &receipt,
+        broker_bytes,
+        &broker_sha256.to_ascii_lowercase(),
+        manifest_sha256,
+    )
+}
 
-    let model_path = RelativeInstalledPath::new(validated_manifest.model_relative.clone())?;
-    let server_path = RelativeInstalledPath::new(validated_manifest.server_relative.clone())?;
+/// The value-level form of [`validate_runtime_configuration`], for callers that
+/// already hold parsed documents.
+pub fn validate_runtime_configuration_values(
+    manifest: &Value,
+    receipt: &Value,
+    broker_bytes: u64,
+    broker_sha256: &str,
+    manifest_sha256: &str,
+) -> Result<ValidatedRuntimeConfiguration, RuntimeConfigError> {
+    validate_embedded_host(manifest)?;
+    validate_embedded_host(receipt)?;
+    let validated_manifest = validate_manifest(manifest, broker_bytes, broker_sha256)?;
+    validate_receipt(receipt, &validated_manifest, manifest_sha256)?;
+    Ok(ValidatedRuntimeConfiguration {
+        model_relative: RelativeInstalledPath::new(validated_manifest.model_relative)?,
+        server_relative: RelativeInstalledPath::new(validated_manifest.server_relative)?,
+        broker_bytes,
+        broker_sha256: broker_sha256.to_owned(),
+    })
+}
+
+/// Turn a validated configuration into a launch plan.
+///
+/// Generation performs no further identity checking: it reuses what
+/// validation established and applies the fixed launch policy plus the caller's
+/// bounded options.
+pub fn generate_runtime_launch_plan(
+    configuration: &ValidatedRuntimeConfiguration,
+    options: RuntimeLaunchOptions,
+) -> Result<RuntimeLaunchPlan, RuntimeConfigError> {
+    generate_launch_plan(
+        configuration.model_relative.clone(),
+        configuration.server_relative.clone(),
+        options,
+    )
+}
+
+/// Build a launch plan for an installed broker that has no manifest and no
+/// staging receipt, from the pinned constants alone.
+///
+/// This is the user decision D-7 path.  What it establishes and what it does
+/// not:
+///
+/// * The two installed paths come from the pinned staging layout, and the JSON
+///   path is proven to produce the same two values.
+/// * The launch policy (loopback host, single session, CPU only, no UI) is
+///   fixed here, not read from disk.
+/// * It performs **no** check of the bytes on this machine.  In particular the
+///   model weight, the runtime closure, and the broker executable are not
+///   hashed here.  A caller that needs the bytes proved must run the platform
+///   adapter's verification, which is where file access belongs; this module
+///   never opens a file.
+pub fn build_embedded_runtime_launch_plan(
+    options: RuntimeLaunchOptions,
+) -> Result<RuntimeLaunchPlan, RuntimeConfigError> {
+    let paths = pinned_installed_runtime_paths()?;
+    generate_launch_plan(paths.model_relative, paths.server_relative, options)
+}
+
+fn generate_launch_plan(
+    model_path: RelativeInstalledPath,
+    server_path: RelativeInstalledPath,
+    options: RuntimeLaunchOptions,
+) -> Result<RuntimeLaunchPlan, RuntimeConfigError> {
+    options.validate()?;
     let api_key_file_path = RelativeInstalledPath::new(options.api_key_file.clone())?;
     if api_key_file_path.as_str() == model_path.as_str()
         || api_key_file_path.as_str() == server_path.as_str()
@@ -641,6 +807,24 @@ fn build_from_values_with_identity(
         gpu_layers: 0,
         no_ui: true,
     })
+}
+
+fn build_from_values_with_identity(
+    manifest: Value,
+    receipt: Value,
+    options: RuntimeLaunchOptions,
+    broker_bytes: u64,
+    broker_sha256: &str,
+    manifest_sha256: &str,
+) -> Result<RuntimeLaunchPlan, RuntimeConfigError> {
+    let configuration = validate_runtime_configuration_values(
+        &manifest,
+        &receipt,
+        broker_bytes,
+        broker_sha256,
+        manifest_sha256,
+    )?;
+    generate_runtime_launch_plan(&configuration, options)
 }
 
 fn parse_bounded_value(bytes: &[u8]) -> Result<Value, RuntimeConfigError> {
@@ -1225,7 +1409,7 @@ fn validate_manifest(
     }
 
     let model_relative = join_relative(&model_directory, &model_file)?;
-    let server_relative = join_relative(&runtime_directory, "llama-server.exe")?;
+    let server_relative = join_relative(&runtime_directory, PINNED_STAGING_SERVER_FILE)?;
     let runtime_entry_names_sha256 = entry_names_sha256(&runtime_entry_names)?;
     Ok(ValidatedManifest {
         model_relative,
@@ -1353,9 +1537,70 @@ fn validate_runtime_archive(
     Ok(seen)
 }
 
+/// The installed layout and identity the pinned policy expects, as data.
+///
+/// This exists so a platform adapter can check an installed bundle against the
+/// pinned policy without a manifest or a staging receipt - the two documents the
+/// installer deliberately refuses to ship.  It carries only pinned constants:
+/// there is nothing here that a document could broaden.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PinnedBundleLayout {
+    /// Relative path of the model weight, as a plan would carry it.
+    pub model_relative: String,
+    /// Relative path of the inference server, as a plan would carry it.
+    pub server_relative: String,
+    /// Relative directory holding the runtime dependency closure.
+    pub runtime_directory: String,
+    /// Relative directory holding the licence texts.
+    pub license_directory: String,
+    /// Relative path of the third-party notice.
+    pub notice_relative: String,
+    /// Relative path of the model licence text.
+    pub model_license_relative: String,
+    /// Relative path of the runtime licence text.
+    pub runtime_license_relative: String,
+    /// Exact size of the model weight.
+    pub model_bytes: u64,
+    /// Digest of the model weight.
+    pub model_sha256: String,
+    /// Exact size of the third-party notice.
+    pub notice_bytes: u64,
+    /// Digest of the third-party notice.
+    pub notice_sha256: String,
+    /// Number of files in the runtime closure.
+    pub runtime_entry_count: u64,
+    /// Digest over the runtime closure's ordinal-sorted names.
+    pub runtime_entry_names_sha256: String,
+}
+
+/// The pinned layout and identity, as data.  Total and infallible: every value
+/// is a compile-time constant, so there is nothing to fail and nothing to read.
+#[must_use]
+pub fn pinned_bundle_layout() -> PinnedBundleLayout {
+    PinnedBundleLayout {
+        model_relative: format!("{PINNED_STAGING_MODEL_DIRECTORY}/{PINNED_MODEL_FILE}"),
+        server_relative: format!("{PINNED_STAGING_RUNTIME_DIRECTORY}/{PINNED_STAGING_SERVER_FILE}"),
+        runtime_directory: PINNED_STAGING_RUNTIME_DIRECTORY.to_owned(),
+        license_directory: PINNED_STAGING_LICENSE_DIRECTORY.to_owned(),
+        notice_relative: PINNED_NOTICE_PATH.to_owned(),
+        model_license_relative: PINNED_MODEL_LICENSE_PATH.to_owned(),
+        runtime_license_relative: PINNED_RUNTIME_LICENSE_PATH.to_owned(),
+        model_bytes: PINNED_MODEL_BYTES,
+        model_sha256: PINNED_MODEL_SHA256.to_owned(),
+        notice_bytes: PINNED_NOTICE_BYTES,
+        notice_sha256: PINNED_NOTICE_SHA256.to_owned(),
+        runtime_entry_count: PINNED_RUNTIME_ENTRY_COUNT,
+        runtime_entry_names_sha256: PINNED_RUNTIME_ENTRY_NAMES_SHA256.to_owned(),
+    }
+}
+
 /// Ordinal-sorted, newline-joined entry names with a trailing newline, hashed
 /// exactly the way the PowerShell staging receipt and manifest record it.
-fn entry_names_sha256(names: &[String]) -> Result<String, RuntimeConfigError> {
+///
+/// Public because a platform adapter that verifies an installed runtime closure
+/// has to compute the same digest over the names it finds on disk, and two
+/// implementations of this canonical form would be two chances to disagree.
+pub fn entry_names_sha256(names: &[String]) -> Result<String, RuntimeConfigError> {
     use std::collections::BTreeSet;
     let ordered: BTreeSet<&str> = names.iter().map(String::as_str).collect();
     if ordered.len() != names.len() {
