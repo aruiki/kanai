@@ -96,9 +96,9 @@ pub const PINNED_RUNTIME_ENTRY_COUNT: u64 = 51;
 /// and is what the installer's size check compares; the digest binds the one
 /// artifact that ships.
 pub const PINNED_BROKER_FILE: &str = "kanai-broker.exe";
-pub const PINNED_BROKER_BYTES: u64 = 3_361_280;
+pub const PINNED_BROKER_BYTES: u64 = 3_371_008;
 pub const PINNED_BROKER_SHA256: &str =
-    "71a6f785c69f623d92b46c8171725da45aee18e927b061946025b5dfa8b47734";
+    "9cafe0542f115b9e7276723691447de444a88d7cf8939a523ee28200d0e8e726";
 pub const PINNED_RUNTIME_ENTRY_NAMES_SHA256: &str =
     "68da91a595ea841f87c7f7f34aff23bdf0a9910f129cf0fd3a06264205b61f0c";
 

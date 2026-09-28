@@ -56,8 +56,8 @@
     "fileName": "kanai-broker.exe",
     "role": "optional-local-slow-path broker; the Rust KanaAI broker, not a Mozc payload",
     "architecture": "x64",
-    "bytes": 3361280,
-    "sha256": "71a6f785c69f623d92b46c8171725da45aee18e927b061946025b5dfa8b47734",
+    "bytes": 3371008,
+    "sha256": "9cafe0542f115b9e7276723691447de444a88d7cf8939a523ee28200d0e8e726",
     "machine": "0x8664",
     "optionalHeaderMagic": "0x020B",
     "kind": "Exe"

@@ -147,16 +147,16 @@ $aiPinned = [ordered]@{
     # means the manifest and the builder cannot drift apart, and an arbitrary
     # non-Mozc executable can never satisfy the broker slot.
     # Re-pinned 2026-09-28 for the beta.2 build, after the broker gained the
-    # product-supplied opt-in it reads from `Software\KanaAI`: 3,361,280 bytes /
-    # 71a6f785c69f623d92b46c8171725da45aee18e927b061946025b5dfa8b47734, from
+    # product-supplied opt-in it reads from `Software\KanaAI`: 3,371,008 bytes /
+    # 9cafe0542f115b9e7276723691447de444a88d7cf8939a523ee28200d0e8e726, from
     # `cargo build --release --target x86_64-pc-windows-msvc -p kanai-broker
     # --bin kanai-broker`. This, `manifest-v1.json`'s `broker` object and
     # `local_runtime::PINNED_BROKER_SHA256` are one three-place edit; the
     # installer's own broker-pinned-size and broker-pinned-digest negative cases
     # fail if they disagree.
     brokerFileName = 'kanai-broker.exe'
-    brokerBytes = 3361280
-    brokerSha256 = '71a6f785c69f623d92b46c8171725da45aee18e927b061946025b5dfa8b47734'
+    brokerBytes = 3371008
+    brokerSha256 = '9cafe0542f115b9e7276723691447de444a88d7cf8939a523ee28200d0e8e726'
     brokerMachine = '0x8664'
     brokerOptionalMagic = '0x020B'
     brokerArchitecture = 'x64'
