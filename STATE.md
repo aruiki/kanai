@@ -1,4 +1,4 @@
-# 最新の引き継ぎ — 2026-09-28（§0-N: beta.2 公開。AI は製品経路で起動する。変換品質は未評価）
+# 最新の引き継ぎ — 2026-09-28（§0-N: beta.2 公開。AI は起動するが**変換に関与していない**（実測））
 
 Status: **NOT COMPLETE** / `.goal-complete` **未作成** / 公開済み = GitHub prerelease
 **`v0.1.0-beta.2`**（AI 同梱・未署名）、tag → `b5c1e24`
@@ -83,7 +83,48 @@ llama-server 29088  1678 MB
 5. 昇格ドライバが W2 完了直後に消えた事象が 1 回あった（原因未特定。cleanup は無実で、
    終了させた PID は 0 件だった）。2 回目の実行では再現せず完走した。
 
-### 0-N-6. AI ON/OFF の候補差分: 測定を試み、**計器の汚染で無効**になった
+### 0-N-6b. AI ON/OFF の候補差分: **測定完了。差分 0。AI は変換に関与していない**
+
+クリーンな機械で再実行し、**有効な測定が取れた**。receipt:
+`platform/windows-tsf/validation/desktop/runs/ai-candidate-difference-20260928-233520.json`、
+verdict **`ai-does-not-change-output`**。
+
+```
+arm 1 (AI 有効)              arm 2 (AI 無効)
+  bun-jitai   斧分自体          bun-jitai   斧分自体
+  ha-itai     葉が痛いので…医者   ha-itai     葉が痛いので…医者
+  onaka-itai  お腹が痛いので…医者  onaka-itai  お腹が痛いので…医者
+  kisya       記者の記者が記者で…  kisya       記者の記者が記者で…
+  niwa        裏庭には庭鶏がいる    niwa        裏庭には庭鶏がいる
+cases: 5, differing: 0
+```
+
+**この測定が有効である根拠**（前回の無効例と対比して全部挙げる）:
+
+| 検証点 | 実測 |
+| --- | --- |
+| ブローカーが公開ビルドか | `brokerSha256` = `9CAFE054…` 一致（前回は `D832612E…` で無効だった） |
+| CLI が解釈されているか | `settingBefore` = `local AI is on (setting local, from user)` |
+| 本製品を測っているか | 両腕とも `mozc_tip` ロード確認のゲートを通過（`blocked=False`） |
+| ON/OFF が実際に効いたか | ブローカー自身のログが `local AI is enabled; starting the runtime`（pid 32524, 32160）と `local AI not started (no opt-in recorded…)`（pid 36448）を記録 |
+| 手動結果と一致するか | オペレータが手で打った誤変換（§0-N-7）を同一に再現 |
+
+**結論**: この版の AI は起動し、1.1 GB のモデルを読み込み、推論を返すが、
+**確定テキストには一切関与していない**。
+
+**次に効く作業の順序が、これで確定した。** 変換品質の改善はモデルの差し替えではなく
+**配線**から始める必要がある。AI の出力が候補に届いていないので、モデルを変えても
+現状では何も変わらない。調べる場所は次の 3 つ（未調査、仮説の順序）:
+
+1. TIP 側 — `engine/kanai_ai/rank_policy.cc` / `broker_contract.cc` /
+   `pipe_broker_client.cc` が rerank 結果を候補列に反映しているか
+2. ブローカー側 — `EnhancementQueue` が rerank を呼んでいるか、
+   deadline（§0-C の H-3: 既定 250 ms に対し実測 1.46 s）で毎回棄却されていないか
+3. モデル側 — 呼ばれた上で入力と同じ順序を返しているか
+
+**1 と 2 を切り分けるまで、3 は測る意味がない。**
+
+### 0-N-6a. 最初の測定は計器の汚染で無効だった（記録として残す）
 
 `platform/windows-tsf/validation/desktop/tests/Test-AiCandidateDifference.ps1` を作成し実行した。
 このテストは正解を判定せず、**AI ON と OFF で確定テキストが変わるか**だけを比較する。
@@ -114,8 +155,10 @@ receipt に書かない計器は、汚染を黙って通す。
 **やり直す手順**（昇格が必要）:
 
 ```
-powershell -NoProfile -ExecutionPolicy Bypass -File .localeta2einstall-clean.ps1 `
-  -Msi .local\installer-ai-beta2-final\KanaAI-0.1.0-x64.msi -Out .localeta2einstall-result2.txt
+powershell -NoProfile -ExecutionPolicy Bypass -File .localeta2
+einstall-clean.ps1 `
+  -Msi .local\installer-ai-beta2-final\KanaAI-0.1.0-x64.msi -Out .localeta2
+einstall-result2.txt
 powershell -NoProfile -ExecutionPolicy Bypass -File `
   platform\windows-tsfalidation\desktop	ests\Test-AiCandidateDifference.ps1
 ```
@@ -142,9 +185,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File `
 
 ### 0-N-5. 次の具体的作業
 
-1. **AI ON/OFF で同じ入力を打ち比べ、候補差分を測る。** 差が無ければ「起動はするが
-   候補に効いていない」を確定させる。ここが「AI 搭載」の実質を決める。
-2. 変換品質の評価（held-out corpus）。配線ではなくモデルとランキングの問題。
+1. **【完了 → §0-N-6b】** AI ON/OFF の候補差分は測定した。**差分 0**。
+2. **AI の出力が候補に届かない理由を特定する。** これが最優先。
+   §0-N-6b の 3 候補（TIP 側の反映 / ブローカーの呼び出しと deadline / モデルの応答）を
+   この順で切り分ける。**モデル品質の評価は、届くようになってからでないと意味がない。**
 3. per-user 有効化を per-machine で成立させる方法を決める（ActiveMovie 的な
    `InstallLayoutOrTip` の呼び出し方を含めて再検討）。
 4. W1 ハーネスに「アクティブな入力方式が KanaAI であること」を前提条件として追加し、
