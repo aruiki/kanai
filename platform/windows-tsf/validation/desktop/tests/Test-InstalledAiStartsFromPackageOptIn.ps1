@@ -49,6 +49,24 @@ function Get-UserOptIn {
 }
 $savedOptIn = Get-UserOptIn
 
+# The broker is still writing these files while they are read. Opening them with
+# ReadAllText takes an exclusive-enough share mode and fails with "because it is
+# being used by another process" - measured here, which is why the first run of
+# this test produced no measurement at all. FileShare.ReadWrite is what a reader
+# of a live log needs.
+function Read-LiveText([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return '' }
+    try {
+        $stream = New-Object System.IO.FileStream($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        try {
+            $reader = New-Object System.IO.StreamReader($stream)
+            try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
+        }
+        finally { $stream.Dispose() }
+    }
+    catch { return '' }
+}
+
 # One arm of the measurement. The broker is a server: it is started detached, its
 # streams are files, and it is killed by process id. Running it in the foreground
 # is how an earlier session hung for 900 s.
@@ -77,7 +95,7 @@ function Invoke-BrokerArm([string]$Label) {
             Start-Sleep -Milliseconds 400
             if ($process.HasExited) { break }
             $stderr = ''
-            if (Test-Path -LiteralPath $err) { $stderr = [IO.File]::ReadAllText($err) }
+            $stderr = Read-LiveText $err
             if ($null -eq $verified -and $stderr -match 'pinned local AI bytes verified') {
                 $verified = [math]::Round($started.Elapsed.TotalSeconds, 2)
             }
@@ -109,7 +127,7 @@ function Invoke-BrokerArm([string]$Label) {
             ChildProcessId = if ($null -ne $child) { $child.ProcessId } else { $null }
             ListenAddress = if ($null -ne $port) { ('{0}:{1}' -f $port.LocalAddress, $port.LocalPort) } else { $null }
             ChildWorkingSetMb = $childWorkingSetMb
-            Stderr = $(if (Test-Path -LiteralPath $err) { [IO.File]::ReadAllText($err) } else { '' })
+            Stderr = (Read-LiveText $err)
         }
     }
     finally {

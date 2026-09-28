@@ -280,6 +280,68 @@ fn startup_diagnostic(policy: EnhancementPolicy) -> Option<&'static str> {
     None
 }
 
+/// Write a startup line where it can still be read after the fact.
+///
+/// Measured 2026-09-28 on the installed product: the text service's Mozc server
+/// starts this broker with no console and no redirected handles, so everything
+/// `eprintln!` produces is discarded. The broker then sat at a 7 MB working set
+/// with no runtime child - it had decided *something* about the AI and there was
+/// no way, from outside, to learn what. The same binary started by hand loaded
+/// the model and answered in under a second. Two behaviours, one binary, and the
+/// only difference anyone could observe was silence.
+///
+/// So the startup lines go to a file as well as to stderr. The file carries the
+/// same static text as the console diagnostics: no configuration value, no path,
+/// no token, no model text, no user text. A process id and a timestamp are
+/// included because several brokers start over a session and otherwise the lines
+/// cannot be told apart; neither is a secret.
+///
+/// Every failure here is swallowed. A broker that cannot write its own log must
+/// still serve Mozc conversions.
+/// The log has to land somewhere a low-integrity broker can write, for the same
+/// reason the key root does: the text service's broker runs at low integrity and
+/// cannot write under `%LOCALAPPDATA%`. A diagnostic that only a
+/// medium-integrity broker can record would be missing from exactly the runs
+/// worth diagnosing, which is how this defect stayed invisible for so long.
+#[cfg(windows)]
+fn record_startup_line(line: &str) {
+    let Ok(since_epoch) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) else {
+        return;
+    };
+    use std::io::Write as _;
+    for directory in startup_log_directories() {
+        if std::fs::create_dir_all(&directory).is_err() {
+            continue;
+        }
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(directory.join("broker-startup.log"))
+        {
+            let _ = writeln!(
+                file,
+                "{}\tpid {}\t{line}",
+                since_epoch.as_secs(),
+                std::process::id()
+            );
+            return;
+        }
+    }
+}
+
+#[cfg(windows)]
+fn startup_log_directories() -> Vec<std::path::PathBuf> {
+    let mut directories = Vec::new();
+    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+        let local = std::path::Path::new(&local);
+        directories.push(local.join("KanaAI"));
+        if let Some(app_data) = local.parent() {
+            directories.push(app_data.join("LocalLow").join("KanaAI"));
+        }
+    }
+    directories
+}
+
 #[cfg(windows)]
 impl BackgroundAi {
     pub(super) fn start(backend: SwitchableBackend, policy: EnhancementPolicy) -> Self {
@@ -289,11 +351,16 @@ impl BackgroundAi {
         let task = tokio::spawn(async move {
             if let Some(line) = startup_diagnostic(policy) {
                 eprintln!("{line}");
+                record_startup_line(line);
                 return;
             }
+            record_startup_line("kanai-broker: local AI is enabled; starting the runtime");
             if let Err(reason) = run(worker_backend, worker_cancel).await {
                 // Deliberately static diagnostics: no config, paths, tokens or model text.
                 eprintln!("kanai-broker optional AI unavailable: {reason}");
+                record_startup_line(&format!("kanai-broker optional AI unavailable: {reason}"));
+            } else {
+                record_startup_line("kanai-broker: the local AI runtime stopped without an error");
             }
         });
         Self {
@@ -515,8 +582,10 @@ async fn run(
     // Clear what a hard kill left behind before adding to it. A directory whose
     // process id is still alive is a broker that is running right now, so this
     // never takes a live key away; see `sweep_stale_key_directories`.
-    let reaped =
-        sweep_stale_key_directories(&std::env::temp_dir(), std::process::id(), process_is_alive);
+    let reaped: usize = temporary_roots()
+        .iter()
+        .map(|base| sweep_stale_key_directories(base, std::process::id(), process_is_alive))
+        .sum();
     if reaped > 0 {
         // Counts only. The paths embed the account name.
         eprintln!("kanai-broker: reaped {reaped} stale local AI key directories");
@@ -534,30 +603,9 @@ async fn run(
     // using it verbatim left the AI path permanently off on such a machine with
     // no line in any log saying why. The 8.3 short form of the same directory is
     // ASCII, so it is preferred; see `kanai_broker::key_root`.
-    let key_root = kanai_broker::key_root::key_root_for(
-        std::process::id(),
-        nonce,
-        &std::env::temp_dir(),
-        kanai_broker::key_root::short_path_name,
-        |candidate| {
-            // Probe by creating the real directory and taking it straight back
-            // out. Leaving it would be a security regression, not a convenience:
-            // the key writer skips any directory that already exists, so a
-            // leftover created here with an inherited DACL would be the one the
-            // key is written into, instead of a protected owner-only one. A
-            // directory that cannot be taken back out is therefore a refusal.
-            std::fs::create_dir(candidate)?;
-            if std::fs::remove_dir(candidate).is_err() {
-                let _ = std::fs::remove_dir_all(candidate);
-                return Err(std::io::Error::other(
-                    "probe directory could not be removed",
-                ));
-            }
-            Ok(candidate.to_path_buf())
-        },
-    )
-    .map_err(|error| {
+    let key_root = first_usable_key_root(nonce).map_err(|error| {
         eprintln!("kanai-broker: local AI key root unavailable ({error})");
+        record_startup_line("kanai-broker: local AI not started (no writable key root)");
         "no writable ASCII key root"
     })?;
     let _key_directory = KeyDirectory(key_root.clone());
@@ -615,6 +663,113 @@ async fn run(
         Some(reason) => Err(reason),
         None => Ok(()),
     }
+}
+
+/// The directories a key root may live under, most preferred first.
+///
+/// `%TEMP%` alone is not enough, and the reason is measured rather than
+/// theoretical. On 2026-09-28 the installed product started its broker from
+/// `mozc_server`, which Mozc runs at **low integrity** (token integrity SID
+/// `S-1-16-4096`). A low-integrity process cannot create a directory under
+/// `%TEMP%`, which carries the medium-integrity label, so the probe below
+/// failed, no key root was chosen, and the AI was abandoned - silently, because
+/// the text service gives the broker no console and no redirected handles, so
+/// every diagnostic it printed was discarded. The same binary started from a
+/// medium-integrity shell loaded the model and answered in under a second.
+/// Two behaviours, one binary, and the only externally visible difference was
+/// four minutes of silence and a 7 MB working set.
+///
+/// `AppData\LocalLow` is the location Windows provides for exactly this: it is
+/// writable at low integrity. It is second, not first, so a normally-elevated
+/// broker keeps using `%TEMP%` and this changes nothing for it.
+///
+/// The key file's own protection does not rest on the directory being hard to
+/// reach. The key writer creates the directory itself and writes an owner-only,
+/// `CREATE_NEW` file; a directory that already exists is refused. That is what
+/// keeps another low-integrity process from pre-creating the path and being
+/// handed the key.
+#[cfg(windows)]
+fn temporary_roots() -> Vec<std::path::PathBuf> {
+    let mut roots = vec![std::env::temp_dir()];
+    // LocalLow sits beside Local, and `LOCALAPPDATA` is inherited even by a
+    // low-integrity child. Deriving it from the sibling avoids a known-folder
+    // call for a path Windows has kept in the same place since Vista.
+    if let Some(local) = std::env::var_os("LOCALAPPDATA")
+        && let Some(app_data) = std::path::Path::new(&local).parent()
+    {
+        roots.push(app_data.join("LocalLow").join("KanaAI"));
+    }
+    roots
+}
+
+/// Try each root in turn and return the first that yields a usable key root.
+///
+/// The failure of one root is not the failure of the AI path: a broker running
+/// at low integrity fails the first and succeeds on the second, which is the
+/// whole point of the list.
+#[cfg(windows)]
+fn first_usable_key_root(nonce: u128) -> Result<std::path::PathBuf, String> {
+    first_usable_key_root_in(&temporary_roots(), nonce, key_root_under)
+}
+
+/// The fallback itself, with the candidate list and the per-root attempt passed
+/// in so it can be tested without a low-integrity process to hand.
+///
+/// The behaviour that matters is not "LocalLow is in the list" - it is that a
+/// root which cannot be used is *passed over* rather than ending the AI path.
+/// Before this, the single root was `%TEMP%`, and a broker that could not write
+/// there gave up on the AI entirely.
+#[cfg(windows)]
+fn first_usable_key_root_in<F>(
+    roots: &[std::path::PathBuf],
+    nonce: u128,
+    attempt: F,
+) -> Result<std::path::PathBuf, String>
+where
+    F: Fn(&std::path::Path, u128) -> Result<std::path::PathBuf, String>,
+{
+    let mut last = String::from("no candidate root");
+    for base in roots {
+        // The root has to exist before a key directory can be probed inside it.
+        // `%TEMP%` always does; the LocalLow subdirectory is ours to create, and
+        // a failure here is just this candidate being unusable.
+        if !base.is_dir() && std::fs::create_dir_all(base).is_err() {
+            last = String::from("root could not be created");
+            continue;
+        }
+        match attempt(base, nonce) {
+            Ok(root) => return Ok(root),
+            Err(error) => last = error,
+        }
+    }
+    Err(last)
+}
+
+#[cfg(windows)]
+fn key_root_under(base: &std::path::Path, nonce: u128) -> Result<std::path::PathBuf, String> {
+    kanai_broker::key_root::key_root_for(
+        std::process::id(),
+        nonce,
+        base,
+        kanai_broker::key_root::short_path_name,
+        |candidate| {
+            // Probe by creating the real directory and taking it straight back
+            // out. Leaving it would be a security regression, not a convenience:
+            // the key writer skips any directory that already exists, so a
+            // leftover created here with an inherited DACL would be the one the
+            // key is written into, instead of a protected owner-only one. A
+            // directory that cannot be taken back out is therefore a refusal.
+            std::fs::create_dir(candidate)?;
+            if std::fs::remove_dir(candidate).is_err() {
+                let _ = std::fs::remove_dir_all(candidate);
+                return Err(std::io::Error::other(
+                    "probe directory could not be removed",
+                ));
+            }
+            Ok(candidate.to_path_buf())
+        },
+    )
+    .map_err(|error| error.to_string())
 }
 
 #[cfg(test)]
@@ -706,6 +861,79 @@ mod tests {
             policy(None),
             EnhancementPolicy::LocalQualityOnly,
             "an unset setting must not enable the local AI path"
+        );
+    }
+
+    /// The defect this exists to stop coming back.
+    ///
+    /// Measured 2026-09-28 on the installed product: `mozc_server` runs at low
+    /// integrity (token integrity SID S-1-16-4096) and starts the broker, which
+    /// inherits it. A low-integrity process cannot create a directory under
+    /// `%TEMP%`, so the only candidate root failed, no key root was chosen, and
+    /// the AI was abandoned. The broker sat at a 7 MB working set with no
+    /// runtime child for four minutes while the same binary, started from a
+    /// medium-integrity shell, loaded the model and answered in under a second.
+    #[cfg(windows)]
+    #[test]
+    fn a_root_that_cannot_be_used_is_passed_over_instead_of_ending_the_ai_path() {
+        let first = std::env::temp_dir().join("kanai-test-unusable-root");
+        let second = std::env::temp_dir().join("kanai-test-usable-root");
+        let roots = vec![first.clone(), second.clone()];
+        let attempts = std::cell::RefCell::new(Vec::new());
+
+        let chosen = first_usable_key_root_in(&roots, 7, |base, nonce| {
+            attempts.borrow_mut().push(base.to_path_buf());
+            assert_eq!(nonce, 7, "the nonce has to reach the attempt unchanged");
+            if base == first.as_path() {
+                // Stands in for the low-integrity refusal.
+                Err(String::from("access is denied"))
+            } else {
+                Ok(base.join("key"))
+            }
+        })
+        .expect("a later root must still be tried");
+
+        assert_eq!(chosen, second.join("key"));
+        assert_eq!(
+            attempts.borrow().as_slice(),
+            &[first.clone(), second.clone()],
+            "the roots have to be tried in order, most preferred first"
+        );
+
+        // The other half: when nothing works, the reason from the last attempt
+        // survives instead of being replaced by a generic message.
+        let failure =
+            first_usable_key_root_in(&roots, 7, |_, _| Err(String::from("access is denied")))
+                .expect_err("no usable root must be an error");
+        assert_eq!(failure, "access is denied");
+
+        for directory in [first, second] {
+            let _ = std::fs::remove_dir_all(directory);
+        }
+    }
+
+    /// `%TEMP%` must stay first, and a low-integrity-writable root must exist
+    /// after it. Asserting the order matters: putting LocalLow first would move
+    /// every ordinary broker's key out of `%TEMP%` for no reason.
+    #[cfg(windows)]
+    #[test]
+    fn the_candidate_roots_start_at_temp_and_include_a_low_integrity_one() {
+        let roots = temporary_roots();
+        assert_eq!(
+            roots.first().map(|root| root.as_path()),
+            Some(std::env::temp_dir().as_path()),
+            "%TEMP% has to stay the preferred root"
+        );
+        assert!(
+            roots.len() > 1,
+            "a single root is what left a low-integrity broker with nowhere to write"
+        );
+        assert!(
+            roots
+                .iter()
+                .skip(1)
+                .any(|root| root.to_string_lossy().contains("LocalLow")),
+            "the fallback has to be a location Windows makes writable at low integrity: {roots:?}"
         );
     }
 
