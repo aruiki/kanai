@@ -263,12 +263,18 @@ pub(super) struct BackgroundAi {
 /// Like the other startup diagnostics it carries no configuration, path, token or
 /// model text; naming the variable is the whole remedy, and a variable name is
 /// not a secret.
+/// Since 2026-09-28 the opt-in also has a product-supplied source - the
+/// `Software\KanaAI` `Enhancement` records the installer writes, read by
+/// [`super::enhancement_optin`] - so the remedy this line names is the one a
+/// user of the installed product can actually act on, with the environment
+/// variable kept for the lab.
 #[cfg(windows)]
 fn startup_diagnostic(policy: EnhancementPolicy) -> Option<&'static str> {
     if policy == EnhancementPolicy::Disabled {
         return Some(
-            "kanai-broker: local AI not started (enhancement policy is disabled; \
-             set KANAI_BROKER_ENHANCEMENT=local to enable)",
+            "kanai-broker: local AI not started (no opt-in recorded; \
+             run \"kanai-broker.exe --enable-local-ai\", or set \
+             KANAI_BROKER_ENHANCEMENT=local, to enable)",
         );
     }
     None
@@ -712,8 +718,9 @@ mod tests {
         let line = startup_diagnostic(EnhancementPolicy::Disabled)
             .expect("a disabled policy must be reported");
         assert!(
-            line.contains("KANAI_BROKER_ENHANCEMENT=local"),
-            "the line has to name the remedy, or it is only a complaint: {line}"
+            line.contains("--enable-local-ai") && line.contains("KANAI_BROKER_ENHANCEMENT=local"),
+            "the line has to name a remedy a user of the installed product can act on, \
+             not only the lab variable: {line}"
         );
         assert!(
             !line.contains("manifest") && !line.contains("STAGING"),

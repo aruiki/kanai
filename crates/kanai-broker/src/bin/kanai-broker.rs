@@ -9,6 +9,10 @@
 #[path = "kanai-broker/installed_ai.rs"]
 mod installed_ai;
 
+#[cfg(any(windows, test))]
+#[path = "kanai-broker/enhancement_optin.rs"]
+mod enhancement_optin;
+
 #[cfg(unix)]
 use kanai_broker::{
     EnhancementBackend, EnhancementError, EnhancementPolicy, LocalOpenAiBackend, ProviderLocality,
@@ -242,8 +246,13 @@ mod windows_listener {
                 ..BrokerConfig::default()
             },
         ));
-        let policy =
-            super::installed_ai::policy(std::env::var("KANAI_BROKER_ENHANCEMENT").ok().as_deref());
+        // The opt-in is read from the environment *and* from the two registry
+        // records the installer writes. Reading only the environment is what
+        // kept the shipped AI from ever starting: nothing in the product sets
+        // that variable, and the text service starts this process with an
+        // inherited environment block. See `enhancement_optin`.
+        let setting = super::enhancement_optin::configured();
+        let policy = super::installed_ai::policy(setting.as_deref());
         let backend = super::installed_ai::SwitchableBackend::default();
         let queue = Arc::new(EnhancementQueue::start(backend.clone(), policy, 4, 2)?);
         let pipe_name = std::env::var("KANAI_AI_TSF_PIPE")
@@ -284,6 +293,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     #[cfg(windows)]
     {
+        // The bundled AI is on by default on an installed machine, so there has
+        // to be a way to turn it off that is not "edit the registry". These
+        // commands write this user's own record and exit; with no argument the
+        // process is the broker it has always been.
+        if let Some(argument) = std::env::args().nth(1)
+            && let Some(code) = enhancement_optin::run_command(&argument)
+        {
+            std::process::exit(code);
+        }
         windows_listener::run().await
     }
     #[cfg(not(any(unix, windows)))]

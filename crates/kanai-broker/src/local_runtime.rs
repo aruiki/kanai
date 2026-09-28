@@ -79,10 +79,26 @@ pub const PINNED_RUNTIME_ENTRY_COUNT: u64 = 51;
 /// about itself at run time. The broker cannot pin its own digest: that would need
 /// a hash fixed point. See `crate::bundle_verify` for what is and is not verified
 /// on the machine the product runs on.
+///
+/// Measured 2026-09-28, correcting a procedure this repository used to follow.
+/// `STATE.md` 0-1 describes re-pinning as converging after one extra build, as if
+/// writing the measured digest here and rebuilding produced the same bytes back.
+/// It does not. Two `cargo build --release` runs from *identical* source - the
+/// second forced by touching `lib.rs` and changing nothing else - produced
+/// 3,361,280 bytes both times and digests 5fa8ce6e... and 71a6f785....
+/// This link is not byte-reproducible, so no amount of iteration reaches a fixed
+/// point, and any build after the edit invalidates the value the edit just wrote.
+///
+/// So the procedure is: build once, keep that exact executable, and pin its
+/// measurement. The constant below therefore describes the binary that is
+/// packaged - `.local/beta2/kanai-broker.exe` for the beta.2 candidate - and not
+/// a binary rebuilt from this file afterwards. The size is stable across builds
+/// and is what the installer's size check compares; the digest binds the one
+/// artifact that ships.
 pub const PINNED_BROKER_FILE: &str = "kanai-broker.exe";
-pub const PINNED_BROKER_BYTES: u64 = 3_267_072;
+pub const PINNED_BROKER_BYTES: u64 = 3_361_280;
 pub const PINNED_BROKER_SHA256: &str =
-    "d832612e4c4158704789338585be69343b639e20b91f21573e84a882e689a0cc";
+    "71a6f785c69f623d92b46c8171725da45aee18e927b061946025b5dfa8b47734";
 pub const PINNED_RUNTIME_ENTRY_NAMES_SHA256: &str =
     "68da91a595ea841f87c7f7f34aff23bdf0a9910f129cf0fd3a06264205b61f0c";
 

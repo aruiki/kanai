@@ -1,9 +1,11 @@
 KanaAI Development Preview - installed package README
 ====================================================
 
-STATUS: UNSIGNED WINDOWS X64 BETA, MOZC BASELINE ONLY, NO LOCAL AI
-This is a local Windows TSF IME beta. It is not a completed product. It bundles
-no local AI model and no local AI runtime, and it claims no AI result.
+STATUS: UNSIGNED WINDOWS X64 BETA
+This is a local Windows TSF IME beta. It is not a completed product. It is built
+in one of two shapes - with the local AI bytes, or without them - and the section
+"Optional local-AI payload" below tells you how to see which one you received.
+Neither shape claims an AI quality result.
 
 This file is installed package documentation. It states what this package
 contains and what it does not implement. It deliberately does not state
@@ -91,16 +93,40 @@ Shape 2 - local-AI bytes included: the list above plus
   ai\licenses\                    the model and runtime license texts
   ai\THIRD-PARTY-NOTICES.txt      the local-AI third-party notice
 
-Shape 2 means only that the reviewed model, runtime, license, and notice files
-were placed in the install folder. It does NOT mean that any AI feature is
-active, working, registered, enabled, or configured. In particular:
+In shape 2 the local AI is ON by default. The package records the opt-in it
+needs in two places, and the broker reads them in this order:
 
-  - the installer does not start, install, register, or validate the broker or
-    the local-AI runtime, and it does not configure Windows to use them;
-  - the model is not executed, benchmarked, or quality-checked by this package,
-    and no AI quality, accuracy, latency, privacy, or fallback result is claimed;
-  - kana/kanji conversion behaviour in this beta is not evidence that any
-    AI path contributed to it;
+  HKEY_CURRENT_USER\Software\KanaAI    Enhancement = local   (your own setting)
+  HKEY_LOCAL_MACHINE\Software\KanaAI   Enhancement = local   (the machine default)
+
+Both are removed when the package is uninstalled. Up to and including
+v0.1.0-beta.1 neither record existed and nothing else supplied the setting, so a
+package that carried the model never started it. That is the defect this shape
+closes.
+
+Turning it off, and back on, without a registry editor - from a Command Prompt:
+
+  "C:\Program Files\KanaAI\kanai-broker.exe" --disable-local-ai
+  "C:\Program Files\KanaAI\kanai-broker.exe" --enable-local-ai
+  "C:\Program Files\KanaAI\kanai-broker.exe" --ai-status
+
+These write only your own user record, which takes precedence over the machine
+default, and they take effect the next time the text service starts the broker.
+
+What running the AI costs and does, measured on the implementation host: the
+model is loaded into a separate child process whose working set settles near
+1.6 GB, it listens only on a loopback port (127.0.0.1) protected by a
+per-process key, and it performs no network access of any kind. Everything runs
+offline on this computer. No text is sent anywhere.
+
+What shape 2 still does NOT mean:
+
+  - it does not mean the AI improved any conversion. No AI quality, accuracy,
+    latency, or fallback result is claimed by this package, and the Mozc
+    baseline remains the conversion path whenever the AI is off, still loading,
+    slow, or unavailable;
+  - kana/kanji conversion behaviour in this beta is not by itself evidence that
+    an AI path contributed to it;
   - the third-party notice shipped in ai\ states that the dependency notice
     inventory is incomplete and that no SBOM has been generated.
 
@@ -109,14 +135,15 @@ network download, account, sign-in, or telemetry is performed by this package.
 
 Mozc baseline and AI boundary
 -----------------------------
-The available conversion path is the pinned Mozc baseline. No AI path
-contributes to it in this package, because no model and no inference runtime is
-bundled.
+The conversion path is the pinned Mozc baseline. In shape 1 nothing else can
+contribute to it, because no model and no inference runtime is installed. In
+shape 2 the local AI runs beside it as an optional path and the Mozc result
+stays available: the AI is never called synchronously for every key, and a
+timeout, a failure, a malformed answer, or a stopped runtime leaves the Mozc
+candidate in place.
 
-No AI quality, speed, privacy, or fallback result is claimed by this package.
-For shape 1, no local model, local-AI runtime, or AI weights are bundled. For
-shape 2, the bundled bytes are not evidence of AI operation. mozc_broker.exe is
-a Mozc component and is not the Rust KanaAI broker or a local model.
+No AI quality or speed result is claimed by this package. mozc_broker.exe is a
+Mozc component and is neither the Rust KanaAI broker nor a local model.
 
 What this beta implements
 -------------------------
@@ -135,8 +162,9 @@ What this beta does not implement
 ---------------------------------
 Not implemented, not claimed, and not supported in this beta:
 
-  - any local AI: no model, no inference runtime, no AI-assisted candidate
-    reranking, and no AI quality, latency, privacy, or fallback result;
+  - any measured AI quality result: shape 2 installs and starts a local model,
+    and this package makes no claim about how much, or whether, it improves a
+    conversion. Shape 1 has no model or inference runtime at all;
   - an x86 KanaAI application package, an x86-only installer, and x86-only
     Windows;
   - Microsoft Office and Microsoft Edge compatibility;

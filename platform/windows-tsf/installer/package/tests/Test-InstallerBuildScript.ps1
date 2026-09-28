@@ -370,6 +370,7 @@ try {
         throw 'The AI-less ValidateOnly receipt does not report the exact non-AI shape.'
     }
     if ($validated.AiFragmentText -match 'AIFOLDER|kanai-broker|<DirectoryRef') { throw 'The AI-less fragment unexpectedly declares local-AI payload.' }
+    if ($validated.AiFragmentText -match 'AiOptIn|Enhancement') { throw 'The AI-less fragment records a local-AI opt-in for a model it does not ship.' }
     if (Test-Path -LiteralPath (Join-Path $output 'KanaAI-0.1.0-x64.msi')) { throw 'ValidateOnly generated an MSI.' }
     if (Test-Path -LiteralPath (Join-Path $output 'KanaAI-0.1.0-Setup.exe')) { throw 'ValidateOnly generated Setup.exe.' }
 
@@ -624,7 +625,24 @@ try {
         }
     }
     $aiComponentCount = ([regex]::Matches($aiFragmentText, '<Component\b')).Count
-    if ($aiComponentCount -ne (12 + $aiExpectedPayload.Count)) { throw "The generated fragment has an unexpected component count: $aiComponentCount" }
+    if ($aiComponentCount -ne (14 + $aiExpectedPayload.Count)) { throw "The generated fragment has an unexpected component count: $aiComponentCount" }
+    # The two extra components are the opt-in rows the AI shape carries: HKLM as
+    # the machine default and HKCU as the installing user's own setting, spelled
+    # the way `enhancement_optin.rs` reads them. Before these existed the package
+    # shipped a 1.1 GB model and never recorded the setting that starts it, so
+    # the AI was off on every real install and neither side said so. They are
+    # asserted by content and not only by count; `Test-AiOptInRecord.ps1`
+    # compares the strings against the broker's own constants and reads the rows
+    # back out of a compiled package.
+    foreach ($expected in @(
+        '<Component Id="AiOptInMachine"',
+        '<Component Id="AiOptInUser"',
+        '<RegistryKey Root="HKLM" Key="Software\KanaAI">',
+        '<RegistryKey Root="HKCU" Key="Software\KanaAI">',
+        '<RegistryValue Name="Enhancement" Type="string" Value="local" KeyPath="yes" />'
+    )) {
+        if ($aiFragmentText.IndexOf($expected, [StringComparison]::Ordinal) -lt 0) { throw "The generated local AI fragment does not supply the opt-in that starts the bundled AI: $expected" }
+    }
     # The sanitized public AI record is relative-only: no drive, UNC, URL, user
     # name, repository path, or staging path may appear in it.
     $aiPackageText = [string]$aiValidation.AiPackageManifestText

@@ -198,9 +198,29 @@ function Get-RepositoryMutationFingerprint([string]$RepositoryRoot, [string[]]$S
     # rather than from the manifest supplied by a caller.
     $paths = @()
     try {
-        $diffPaths = @(Invoke-GitCapture @('-C', $RepositoryRoot, 'diff', '--name-only', 'HEAD', '--') -split "`n" |
+    # `(Invoke-GitCapture @(...)) -split` needs those parentheses.
+    #
+    # Without them PowerShell parses this as a *command* invocation and hands
+    # `-split` and the separator to the function as two more arguments, which a
+    # simple function silently collects in $args. The result is one string
+    # holding every path with embedded newlines, and the loop below then calls
+    # GetFullPath on it.
+    #
+    # Measured 2026-09-28 in this worktree: source identity came back
+    # `unverified` with the single reason
+    #   Exception calling "GetFullPath" with "1" argument(s): "Illegal
+    #   characters in path."
+    # and `build-windows-installer.ps1` refused the payload with "source
+    # identity is unverified; release-candidate validation fails closed".
+    #
+    # The defect is data-dependent, which is why it survived: the blob is only
+    # reached when its *first* path starts with one of $mutationPrefixes, so a
+    # tree whose first changed file is under crates/ skips it and the mutation
+    # fingerprint silently covers nothing at all. That second outcome is the
+    # worse one - a fingerprint that hashes no file bytes still produces a hash.
+        $diffPaths = @((Invoke-GitCapture @('-C', $RepositoryRoot, 'diff', '--name-only', 'HEAD', '--')) -split "`n" |
             Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-        $untrackedPaths = @(Invoke-GitCapture @('-C', $RepositoryRoot, 'ls-files', '--others', '--exclude-standard') -split "`n" |
+        $untrackedPaths = @((Invoke-GitCapture @('-C', $RepositoryRoot, 'ls-files', '--others', '--exclude-standard')) -split "`n" |
             Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
         $relevantUntracked = @($untrackedPaths | Where-Object {
             $candidate = ([string]$_).Trim().Replace('/', '\')

@@ -110,6 +110,16 @@ $aiLicenseDirectoryName = 'licenses'
 $aiServerEntry = 'llama-server.exe'
 $aiSanitizedManifestFileName = 'PACKAGE-MANIFEST.json'
 $aiSanitizedManifestStatus = 'staged-verified-local-ai-runtime-sanitized'
+# The opt-in record the AI package writes. These three strings have to stay
+# equal to `OPT_IN_KEY` / `OPT_IN_VALUE` / `OPT_IN_ENABLED` in
+# `crates/kanai-broker/src/bin/kanai-broker/enhancement_optin.rs`: if they drift,
+# the installer records an opt-in that the broker reads as an unknown value,
+# `policy()` fails closed, and the product silently ships an AI that never
+# starts - which is the exact defect this pair of changes exists to end.
+# `Test-AiOptInRecord.ps1` compares them.
+$aiOptInRegistryKey = 'Software\KanaAI'
+$aiOptInRegistryValue = 'Enhancement'
+$aiOptInEnabledValue = 'local'
 $aiDirectoryIds = [ordered]@{
     root = 'AIFOLDER'
     model = 'AIMODELFOLDER'
@@ -136,16 +146,17 @@ $aiPinned = [ordered]@{
     # The shipped Rust broker is part of the reviewed AI bundle. Pinning it here
     # means the manifest and the builder cannot drift apart, and an arbitrary
     # non-Mozc executable can never satisfy the broker slot.
-    # Re-pinned 2026-09-27 for the D-7 build: 3,267,072 bytes /
-    # d832612e4c4158704789338585be69343b639e20b91f21573e84a882e689a0cc, from
+    # Re-pinned 2026-09-28 for the beta.2 build, after the broker gained the
+    # product-supplied opt-in it reads from `Software\KanaAI`: 3,361,280 bytes /
+    # 71a6f785c69f623d92b46c8171725da45aee18e927b061946025b5dfa8b47734, from
     # `cargo build --release --target x86_64-pc-windows-msvc -p kanai-broker
     # --bin kanai-broker`. This, `manifest-v1.json`'s `broker` object and
     # `local_runtime::PINNED_BROKER_SHA256` are one three-place edit; the
     # installer's own broker-pinned-size and broker-pinned-digest negative cases
     # fail if they disagree.
     brokerFileName = 'kanai-broker.exe'
-    brokerBytes = 3267072
-    brokerSha256 = 'd832612e4c4158704789338585be69343b639e20b91f21573e84a882e689a0cc'
+    brokerBytes = 3361280
+    brokerSha256 = '71a6f785c69f623d92b46c8171725da45aee18e927b061946025b5dfa8b47734'
     brokerMachine = '0x8664'
     brokerOptionalMagic = '0x020B'
     brokerArchitecture = 'x64'
@@ -292,8 +303,28 @@ function Invoke-GitCapture([string[]]$Arguments) {
 function Get-RepositoryMutationFingerprint([string]$RepositoryRoot, [string[]]$StatusLines) {
     $paths = @()
     try {
-        $diffPaths = @(Invoke-GitCapture @('-C', $RepositoryRoot, 'diff', '--name-only', 'HEAD', '--') -split "`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-        $untrackedPaths = @(Invoke-GitCapture @('-C', $RepositoryRoot, 'ls-files', '--others', '--exclude-standard') -split "`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        # `(Invoke-GitCapture @(...)) -split` needs those parentheses.
+        #
+        # Without them PowerShell parses this as a *command* invocation and hands
+        # `-split` and the separator to the function as two more arguments, which a
+        # simple function silently collects in $args. The result is one string
+        # holding every path with embedded newlines, and the loop below then calls
+        # GetFullPath on it.
+        #
+        # Measured 2026-09-28 in this worktree: source identity came back
+        # `unverified` with the single reason
+        #   Exception calling "GetFullPath" with "1" argument(s): "Illegal
+        #   characters in path."
+        # and `build-windows-installer.ps1` refused the payload with "source
+        # identity is unverified; release-candidate validation fails closed".
+        #
+        # The defect is data-dependent, which is why it survived: the blob is only
+        # reached when its *first* path starts with one of $mutationPrefixes, so a
+        # tree whose first changed file is under crates/ skips it and the mutation
+        # fingerprint silently covers nothing at all. That second outcome is the
+        # worse one - a fingerprint that hashes no file bytes still produces a hash.
+        $diffPaths = @((Invoke-GitCapture @('-C', $RepositoryRoot, 'diff', '--name-only', 'HEAD', '--')) -split "`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        $untrackedPaths = @((Invoke-GitCapture @('-C', $RepositoryRoot, 'ls-files', '--others', '--exclude-standard')) -split "`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
         $relevantUntracked = @($untrackedPaths | Where-Object {
             $candidate = ([string]$_).Trim().Replace('/', '\')
             ($candidate -ieq 'LICENSE') -or @($mutationPrefixes | Where-Object { $candidate.StartsWith($_, [System.StringComparison]::OrdinalIgnoreCase) }).Count -gt 0
@@ -1852,6 +1883,28 @@ function New-InstallerWxsFragment($Snapshot, $SnapshotValidation) {
         $bitness = if ($file.Name -eq 'mozc_tip32.dll') { 'always32' } else { 'always64' }
         $allowedLeafNames += $file.Name
         [void]$xml.AppendLine("<Component Id=`"$id`" Guid=`"*`" Bitness=`"$bitness`"><File Id=`"$id`" Name=`"$name`" Source=`"$path`" KeyPath=`"yes`" /></Component>")
+    }
+    if ($aiRecords.Count -gt 0) {
+        # The opt-in the product itself supplies.
+        #
+        # Measured 2026-09-28 (STATE.md 0-L): the local AI starts, loads its
+        # model and answers, and the only reason an installed KanaAI never got
+        # there is that nothing in the product ever recorded the opt-in. The
+        # text service starts the broker with an inherited environment block and
+        # `KANAI_BROKER_ENHANCEMENT` is set nowhere, so `policy()` resolved to
+        # Disabled on every real machine. Shipping a 1.1 GB model behind a
+        # switch that the package never throws is not a shipped AI.
+        #
+        # These two rows are that switch, and they are emitted only in the AI
+        # build: a Mozc-only package must not record an opt-in for a model it
+        # does not contain. `kanai-broker.exe` reads HKCU first and HKLM second
+        # (`enhancement_optin.rs`), so the machine row is the default for every
+        # account and the user row is how `--disable-local-ai` overrides it.
+        #
+        # Both are component key paths, so an uninstall removes them and does
+        # not leave a machine recording consent for software that is gone.
+        [void]$xml.AppendLine(('<Component Id="AiOptInMachine" Guid="{{FCB097CA-F4F9-4BFC-8913-DB22F532F290}}" Bitness="always64" Directory="INSTALLFOLDER"><RegistryKey Root="HKLM" Key="{0}"><RegistryValue Name="{1}" Type="string" Value="{2}" KeyPath="yes" /></RegistryKey></Component>' -f $aiOptInRegistryKey, $aiOptInRegistryValue, $aiOptInEnabledValue))
+        [void]$xml.AppendLine(('<Component Id="AiOptInUser" Guid="{{7A41AEBC-03F6-4A3A-BB92-21B64D886CBD}}" Directory="INSTALLFOLDER"><RegistryKey Root="HKCU" Key="{0}"><RegistryValue Name="{1}" Type="string" Value="{2}" KeyPath="yes" /></RegistryKey></Component>' -f $aiOptInRegistryKey, $aiOptInRegistryValue, $aiOptInEnabledValue))
     }
     $aiIndex = 0
     foreach ($record in $aiRecords) {
