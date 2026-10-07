@@ -34,9 +34,15 @@
   公開側の旧kanai-mark.svgを除去し、文書に記載した14ファイルへ更新。
 - 現行KotoriのGitHub Aboutの説明・homepage・topicsを整備しAPIで反映を確認。
   旧KanaAI Aboutも現行製品への案内と旧記録であることを明記。
-- 公開ファイルの確認結果は完了後に追記する。
+- Pages buildは `e9c5663` で `built`。公開14ファイルすべてHTTP 200・正本とバイト一致。
+  トップHTML SHA-256: `cd2b9157b60e31271f9ccee30df6fc82cbcbc9d4311b37edd1e0a224010ad8e1`。
+- 紹介ソースは `3818502` でorigin/mainへpush済み。公開確認の詳細は
+  `.local/kotori-public-verification.json`、画面は `.local/kotori-site-published.png`。
+- ユーザーが開いていた公開タブを再読み込みし、Kotoriの見出しと現行GitHubリンクを確認。
+  先に表示されていたKanaAIの古いHTMLも実際に確認した。
+- 公開作業は完了。製品の追加実装・品質の再測定は今回の対象ではない。
 
-次: 現行サイトを配備して公開ファイル一致を確認。Search Consoleの所有者確認・登録は未実施。
+次: 新リリース時はKotoriの公開記録を読み直して本文・評価条件・署名を更新。Search Consoleの所有者確認・登録は未実施。
 詳細・根拠・未投稿の告知文は `docs/PROMOTION.md`、配備は `docs/GITHUB_PAGES.md`。
 
 以下は前回までの履歴。旧KanaAIの製品状態と、現行Kotoriの状態を混同しない。
