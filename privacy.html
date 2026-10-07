@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#142e29" />
+  <title>プライバシーとセキュリティ｜入力は端末の外に出ない｜KanaAI</title>
+  <meta name="description" content="KanaAIのプライバシー設計。変換・学習・AI推論はすべて端末内で完結し、入力内容をテレメトリや広告に使いません。AIに渡す範囲、保護された入力欄の扱い、削除、鍵保護、そして現時点の限界まで明記します。" />
+  <link rel="canonical" href="https://aruiki.github.io/kanai/privacy.html" />
+  <link rel="sitemap" type="application/xml" href="https://aruiki.github.io/kanai/sitemap.xml" />
+  <link rel="alternate" hreflang="ja" href="https://aruiki.github.io/kanai/privacy.html" />
+  <link rel="alternate" hreflang="x-default" href="https://aruiki.github.io/kanai/" />
+  <meta property="og:type" content="article" />
+  <meta property="og:locale" content="ja_JP" />
+  <meta property="og:site_name" content="KanaAI" />
+  <meta property="og:title" content="打った文字は、端末の外に出ない｜KanaAIのプライバシー設計" />
+  <meta property="og:description" content="IMEは文章が確定する前のテキストを見ます。だからKanaAIはlocal-firstで作りました。AIに渡す範囲、保護された入力欄、削除、鍵保護、そして限界を明記します。" />
+  <meta property="og:url" content="https://aruiki.github.io/kanai/privacy.html" />
+  <meta property="og:image" content="https://aruiki.github.io/kanai/og-card.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="KanaAI — Mozcを土台に、ローカルAIを育てるIME" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card.png" />
+  <link rel="icon" href="kanai-mark.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="landing.css" />
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"KanaAI","item":"https://aruiki.github.io/kanai/"},{"@type":"ListItem","position":2,"name":"プライバシーとセキュリティ","item":"https://aruiki.github.io/kanai/privacy.html"}]}
+  </script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">本文へ移動</a>
+<header><div class="wrap">
+  <a class="brand" href="./"><img src="kanai-mark.svg" alt="" width="36" height="36" />KanaAI</a>
+  <nav aria-label="メインナビゲーション"><a href="./#features">特徴</a><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">検証状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/kanai">GitHub</a></nav>
+</div></header>
+<main id="main-content" class="wrap">
+  <nav class="breadcrumb" aria-label="現在地"><a href="./">ホーム</a><span>›</span><span>プライバシーとセキュリティ</span></nav>
+  <section class="page-head" aria-labelledby="page-title">
+    <p class="eyebrow">PRIVACY &amp; SECURITY</p>
+    <h1 id="page-title">IMEは、確定する前の文章を見ます。<br />だからlocal-firstで作りました。</h1>
+    <p class="lede">入力方式は、ユーザーが保存も送信も望んでいない段階のテキストに触れる、数少ない種類のソフトウェアです。KanaAIはその性質を前提に設計しました。<strong>変換と学習はアカウントもネットワークもなしに動きます。</strong></p>
+    <div class="callout warn"><p class="t">このページの位置づけ</p><p>ここに書くのは<strong>設計上のプライバシー契約</strong>です。公開版 v0.1.0-beta.2 は未署名・未完成のベータであり、運用主体・連絡先・管轄・委託先を名指しした配布物固有の法的プライバシー通知は、<strong>まだ発行していません</strong>。このページは法的助言ではありません。</p></div>
+    <ul class="subnav">
+      <li><a href="#defaults">譲らない既定</a></li><li><a href="#flows">データの流れ</a></li><li><a href="#ai-scope">AIに渡す範囲</a></li><li><a href="#protected">保護された入力欄</a></li><li><a href="#deletion">削除</a></li><li><a href="#security">セキュリティ境界</a></li><li><a href="#limits">現在の限界</a></li>
+    </ul>
+  </section>
+  <section class="content" id="defaults" aria-labelledby="defaults-title">
+    <p class="eyebrow">NON-NEGOTIABLE DEFAULTS</p><h2 id="defaults-title">交渉しない既定を9つ決めた</h2>
+    <div class="prose"><p>プライバシーは機能追加の後始末にできません。KanaAIは次の9つを<strong>既定として守る条件</strong>として定義し、実装とテストはこの条件に照らして判定します。</p></div>
+    <ol class="spec-list">
+      <li><strong>アカウントもネットワークも不要。</strong>かな漢字変換と候補生成はオフラインで完結します。</li>
+      <li><strong>現在の入力・生のキー列・クリップボード・文書全文はメモリ内に留まり、既定では保存されません。</strong></li>
+      <li><strong>学習はローカルで、確認でき、取り消せ、パスワード欄では無効。</strong></li>
+      <li><strong>クラウド予測・同期・診断・生成支援は、それぞれ個別のオプトイン。</strong>1つの許可で全部は有効になりません。</li>
+      <li><strong>生成AIはユーザーが呼び出し、中止でき、結果を事前確認でき、変換の依存要素にならない。</strong></li>
+      <li><strong>入力内容を販売しない、広告に使わない、既定でテレメトリに含めない。</strong></li>
+      <li><strong>削除は本当に削除。</strong>UIで隠すだけのフィルタではありません。</li>
+      <li><strong>鍵ストアの不在・ネットワーク遮断・プロバイダ不通・同期無効は、平文フォールバックを起こさない。</strong>失敗時は閉じます。</li>
+      <li><strong>開発用のTypeScript層は本番入力を既定で読めない。</strong>署名されたエンドユーザー成果物から除外されます。</li>
+    </ol>
+  </section>
+  <section class="content" id="flows" aria-labelledby="flows-title">
+    <p class="eyebrow">DATA FLOW</p><h2 id="flows-title">何がどこへ行くか、行かないか</h2>
+    <div class="table-wrap"><table class="data">
+      <thead><tr><th>段階</th><th>保存</th><th>送信</th></tr></thead>
+      <tbody>
+        <tr><td>生のキー入力・現在の入力（preedit）</td><td>メモリのみ（既定で保存しない）</td><td><span class="pill no">なし</span></td></tr>
+        <tr><td>確定した文章（ローカル学習・履歴）</td><td>暗号化されたKanaAIストア（ポリシーが許可した場合のみ）</td><td><span class="pill no">なし</span></td></tr>
+        <tr><td>パスワード等の保護された入力欄</td><td><span class="pill no">保存しない</span></td><td><span class="pill no">なし</span></td></tr>
+        <tr><td>クラウド予測・同期・診断・生成支援</td><td>機能ごとに個別</td><td><span class="pill warn">個別オプトイン時のみ</span></td></tr>
+      </tbody>
+    </table></div>
+    <div class="prose">
+      <p>ネイティブの入力シェルが内側へ渡すのは、<strong>現在のネイティブキー／編集イベントと最小限のフィールド情報だけ</strong>です。文書の選択範囲、クリップボード、ウィンドウタイトル、URL、ファイルシステムパスは、通常のシェルプロトコルに含まれていません。</p>
+      <div class="callout"><p class="t">ネットワーク機能を有効にする前の条件</p><p>脅威モデルとデータフローのレビュー、プロバイダ・委託先・地域の開示、正確なペイロード構造と最小化テスト、IMEプロセスから分離された資格情報、送信許可リストとTLS/リダイレクト/サイズ/期限のテスト、オプトイン・一時停止・取消・削除の経路、乱用とレート制限、そしてデータに見合った独立セキュリティレビュー。<strong>これを満たさないネットワーク機能は有効にしません。</strong></p></div>
+    </div>
+  </section>
+  <section class="content" id="ai-scope" aria-labelledby="ai-scope-title">
+    <p class="eyebrow">WHAT THE MODEL SEES</p><h2 id="ai-scope-title">AIに渡す範囲は、列挙できる</h2>
+    <div class="prose"><p>「ローカルAI」は曖昧な言い方です。並べ替え（rerank）の既定ペイロードは、次の項目だけに制限されています。</p></div>
+    <ul class="spec-list">
+      <li>現在の読み</li>
+      <li>明示的に承認されたローカル文脈（正規化後 <strong>最大32文字</strong>）</li>
+      <li>候補のIDと値</li>
+      <li>選択された最近のローカル例</li>
+      <li>要求したアクションと出力スキーマ</li>
+    </ul>
+    <div class="prose"><p>既定で<strong>含まれない</strong>もの：クリップボード、文書全文、URL、ウィンドウタイトル、アプリのパス、学習コーパス、無関係な履歴。</p>
+      <p>書き込み支援では、実行前に<strong>選択したテキスト・指示・モデル・送信先がすべて表示されます</strong>。ローカルの結果も、選択範囲を置き換える前にプレビューされます。</p>
+      <div class="callout warn"><p class="t">正直に言うと</p><p>この経路は動くものの、同梱モデルは<strong>候補の順序を1回も変えませんでした</strong>（実測で <code>changed_positions=0</code> / <code>adopted=0</code>）。「届いた」ことと「良くなった」ことは別の問題です。詳しくは<a href="design.html#rejected">実測して不採用にした判断</a>に書いてあります。</p></div>
+    </div>
+  </section>
+  <section class="content" id="protected" aria-labelledby="protected-title">
+    <p class="eyebrow">PROTECTED FIELDS</p><h2 id="protected-title">パスワード欄では、学習もAIも止まる</h2>
+    <div class="prose">
+      <p>保護された入力欄（パスワード欄、ブラウザの保護モード等）では、<strong>文脈の取得・AI・学習を停止</strong>します。学習はローカルであっても、パスワードを学習してはいけません。</p>
+      <p>同様に、<strong>鍵ストアが無い・ネットワークが遮断された・プロバイダに届かない・同期が無効</strong>という状態は、平文へのフォールバックを起こしません。機能が使えないときは、<strong>閉じます</strong>。危険な形で開きません。</p>
+      <p>この条件は全ネイティブアダプタでテストすることがリリース前の必須項目です。</p>
+    </div>
+  </section>
+  <section class="content" id="deletion" aria-labelledby="deletion-title">
+    <p class="eyebrow">DELETION</p><h2 id="deletion-title">削除は、隠すことではない</h2>
+    <div class="prose"><p>KanaAIの削除はUIのフィルタではなく、実データの削除として設計されています。</p></div>
+    <ul class="spec-list">
+      <li><strong>学習データのリセット</strong> — 値を消し、Mozc側の射影を再構築します。</li>
+      <li><strong>プロフィールのリセット</strong> — アダプタを停止し、プロフィールデータをすべて削除し、鍵ハンドルを破棄し、直接／ローカルモードに戻ります。</li>
+      <li><strong>アンインストール</strong> — プロフィールを残すかを<strong>個別に</strong>聞きます。既定で残すのは更新がきっかけの場合だけで、明示的な削除では残しません。</li>
+      <li><strong>同期の削除</strong> — 端末ごとに確認され、有効な端末へ伝播し、UIに反映されます。バックアップの扱いと最大の消去期限は配布物固有のプライバシー通知に明記します。</li>
+    </ul>
+  </section>
+  <section class="content" id="security" aria-labelledby="security-title">
+    <p class="eyebrow">THREAT MODEL</p><h2 id="security-title">守る範囲と、守りきれない範囲</h2>
+    <div class="prose"><p>「ローカルだから安全」で終わらせないために、脅威・必要な制御・<strong>残るリスク</strong>を分けて書いています。</p></div>
+    <div class="table-wrap"><table class="data">
+      <thead><tr><th>脅威</th><th>必要な制御</th><th>残るリスク</th></tr></thead>
+      <tbody>
+        <tr><td>KanaAIが入力内容を誤って記録・送信する</td><td>カナリアテスト、型付き秘匿境界、内容メトリクスの禁止、パケット捕捉、レビュー可能な送信クライアント</td><td>バグは漏らしうる。報告と更新の経路が必要</td></tr>
+        <tr><td>別のローカルプロセスが学習データを読む</td><td>ユーザー限定の権限、認証付き暗号、OS鍵ストア、相互認証するローカルIPC</td><td>同一ユーザーの侵害済みプロセスやOSは依然として入力を捕捉できる</td></tr>
+        <tr><td>クラウド予測が敏感な読みかけを見る</td><td>個別オプトイン、読みのみの最小ペイロード、リクエストの事前表示、文書文脈なし、停止スイッチ</td><td>読みかけ自体が敏感なことがある。機能は既定でオフ</td></tr>
+        <tr><td>同期サーバが個人辞書を読む</td><td>転送前のクライアント側暗号化、復旧鍵の設計、メタデータを最小化したプロトコル</td><td>アカウント・端末のメタデータと通信のタイミングは見える。鍵を失えば同期データも失う</td></tr>
+        <tr><td>AIプロバイダがテキストを保持・学習に使う</td><td>プロバイダ・地域・保持期間の明示、バックグラウンド送信の禁止、任意のプロバイダアカウント、KanaAI履歴を付けない</td><td>第三者の保持方針をKanaAIが単独で制御することはできない</td></tr>
+      </tbody>
+    </table></div>
+    <div class="prose">
+      <h3>鍵の保護</h3>
+      <p>鍵を実際に保持するディレクトリは、鍵の書き込み側が<strong>所有者のみアクセスできるDACL</strong>で作成します。書き込み可否を調べるための検査は自分で作ったディレクトリを直ちに削除するので、権限を間違えたディレクトリを残しません。</p>
+      <h3>ASCIIパス要件という、見つけにくい不具合</h3>
+      <p>鍵の置き場所の第1候補はユーザーの一時ディレクトリで、<strong>日本語のアカウント名では ASCII になりません</strong>（例：<code>C:\Users\&lt;名前&gt;\AppData\Local\Temp</code>）。そのような端末ではAI経路が恒久的にオフになり、しかも<strong>ログに理由が残っていませんでした</strong>。</p>
+      <p>修正は、同じディレクトリを指す8.3形式の短い名前（ASCII）を優先し、長い名前が既にASCIIのときだけそれを使う、というものです。<code>kanai_broker::key_root</code> は「ASCII である」かつ「そのアカウントが私的ディレクトリを作れる」最初の候補を選び、該当がなければ <code>NoAsciiRoot</code> または <code>NotCreatable</code> を<strong>名前で</strong>報告します。鍵ファイル自身の保護は変えていません。</p>
+      <p>この問題はアカウント名がASCIIの実装ホストでは再現しませんでした。<strong>構造で直し</strong>、日本語アカウントの一時ディレクトリを注入するテストで覆っています。</p>
+      <h3>リリース前に毎回確認すること</h3>
+      <p>カナリア文字列がバイナリ・ログ・メトリクス・クラッシュダンプ・同期・DNS・パケットに無いこと。生のキー／preeditがデバッグ出力に出ないこと。プロフィール削除と同期の墓碑テストが通ること。鍵ストア失敗が閉じること。パスワード／保護モードのテストが全アダプタで通ること。署名済み成果物とSBOM・告示のレビューが完了していること。依存とライセンス方針（Mozc辞書の混在条件を含む）が通ること。プライバシー通知が実際の挙動と一致すること。インシデント責任者・連絡先・巻き戻し手順が公開されていること。</p>
+    </div>
+  </section>
+  <section class="content" id="limits" aria-labelledby="limits-title">
+    <p class="eyebrow">CURRENT LIMITS</p><h2 id="limits-title">いま出来ていないこと</h2>
+    <div class="prose"><p>このページをプライバシーポリシーとして読む前に、現在の配布物の状態を知ってください。</p></div>
+    <ul class="spec-list">
+      <li><strong>配布物固有の法的プライバシー通知は未発行。</strong>運用主体・連絡先・管轄・委託先・実際のサービス構成を名指しした文書は、公開リリースの前に別途発行する必要があります。この設計文書はそれを作りません。</li>
+      <li><strong>公開版 v0.1.0-beta.2 は未署名・未完成</strong>で、SBOMと告示のレビューは完了していません。実運用のサービスではなく、検証用のベータです。</li>
+      <li><strong>ローカルAIは品質が出ませんでした。</strong>同梱モデルの6つの役割はすべて不採用または出荷不可で、AIは既定でオフです。入力はMozcが行います。</li>
+      <li><strong>Mozcのライセンスは単一ではありません。</strong>Google作成のMozcコードはBSD-3-Clauseですが、辞書データと第三者コンポーネントは条件が混在しています。パッケージは「1つのライセンス」と決めつけず、完全な告示を保持する必要があります。</li>
+      <li><strong>残留リスクは残ります。</strong>同一ユーザーの侵害済みプロセスやOSは、設計に関係なく入力を捕捉できます。</li>
+    </ul>
+    <div class="actions"><a class="button" href="https://github.com/aruiki/kanai/blob/main/docs/PRIVACY.md">設計文書 PRIVACY.md を読む</a><a class="button secondary" href="https://github.com/aruiki/kanai/blob/main/SECURITY.md">セキュリティ報告の手順</a></div>
+  </section>
+  <nav class="page-nav" aria-label="ページ間の移動">
+    <a class="prev" href="design.html"><span class="dir">← 前</span><span class="ttl">設計と技術</span></a>
+    <a class="next" href="download.html"><span class="dir">次 →</span><span class="ttl">ダウンロード・導入</span></a>
+  </nav>
+</main>
+<footer><div class="wrap">
+  <div class="foot-nav">
+    <div><h4>製品</h4><ul><li><a href="./">ホーム</a></li><li><a href="design.html">設計と技術</a></li><li><a href="privacy.html">プライバシー</a></li></ul></div>
+    <div><h4>使う</h4><ul><li><a href="download.html">ダウンロード・導入</a></li><li><a href="faq.html">よくある質問</a></li><li><a href="status.html">検証状況</a></li></ul></div>
+    <div><h4>開発</h4><ul><li><a href="https://github.com/aruiki/kanai">GitHub</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/STATE.md">開発記録</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/CONTRIBUTING.md">参加方法</a></li></ul></div>
+    <div><h4>報告・法務</h4><ul><li><a href="https://github.com/aruiki/kanai/issues/new/choose">不具合報告</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/SECURITY.md">セキュリティ</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/LICENSE-MIT">ライセンス</a></li></ul></div>
+  </div>
+  <a class="brand" href="./">KanaAI</a><p>Mozc-based Japanese input for Windows. Local AI in development.</p>
+  <p>ページ更新: 2026年10月7日 · 公開版 v0.1.0-beta.2（未署名・未完成） · <span class="langswitch"><a href="./">日本語</a><a href="en/">English</a></span></p>
+</div></footer>
+</body>
+</html>

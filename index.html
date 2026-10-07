@@ -8,13 +8,21 @@
   <meta name="description" content="KanaAIはMozcを基盤にしたオープンソースのWindows日本語IME。ローカルAI同梱の試用ベータを公開中。対応環境、導入方法、AIの現状と既知の制限を紹介します。" />
   <link rel="canonical" href="https://aruiki.github.io/kanai/" />
   <link rel="sitemap" type="application/xml" href="https://aruiki.github.io/kanai/sitemap.xml" />
+  <link rel="alternate" hreflang="ja" href="https://aruiki.github.io/kanai/" />
+  <link rel="alternate" hreflang="en" href="https://aruiki.github.io/kanai/en/" />
+  <link rel="alternate" hreflang="x-default" href="https://aruiki.github.io/kanai/" />
   <meta property="og:type" content="website" />
   <meta property="og:locale" content="ja_JP" />
   <meta property="og:site_name" content="KanaAI" />
   <meta property="og:title" content="KanaAI｜MozcベースのWindows日本語IME" />
   <meta property="og:description" content="ローカルAIを育てる、オープンソースの日本語入力。AI同梱の試用ベータを公開中。導入方法と現在の制限を確認できます。" />
   <meta property="og:url" content="https://aruiki.github.io/kanai/" />
-  <meta name="twitter:card" content="summary" />
+  <meta property="og:image" content="https://aruiki.github.io/kanai/og-card.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="KanaAI — Mozcを土台に、ローカルAIを育てるIME" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card.png" />
   <link rel="icon" href="kanai-mark.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="landing.css" />
   <script type="application/ld+json">
@@ -25,7 +33,7 @@
 <a class="skip-link" href="#main-content">本文へ移動</a>
 <header><div class="wrap">
   <a class="brand" href="#top"><img src="kanai-mark.svg" alt="" width="36" height="36" />KanaAI</a>
-  <nav aria-label="メインナビゲーション"><a href="#features">特徴</a><a href="#download">ダウンロード・導入</a><a href="#faq">よくある質問</a><a href="https://github.com/aruiki/kanai">GitHub</a></nav>
+  <nav aria-label="メインナビゲーション"><a href="#features">特徴</a><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">検証状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/kanai">GitHub</a></nav>
 </div></header>
 <main id="main-content" class="wrap">
   <section class="hero" id="top" aria-labelledby="hero-title">
@@ -33,7 +41,7 @@
       <p class="eyebrow">OPEN SOURCE · WINDOWS 日本語入力</p>
       <h1 id="hero-title">Mozcを土台に。<br />ローカルAIを育てる<br />日本語IME、KanaAI。</h1>
       <p class="lede">KanaAI（カナエーアイ）は、Windowsで使う日本語入力ソフトです。Mozcのかな漢字変換と、PC内で動くAIを組み合わせる開発を進めています。</p>
-      <div class="actions"><a class="button" href="#download">試用ベータの導入方法</a><a class="button secondary" href="https://github.com/aruiki/kanai">ソースコードを見る</a></div>
+      <div class="actions"><a class="button" href="download.html">試用ベータの導入方法</a><a class="button secondary" href="https://github.com/aruiki/kanai">ソースコードを見る</a></div>
       <p class="small">公開版 v0.1.0-beta.2 · Windows x64 · 未署名・未完成</p>
     </div>
     <aside class="status" aria-label="公開ベータの現在地">
@@ -51,6 +59,17 @@
       <article class="card"><h3>開発過程を公開</h3><p>KanaAI自身のソースはMITまたはApache-2.0。実装、検証結果、未解決の課題をGitHubで確認できます。</p></article>
     </div>
     <div class="notice"><strong>現在使えることと、開発中のこと</strong><p>Mozcベースの日本語入力と同梱AIの起動を確認したベータです。AIによる変換精度向上や、日常利用の安定性を保証する段階には達していません。完成版の独立検証は未完了です。</p></div>
+  </section>
+  <section class="content" id="pages" aria-labelledby="pages-title">
+    <p class="eyebrow">PAGES</p><h2 id="pages-title">詳しいページ</h2>
+    <div class="grid">
+      <a class="cardlink" href="design.html"><h3>設計と技術</h3><p>Mozcを活かす分担、Fast Path／Slow Path、世代番号、AI役割の実測と棄却、モデルの階段。</p><span class="go">設計を読む →</span></a>
+      <a class="cardlink" href="privacy.html"><h3>プライバシー</h3><p>外部送信なし、loopbackのみ、保護フィールドでの停止、保存場所と削除、脅威モデル。</p><span class="go">プライバシーを読む →</span></a>
+      <a class="cardlink" href="download.html"><h3>ダウンロード・導入</h3><p>SHA-256、動作環境、4手順の導入、AIのON/OFF、削除、動かないときのログ。</p><span class="go">導入手順を読む →</span></a>
+      <a class="cardlink" href="status.html"><h3>検証状況</h3><p>receiptがある項目と、まだ証拠がない項目。実機ログの実測値と残作業。</p><span class="go">証拠を確認する →</span></a>
+      <a class="cardlink" href="faq.html"><h3>よくある質問</h3><p>14の回答。変換結果、外部送信、約1.1 GBの理由、未署名の警告、導入直後の操作。</p><span class="go">FAQを読む →</span></a>
+      <a class="cardlink" href="https://github.com/aruiki/kanai"><h3>GitHub</h3><p>ソース、開発記録（STATE.md）、リリース、Issue。MIT OR Apache-2.0。</p><span class="go">リポジトリを開く →</span></a>
+    </div>
   </section>
   <section class="content" id="download" aria-labelledby="download-title">
     <p class="eyebrow">TRY THE BETA</p><h2 id="download-title">ダウンロードとインストール</h2>
@@ -72,6 +91,7 @@
     <details><summary>Microsoft IMEやGoogle 日本語入力の代わりになりますか？</summary><p>Windowsの入力方式として使えますが、現時点では開発中の試用ベータです。他のIMEと同等以上の精度・速度・安定性を示す比較結果はありません。KanaAIはGoogleと提携しておらず、サポートも受けていません。</p></details>
     <details><summary>無料ですか？ 商用利用できますか？</summary><p>公開ベータは無償でダウンロードできます。KanaAI自身のソースはMITまたはApache-2.0で公開しています。Mozc、辞書、モデル、推論環境にはそれぞれのライセンスが適用されるため、利用・再配布時には同梱ライセンスを確認してください。</p></details>
     <details><summary>MacやLinuxでも使えますか？</summary><p>このページで案内する配布版はWindows x64向けです。macOS・Linux向けの完成したIME配布版は案内していません。</p></details>
+    <div class="actions"><a class="button secondary" href="faq.html">14の回答すべてを見る</a><a class="button secondary" href="status.html">検証状況と残作業</a></div>
   </section>
   <section class="content" id="contribute" aria-labelledby="contribute-title">
     <p class="eyebrow">BUILD WITH US</p><h2 id="contribute-title">試す。報告する。一緒に育てる。</h2>
@@ -80,6 +100,15 @@
     <p><a href="https://github.com/aruiki/kanai/blob/main/STATE.md">最新の開発記録</a> · <a href="https://github.com/aruiki/kanai/releases">リリース一覧</a></p>
   </section>
 </main>
-<footer><div class="wrap"><a class="brand" href="#top">KanaAI</a><p>Mozc-based Japanese input for Windows. Local AI in development.</p><p>ページ更新: 2026年10月7日 · <a href="https://github.com/aruiki/kanai">GitHub</a> · <a href="https://github.com/aruiki/kanai/blob/main/LICENSE-MIT">ライセンス</a></p></div></footer>
+<footer><div class="wrap">
+  <div class="foot-nav">
+    <div><h4>製品</h4><ul><li><a href="./">ホーム</a></li><li><a href="design.html">設計と技術</a></li><li><a href="privacy.html">プライバシー</a></li></ul></div>
+    <div><h4>使う</h4><ul><li><a href="download.html">ダウンロード・導入</a></li><li><a href="faq.html">よくある質問</a></li><li><a href="status.html">検証状況</a></li></ul></div>
+    <div><h4>開発</h4><ul><li><a href="https://github.com/aruiki/kanai">GitHub</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/STATE.md">開発記録</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/CONTRIBUTING.md">参加方法</a></li></ul></div>
+    <div><h4>報告・法務</h4><ul><li><a href="https://github.com/aruiki/kanai/issues/new/choose">不具合報告</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/SECURITY.md">セキュリティ</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/LICENSE-MIT">ライセンス</a></li></ul></div>
+  </div>
+  <a class="brand" href="#top">KanaAI</a><p>Mozc-based Japanese input for Windows. Local AI in development.</p>
+  <p>ページ更新: 2026年10月7日 · 公開版 v0.1.0-beta.2（未署名・未完成） · <span class="langswitch"><a href="./">日本語</a><a href="en/">English</a></span></p>
+</div></footer>
 </body>
 </html>
