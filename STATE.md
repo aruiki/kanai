@@ -15,6 +15,10 @@ GitHub APIの公開release beta.2、Pages設定（gh-pages）、実際の公開�
   独立検証記録VERIFICATION.mdと.goal-completeの扱いは変更なし。
 - 公開元gh-pagesへpush済み: `02af7c3b6b3fbf3e9c36c1ffeb114f4e724728a0`。
   配備差分で末尾CRLFが検出されたためUTF-8/LFへ正規化し、再度diff --checkで確認した。
+- Pages build `02af7c3` は `built`。公開index.html / landing.css / sitemap.xml /
+  kanai-mark.svgの4件でHTTP 200かつローカルファイルとのバイト一致を確認。
+  index SHA-256: `0706454774837f496aff80849980c78dff5d67142502ed537801f2baef589f5d`。
+- 紹介サイト・README・手順のソースは `e1eb155` でorigin/mainへpush済み。
 - GitHub Aboutの説明とhomepage URLを更新し、APIから反映を確認。
 - 外部リンク8件はHTTP 200。390px幅とPC幅の表示、導入リンクとFAQ展開をブラウザー確認。
 - Search Consoleはログイン前の案内ページとなり、所有者確認・サイトマップ送信は未実施。
