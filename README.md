@@ -1,5 +1,9 @@
 # KanaAI
 
+> **現在の製品・配布先は [Kotori日本語入力](https://github.com/aruiki/KotoriIME-japanese-) です。**
+> [紹介サイト](https://aruiki.github.io/kanai/)はKotoriの現行情報を案内します。
+> 以下のKanaAI実装・beta.2検証記録は旧プロジェクトの履歴です。
+
 <!-- markdownlint-disable MD013 -->
 
 <div align="center">

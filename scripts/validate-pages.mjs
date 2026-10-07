@@ -9,7 +9,7 @@ const repositoryRoot = resolve(scriptDirectory, "..");
 const pagesRoot = join(repositoryRoot, "pages");
 const assetsRoot = join(repositoryRoot, "site-assets");
 const siteOrigin = "https://aruiki.github.io/kanai/";
-const releaseVersion = "0.1.0-beta.2";
+const releaseVersion = "1.0.0";
 const canonicalOwners = new Map();
 const errors = [];
 const warnings = [];
@@ -186,15 +186,14 @@ function checkHtmlFile(filePath) {
   if (description.length === 0) reportError(`${source}: missing description`);
   if (description.length > 160) reportWarning(`${source}: description is ${description.length} characters; search results usually truncate past 160`);
 
-  // Honest-disclosure phrases. Every published page must pin the release and say
-  // the beta is unsigned and unfinished, in the language of that page. The home
-  // page additionally carries the measured-result and size statements.
+  // Product identity and disclosures follow the current Kotori release, not
+  // the retired KanaAI beta. Old-result claims must never be republished.
   const phrases = language === "en"
-    ? ["Mozc", "Windows", `v${releaseVersion}`, "unsigned", "not a completed product"]
-    : ["Mozc", "Windows", `v${releaseVersion}`, "未署名", "未完成"];
-  if (kind === "home" && language === "ja") {
-    phrases.push("変換結果は変わりません", "ダウンロード", "FAQ", "約1.1 GB");
-  }
+    ? ["Mozc", "Windows", `v${releaseVersion}`, "Kotori", "unsigned"]
+    : ["Mozc", "Windows", `v${releaseVersion}`, "Kotori", "未署名"];
+  if (kind === "home" && language === "ja") phrases.push("ダウンロード", "FAQ", "GPU");
+  for (const stale of ["変換結果は変わりません", "0.1.0-beta.2", "Qwen2.5", "KanaAI-0.1.0-Setup.exe", "https://github.com/aruiki/kanai"])
+    if (html.includes(stale)) reportError(`${source}: retired product claim or link: ${stale}`);
   for (const phrase of phrases) {
     if (!html.includes(phrase)) reportError(`${source}: required product content missing: ${phrase}`);
   }
@@ -345,7 +344,7 @@ if (warnings.length > 0) {
   warnings.forEach((warning) => console.warn(`  - ${warning}`));
 }
 
-console.log("KanaAI pages validation");
+console.log("Kotori website validation");
 console.log(`  HTML pages:       ${counts.html}`);
 console.log(`  CSS files:        ${counts.stylesheets}`);
 console.log(`  JS files:         ${counts.scripts}`);

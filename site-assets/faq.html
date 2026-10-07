@@ -1,152 +1,22 @@
 <!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#142e29" />
-  <title>よくある質問（FAQ）｜KanaAI — Windows日本語IME</title>
-  <meta name="description" content="KanaAI v0.1.0-beta.2のFAQ。AIが起動しても変換結果が変わらない実測、入力の外部送信なし、動作環境、約1.1 GBの理由、未署名の警告、導入後に日本語が入力できない場合、AIの停止、削除、Mozcとの関係を記載します。" />
-  <link rel="canonical" href="https://aruiki.github.io/kanai/faq.html" />
-  <link rel="sitemap" type="application/xml" href="https://aruiki.github.io/kanai/sitemap.xml" />
-  <link rel="alternate" hreflang="ja" href="https://aruiki.github.io/kanai/faq.html" />
-  <link rel="alternate" hreflang="x-default" href="https://aruiki.github.io/kanai/" />
-  <meta property="og:type" content="article" />
-  <meta property="og:locale" content="ja_JP" />
-  <meta property="og:site_name" content="KanaAI" />
-  <meta property="og:title" content="KanaAI よくある質問｜AIは起動しても変換結果を変えません" />
-  <meta property="og:description" content="実測に基づく14の回答。動作環境、約1.1 GBの理由、未署名の警告、導入直後の操作、AIの停止、削除、Mozcとの関係をまとめています。" />
-  <meta property="og:url" content="https://aruiki.github.io/kanai/faq.html" />
-  <meta property="og:image" content="https://aruiki.github.io/kanai/og-card.png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="KanaAI — Mozcを土台に、ローカルAIを育てるIME" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card.png" />
-  <link rel="icon" href="kanai-mark.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="landing.css" />
-  <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"KanaAI","item":"https://aruiki.github.io/kanai/"},{"@type":"ListItem","position":2,"name":"よくある質問","item":"https://aruiki.github.io/kanai/faq.html"}]}
-  </script>
-  <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
-  {"@type":"Question","name":"KanaAIとは何ですか。無料ですか。","acceptedAnswer":{"@type":"Answer","text":"Mozcを基盤にしたWindows用の日本語IMEです。MIT OR Apache-2.0で公開するオープンソースで、無料で使えます。公開版は v0.1.0-beta.2 の未署名・未完成プレリリースです。"}},
-  {"@type":"Question","name":"AIが動いても変換結果は変わらないのですか。","acceptedAnswer":{"@type":"Answer","text":"はい。この版ではAIをON/OFFして20文脈を比較した実測で差分0件、判定は ai-does-not-change-output でした。AIは起動しますが、変換結果を変えません。体感される品質はMozc baselineのものです。"}},
-  {"@type":"Question","name":"入力したテキストはどこかに送信されますか。","acceptedAnswer":{"@type":"Answer","text":"送信されません。AIはPC内で動くモデルとruntimeで、ネットワークアクセスは一切ありません。runtimeはloopbackの127.0.0.1のみでlistenし、プロセスごとの鍵で保護されます。テレメトリもありません。"}},
-  {"@type":"Question","name":"パスワードを入力するときAIは動きますか。","acceptedAnswer":{"@type":"Answer","text":"動きません。保護フィールドでは文脈取得・AI・学習を停止します。ただしこの版での機械検証は未実施です。"}},
-  {"@type":"Question","name":"学習や履歴はどうなっていますか。","acceptedAnswer":{"@type":"Answer","text":"未確定入力からは学習しません。世代の古い結果や候補IDの改変は拒否されます。Mozcの履歴・学習データはMozcのプロファイルに保存され、Mozcの設定から削除できます。"}},
-  {"@type":"Question","name":"どのWindowsで動きますか。","acceptedAnswer":{"@type":"Answer","text":"検証はWindows 11 x64 build 26200 の1台・1ユーザーのみです。ARM64は未検証、Windows 10も未検証です。"}},
-  {"@type":"Question","name":"なぜ約1.1 GBもあるのですか。","acceptedAnswer":{"@type":"Answer","text":"AIのモデルとruntimeを同梱しているためです。ダウンロード約1.1 GB、AI有効時の子プロセスのメモリは検証環境で約1.6 GBでした。CPU実行のみでGPUは使いません。"}},
-  {"@type":"Question","name":"未署名の警告が出ました。どうすればよいですか。","acceptedAnswer":{"@type":"Answer","text":"Windows SmartScreenやpublisherの警告は未署名のために出ます。SHA-256を照合してから実行してください。警告を避けるためにSmartScreen、Smart App Control、ウイルス対策、企業ポリシーを無効化しないでください。"}},
-  {"@type":"Question","name":"導入したのに日本語が入力できません。","acceptedAnswer":{"@type":"Answer","text":"Win+SpaceでKanaAIを選び、半角/全角キーでIMEをONにしてください。この版は導入ユーザーへの有効化レコードを書けていないため、導入直後は自動で既定になりません。"}},
-  {"@type":"Question","name":"AIを止めたいです。","acceptedAnswer":{"@type":"Answer","text":"kanai-broker.exe に --disable-local-ai を渡すと自分のユーザー設定だけを書き換えます。反映は次に入力方式が起動したときです。AIが停止しても変換はMozc baselineがそのまま使えます。"}},
-  {"@type":"Question","name":"アンインストールできますか。","acceptedAnswer":{"@type":"Answer","text":"できます。設定 → アプリ → インストール済みアプリから KanaAI Development Preview を削除します。導入・登録・削除・再導入・上書きなどの11フェーズがすべてpassしたreceiptがあります。"}},
-  {"@type":"Question","name":"MozcやGoogleとの関係は。","acceptedAnswer":{"@type":"Answer","text":"Mozcを変換エンジンとして利用し、Mozcの辞書・形態素処理・候補生成・履歴・OS統合を活用します。KanaAIはGoogleと提携しておらず、サポートも受けていません。"}},
-  {"@type":"Question","name":"キー入力が重くなりませんか。","acceptedAnswer":{"@type":"Answer","text":"AIはキー入力の同期処理に入りません。Fast PathはMozc変換と軽量処理から候補を返し、大型モデル・ディスクI/O・通信を同期経路に置きません。AIの未起動・タイムアウト・クラッシュでもMozc入力は維持されます。変換遅延の体系的な性能測定はこの版では未実施です。"}},
-  {"@type":"Question","name":"完成品ですか。","acceptedAnswer":{"@type":"Answer","text":"いいえ。未完成です。公開版はGitHub prereleaseのベータで、署名・実モデル品質・独立verifierによる完成判定は満たしていません。"}}
-  ]}
-  </script>
-</head>
-<body>
+<html lang="ja"><head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#142e29" />
+<title>Kotori日本語入力 FAQ｜GPU・AI変換・更新・ライセンス</title><meta name="description" content="Kotori日本語入力のよくある質問。GPUなしの動作、オフラインAI、変換精度、未署名のWindows警告、更新と削除、ライセンス、不具合の報告。" />
+<link rel="canonical" href="https://aruiki.github.io/kanai/faq.html" /><link rel="alternate" hreflang="ja" href="https://aruiki.github.io/kanai/faq.html" /><link rel="alternate" hreflang="x-default" href="https://aruiki.github.io/kanai/faq.html" />
+<meta property="og:type" content="website" /><meta property="og:locale" content="ja_JP" /><meta property="og:site_name" content="Kotori日本語入力" />
+<meta property="og:title" content="Kotori日本語入力 FAQ｜GPU・AI変換・更新・ライセンス" /><meta property="og:description" content="Kotori日本語入力のよくある質問。GPUなしの動作、オフラインAI、変換精度、未署名のWindows警告、更新と削除、ライセンス、不具合の報告。" /><meta property="og:url" content="https://aruiki.github.io/kanai/faq.html" />
+<meta property="og:image" content="https://aruiki.github.io/kanai/og-card.png" /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" /><meta property="og:image:alt" content="Kotori日本語入力 — 文脈を読むローカルAI" />
+<meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card.png" />
+<link rel="icon" href="kotori-mark.svg" type="image/svg+xml" /><link rel="stylesheet" href="landing.css" />
+<script src="releases.js" defer></script><script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Kotori日本語入力","item":"https://aruiki.github.io/kanai/"},{"@type":"ListItem","position":2,"name":"FAQ","item":"https://aruiki.github.io/kanai/faq.html"}]}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Kotori日本語入力とは何ですか？","acceptedAnswer":{"@type":"Answer","text":"Mozcの変換エンジンと辞書を土台に、ローカルAIが文脈に応じて候補を選び直すWindows向け日本語IMEです。入力中の文の続きを予測し、Tabで選ぶこともできます。"}},{"@type":"Question","name":"AIで変換はどう変わりますか？","acceptedAnswer":{"@type":"Answer","text":"公開されている変換例では「音声認識の制度が上がった」を「音声認識の精度が上がった」へ、「彼は公園で公園をした」を「彼は公園で公演をした」へ選び直しています。StandardのAJIMEE-Bench評価は91.5%です。これは200問・前の文ありという条件の評価で、すべての文章が正しくなるという意味ではありません。"}},{"@type":"Question","name":"GPUがなくても使えますか？","acceptedAnswer":{"@type":"Answer","text":"使えます。GPUがないPCや内蔵GPUだけのPCは、自動でCPU向けのLow設定で動きます。専用GPU・Vulkan対応・VRAM 3 GB以上があればStandard以上の品質を利用できます。内蔵GPUはAIに使いません。"}},{"@type":"Question","name":"インターネット接続やクラウドのアカウントは必要ですか？","acceptedAnswer":{"@type":"Answer","text":"インストーラーに辞書・AIモデル・実行環境を同梱しています。導入後の日本語入力とAI処理はPC内で完結し、入力文字を外部へ送信しません。クラウドAIのアカウントやCUDAの追加導入は不要です。"}},{"@type":"Question","name":"無料ですか？ ライセンスは？","acceptedAnswer":{"@type":"Answer","text":"公開版は無償でダウンロードできます。リポジトリのコードはMITまたはApache-2.0、Mozcへの変更はBSD-3-Clauseです。モデル・Qt・推論環境などには別のライセンスが適用されます。再配布時は現行リポジトリのライセンス一覧を確認してください。"}},{"@type":"Question","name":"どの版をダウンロードすればよいですか？","acceptedAnswer":{"@type":"Answer","text":"通常はGitHub ReleasesのLatestである製品版を選びます。このページの内容確認時点ではv1.0.0です。v1.1.0-rc.1は、手を止めるとAI変換と予測を表示する機能を追加したリリース候補です。"}},{"@type":"Question","name":"Windowsの警告が出るのはなぜですか？","acceptedAnswer":{"@type":"Answer","text":"v1.0.0とv1.1.0-rc.1は未署名です。導入時にWindowsの警告が表示されることがあります。配布元とリリースノートを確認し、同じリリースのSHA-256ファイルでMSIを照合できます。"}},{"@type":"Question","name":"ゲーム中もGPUのメモリを使いますか？","acceptedAnswer":{"@type":"Answer","text":"日本語を10分入力しなければAIモデルを外してVRAMを空けます。次に入力すると裏で読み込み直すため、最初の変換はMozcの結果になる場合があります。すぐに負荷を減らしたいときは品質をLowに切り替えます。"}},{"@type":"Question","name":"ユーザー辞書や学習は使えますか？","acceptedAnswer":{"@type":"Answer","text":"Mozcのユーザー辞書と学習を利用できます。ユーザー辞書に登録した語はAIが書き換えません。更新時は設定・学習・辞書を引き継ぎます。削除後もユーザーデータは残ります。"}},{"@type":"Question","name":"Mac・Linux・ARM版Windowsでも使えますか？","acceptedAnswer":{"@type":"Answer","text":"現在案内している配布版はWindows 10 1809以降またはWindows 11のx64向けです。ARM版Windowsには対応していません。Mac・Linux向けの配布版は案内していません。"}},{"@type":"Question","name":"AIが間に合わないときや読み込み中はどうなりますか？","acceptedAnswer":{"@type":"Answer","text":"変換に使う時間には上限があり、AIが間に合わない場合はMozcの結果を表示します。CPUで長い文を打ってすぐSpaceを押すと、AIの結果が間に合わないことがあります。"}},{"@type":"Question","name":"不具合はどこへ報告できますか？","acceptedAnswer":{"@type":"Answer","text":"現行リポジトリのGitHub Issuesへ報告できます。設定の「AI変換」タブから診断情報を書き出せます。診断情報には入力文字を含まず、自動送信もしません。セキュリティの問題はSECURITY.mdの方法で知らせてください。"}}]}
+</script>
+</head><body>
 <a class="skip-link" href="#main-content">本文へ移動</a>
-<header><div class="wrap">
-  <a class="brand" href="./"><img src="kanai-mark.svg" alt="" width="36" height="36" />KanaAI</a>
-  <nav aria-label="メインナビゲーション"><a href="./#features">特徴</a><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">検証状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/kanai">GitHub</a></nav>
-</div></header>
-<main id="main-content" class="wrap">
-  <nav class="breadcrumb" aria-label="現在地"><a href="./">ホーム</a><span>›</span><span>よくある質問</span></nav>
-  <section class="page-head" aria-labelledby="page-title">
-    <p class="eyebrow">FAQ</p>
-    <h1 id="page-title">よくある質問</h1>
-    <p class="lede">公開版 <strong>v0.1.0-beta.2</strong>（<strong>未署名・未完成</strong>）に対する14の回答です。実測receiptがある項目は数値を明記し、証拠がない項目は「未検証」と書きます。</p>
-    <div class="actions"><a class="button" href="download.html">ダウンロード・導入</a><a class="button secondary" href="status.html">検証状況</a></div>
-    <ul class="subnav">
-      <li><a href="#questions">14の回答</a></li><li><a href="#q2">AIと変換結果</a></li><li><a href="#q3">外部送信</a></li><li><a href="#q7">約1.1 GB</a></li><li><a href="#q9">日本語が入力できない</a></li><li><a href="#q14">完成品ですか</a></li><li><a href="#contact">報告・相談</a></li>
-    </ul>
-  </section>
-  <section class="content" id="questions" aria-labelledby="questions-title">
-    <p class="eyebrow">ANSWERS</p><h2 id="questions-title">14の回答</h2>
-    <div class="prose"><p>実測receiptがある項目は数値を明記し、証拠がない項目は<strong>未検証</strong>と書きます。数値は<a href="status.html">検証状況</a>の出典と一致します。</p></div>
-    <details id="q1" open>
-      <summary>KanaAIとは何ですか。無料ですか。</summary>
-      <p>Mozcを基盤にした<strong>Windows用の日本語IME</strong>です。MIT OR Apache-2.0で公開するオープンソースで、<strong>無料で使えます</strong>。公開版は <strong>v0.1.0-beta.2</strong> の<strong>未署名・未完成</strong>プレリリースです。変換エンジン、辞書、形態素処理、候補生成、履歴、OS統合はMozcのものを活用し、理由なく再実装していません。</p>
-    </details>
-    <details id="q2">
-      <summary>AIが動いても変換結果は変わらないのですか。</summary>
-      <p><strong>はい。</strong>この版ではAIをON/OFFして20文脈を比較した実測で<strong>差分0件</strong>、判定は <code>ai-does-not-change-output</code> でした。AIは起動しますが、<strong>変換結果を変えません</strong>。体感される品質はMozc baselineのものです。</p>
-      <p>このreceiptは有効性のゲートを通っています（AI応答20/20成功、runtimeの実起動ログがTIPのログに一致、応答は20件とも成功で非空）。<strong>「AIが動かなかったから差が出ない」のではなく、動いても出力が変わらない</strong>というのが実測結果です。日本語変換品質の評価そのものは<strong>未実施</strong>です。</p>
-    </details>
-    <details id="q3">
-      <summary>入力したテキストはどこかに送信されますか。</summary>
-      <p><strong>送信されません。</strong>AIはPC内で動くモデルとruntimeで、<strong>ネットワークアクセスは一切ありません</strong>。runtimeはloopback（<code>127.0.0.1</code>）のみでlistenし、プロセスごとの鍵で保護されます。<strong>テレメトリもありません。</strong>APIキーも外部の推論サービスも不要です。詳しくは<a href="privacy.html">プライバシー</a>に記載しています。</p>
-    </details>
-    <details id="q4">
-      <summary>パスワードを入力するときAIは動きますか。</summary>
-      <p><strong>動きません。</strong>保護フィールドでは<strong>文脈取得・AI・学習を停止します</strong>。設計としては、IMEはOSから渡されるコンテキストの信頼できない解釈を決して安全境界にしません。<strong>ただしこの版での機械検証は未実施</strong>で、コード上の保護が実機で期待どおり働くreceiptはまだありません。</p>
-    </details>
-    <details id="q5">
-      <summary>学習や履歴はどうなっていますか。</summary>
-      <p><strong>未確定入力からは学習しません。</strong>世代の古い結果や候補IDの改変は拒否されます。Mozcの履歴・学習データはMozcのプロファイルに保存され、<strong>Mozcの設定から削除できます</strong>。KanaAI側のキャッシュもPC内だけです。削除手段は<a href="privacy.html#deletion">プライバシーの削除の節</a>にまとめてあります。</p>
-    </details>
-    <details id="q6">
-      <summary>どのWindowsで動きますか。</summary>
-      <p>検証は<strong>Windows 11 x64 build 26200 の1台・1ユーザーのみ</strong>です。<strong>ARM64は未検証</strong>、Windows 10も未検証です。CPU実行のみでGPUは使いません。AI有効時の子プロセスのメモリは検証環境で約1.6 GBでした。</p>
-    </details>
-    <details id="q7">
-      <summary>なぜ約1.1 GBもあるのですか。</summary>
-      <p><strong>AIのモデルとruntimeを同梱しているため</strong>です。モデルは Qwen2.5-1.5B-Instruct（GGUF Q6_K、Apache-2.0）、runtimeは llama.cpp（MIT）です。同梱することで、ダウンロード後に追加のダウンロードやAPIキーの取得をせず、PC内だけで動きます。ダウンロードは<strong>約1.1 GB</strong>（Setup.exe 1,124,611,072 bytes）です。</p>
-    </details>
-    <details id="q8">
-      <summary>未署名の警告が出ました。どうすればよいですか。</summary>
-      <p>Windows SmartScreenやpublisherの警告は<strong>未署名</strong>のために出ます。<a href="download.html#files">SHA-256</a>を照合してから実行してください。<strong>警告を避けるために SmartScreen、Smart App Control、ウイルス対策、企業ポリシーを無効化しないでください。</strong>署名は今後の作業です。</p>
-    </details>
-    <details id="q9">
-      <summary>導入したのに日本語が入力できません。</summary>
-      <p><kbd>Win</kbd>+<kbd>Space</kbd> で<strong>KanaAI</strong>を選び、半角/全角キーでIMEをONにしてください。この版は<strong>導入ユーザーへの入力方式の有効化レコードを書けていません</strong>（per-machine インストールではHKCUが導入ユーザーのhiveに着地しないことを実測しました）。そのため<strong>導入直後は自動で既定になりません</strong>。入力自体はTSF登録経由で動作します。</p>
-    </details>
-    <details id="q10">
-      <summary>AIを止めたいです。</summary>
-      <p><code>kanai-broker.exe</code> に <code>--disable-local-ai</code> を渡すと<strong>自分のユーザー設定だけを書き換えます</strong>。反映は次に入力方式が起動したときです。実測では0.42秒で「起動しない」と報告し、runtime子プロセスを作りません。<strong>AIが停止しても変換はMozc baselineがそのまま使えます。</strong>コマンドは<a href="download.html#ai-switch">ダウンロードのページ</a>にあります。</p>
-    </details>
-    <details id="q11">
-      <summary>アンインストールできますか。</summary>
-      <p><strong>できます。</strong>設定 → アプリ → インストール済みアプリから「<strong>KanaAI Development Preview</strong>」を削除します。導入・TSF登録・削除・再導入・上書き・下位版の拒否などの<strong>11フェーズがすべてpass</strong>したreceiptがあり、cleanup後に <code>C:\Program Files\KanaAI</code> が不在で孤立要素がないことを確認しています。</p>
-    </details>
-    <details id="q12">
-      <summary>MozcやGoogleとの関係は。</summary>
-      <p><strong>Mozcを変換エンジンとして利用</strong>し、Mozcの辞書・形態素処理・候補生成・履歴・OS統合を活用します。理由のない再実装はしません。新規のランキング、文脈管理、キャッシュ、個人適応、推論連携にRustを使っています。<strong>KanaAIはGoogleと提携しておらず、サポートも受けていません。</strong>Mozcのライセンスは同梱の <code>MOZC-LICENSE.txt</code> を確認してください。</p>
-    </details>
-    <details id="q13">
-      <summary>キー入力が重くなりませんか。</summary>
-      <p><strong>AIはキー入力の同期処理に入りません。</strong>Fast PathはMozc変換と軽量処理から候補を返し、大型モデル・ディスクI/O・通信を同期経路に置きません。確定文章と許可された短い文脈だけを非同期で処理します。AIの未起動・タイムアウト・クラッシュでもMozc入力は維持されます。<strong>変換遅延の体系的な性能測定はこの版では未実施</strong>です。</p>
-    </details>
-    <details id="q14">
-      <summary>完成品ですか。</summary>
-      <p><strong>いいえ。未完成です。</strong>公開版はGitHub prereleaseのベータで、<strong>署名・実モデル品質・独立verifierによる完成判定</strong>は満たしていません。独立検証の記録（<code>VERIFICATION.md</code>）は2026-09-25時点で <strong>FAIL／NOT COMPLETE</strong> のままです。現在の証拠と残作業は<a href="status.html">検証状況</a>に記載しています。</p>
-    </details>
-  </section>
-  <section class="content" id="contact" aria-labelledby="contact-title">
-    <p class="eyebrow">CONTACT</p><h2 id="contact-title">報告・相談</h2>
-    <div class="grid">
-      <a class="cardlink" href="https://github.com/aruiki/kanai/issues/new/choose"><h3>不具合を報告する</h3><p>GitHub Issuesへ。Windowsのバージョン、リリース番号、発生したアプリ名、<code>broker-startup.log</code> の内容を添えてください。</p><span class="go">Issueを立てる →</span></a>
-      <a class="cardlink" href="https://github.com/aruiki/kanai/blob/main/CONTRIBUTING.md"><h3>開発に参加する</h3><p>実装・検証・評価の参加方法。特にAI品質の実測評価とW1 receiptの取得が未完了です。</p><span class="go">CONTRIBUTING.md →</span></a>
-      <a class="cardlink" href="https://github.com/aruiki/kanai/blob/main/SECURITY.md"><h3>セキュリティ</h3><p>脆弱性の報告手順。公開前に知らせたい内容はこちらの手順に従ってください。</p><span class="go">SECURITY.md →</span></a>
-    </div>
-    <div class="callout"><p class="t">報告時に伏せてほしいもの</p><p>個人情報、辞書の内容、APIキー、パスワード。<code>broker-startup.log</code> 自体は設定値・パス・入力テキスト・トークンを含みませんが、貼り付ける前に一度確認してください。</p></div>
-  </section>
-  <nav class="page-nav" aria-label="ページ間の移動">
-    <a class="prev" href="status.html"><span class="dir">← 前</span><span class="ttl">検証状況とロードマップ</span></a>
-    <a class="next" href="./"><span class="dir">次 →</span><span class="ttl">ホーム</span></a>
-  </nav>
-</main>
-<footer><div class="wrap">
-  <div class="foot-nav">
-    <div><h4>製品</h4><ul><li><a href="./">ホーム</a></li><li><a href="design.html">設計と技術</a></li><li><a href="privacy.html">プライバシー</a></li></ul></div>
-    <div><h4>使う</h4><ul><li><a href="download.html">ダウンロード・導入</a></li><li><a href="faq.html">よくある質問</a></li><li><a href="status.html">検証状況</a></li></ul></div>
-    <div><h4>開発</h4><ul><li><a href="https://github.com/aruiki/kanai">GitHub</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/STATE.md">開発記録</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/CONTRIBUTING.md">参加方法</a></li></ul></div>
-    <div><h4>報告・法務</h4><ul><li><a href="https://github.com/aruiki/kanai/issues/new/choose">不具合報告</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/SECURITY.md">セキュリティ</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/LICENSE-MIT">ライセンス</a></li></ul></div>
-  </div>
-  <a class="brand" href="./">KanaAI</a><p>Mozc-based Japanese input for Windows. Local AI in development.</p>
-  <p>ページ更新: 2026年10月7日 · 公開版 v0.1.0-beta.2（未署名・未完成） · <span class="langswitch"><a href="./">日本語</a><a href="en/">English</a></span></p>
-</div></footer>
-</body>
-</html>
+<header><div class="wrap"><a class="brand" href="./"><img src="kotori-mark.svg" width="36" height="36" alt="" />Kotori日本語入力</a><nav aria-label="メインナビゲーション"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/KotoriIME-japanese-">GitHub</a><a href="en/">English</a></nav></div></header>
+<main id="main-content" class="wrap"><nav class="breadcrumb" aria-label="現在地"><a href="./">ホーム</a><span>›</span><span>FAQ</span></nav><section class="page-head"><p class="eyebrow">KOTORI JAPANESE INPUT</p><h1>Kotori日本語入力のよくある質問。</h1><p class="lede">Kotori日本語入力のよくある質問。GPUなしの動作、オフラインAI、変換精度、未署名のWindows警告、更新と削除、ライセンス、不具合の報告。</p></section><section class="content" id="questions" aria-labelledby="questions-title"><h2 id="questions-title">知っておきたいこと。</h2><details open><summary>Kotori日本語入力とは何ですか？</summary><p>Mozcの変換エンジンと辞書を土台に、ローカルAIが文脈に応じて候補を選び直すWindows向け日本語IMEです。入力中の文の続きを予測し、Tabで選ぶこともできます。</p></details><details><summary>AIで変換はどう変わりますか？</summary><p>公開されている変換例では「音声認識の制度が上がった」を「音声認識の精度が上がった」へ、「彼は公園で公園をした」を「彼は公園で公演をした」へ選び直しています。StandardのAJIMEE-Bench評価は91.5%です。これは200問・前の文ありという条件の評価で、すべての文章が正しくなるという意味ではありません。</p></details><details><summary>GPUがなくても使えますか？</summary><p>使えます。GPUがないPCや内蔵GPUだけのPCは、自動でCPU向けのLow設定で動きます。専用GPU・Vulkan対応・VRAM 3 GB以上があればStandard以上の品質を利用できます。内蔵GPUはAIに使いません。</p></details><details><summary>インターネット接続やクラウドのアカウントは必要ですか？</summary><p>インストーラーに辞書・AIモデル・実行環境を同梱しています。導入後の日本語入力とAI処理はPC内で完結し、入力文字を外部へ送信しません。クラウドAIのアカウントやCUDAの追加導入は不要です。</p></details><details><summary>無料ですか？ ライセンスは？</summary><p>公開版は無償でダウンロードできます。リポジトリのコードはMITまたはApache-2.0、Mozcへの変更はBSD-3-Clauseです。モデル・Qt・推論環境などには別のライセンスが適用されます。再配布時は現行リポジトリのライセンス一覧を確認してください。</p></details><details><summary>どの版をダウンロードすればよいですか？</summary><p>通常はGitHub ReleasesのLatestである製品版を選びます。このページの内容確認時点ではv1.0.0です。v1.1.0-rc.1は、手を止めるとAI変換と予測を表示する機能を追加したリリース候補です。</p></details><details><summary>Windowsの警告が出るのはなぜですか？</summary><p>v1.0.0とv1.1.0-rc.1は未署名です。導入時にWindowsの警告が表示されることがあります。配布元とリリースノートを確認し、同じリリースのSHA-256ファイルでMSIを照合できます。</p></details><details><summary>ゲーム中もGPUのメモリを使いますか？</summary><p>日本語を10分入力しなければAIモデルを外してVRAMを空けます。次に入力すると裏で読み込み直すため、最初の変換はMozcの結果になる場合があります。すぐに負荷を減らしたいときは品質をLowに切り替えます。</p></details><details><summary>ユーザー辞書や学習は使えますか？</summary><p>Mozcのユーザー辞書と学習を利用できます。ユーザー辞書に登録した語はAIが書き換えません。更新時は設定・学習・辞書を引き継ぎます。削除後もユーザーデータは残ります。</p></details><details><summary>Mac・Linux・ARM版Windowsでも使えますか？</summary><p>現在案内している配布版はWindows 10 1809以降またはWindows 11のx64向けです。ARM版Windowsには対応していません。Mac・Linux向けの配布版は案内していません。</p></details><details><summary>AIが間に合わないときや読み込み中はどうなりますか？</summary><p>変換に使う時間には上限があり、AIが間に合わない場合はMozcの結果を表示します。CPUで長い文を打ってすぐSpaceを押すと、AIの結果が間に合わないことがあります。</p></details><details><summary>不具合はどこへ報告できますか？</summary><p>現行リポジトリのGitHub Issuesへ報告できます。設定の「AI変換」タブから診断情報を書き出せます。診断情報には入力文字を含まず、自動送信もしません。セキュリティの問題はSECURITY.mdの方法で知らせてください。</p></details></section><section class="content" id="support" aria-labelledby="support-title"><h2 id="support-title">使い方・不具合の窓口</h2><p><a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/docs/USER_GUIDE.md">使い方と困ったとき</a> · <a href="https://github.com/aruiki/KotoriIME-japanese-/issues/new/choose">不具合・誤変換・要望</a> · <a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/docs/licenses.md">ライセンス一覧</a></p><p>Kotori日本語入力はGoogleが提供・推奨するものではありません。</p></section></main>
+<footer><div class="wrap"><a class="brand" href="./">Kotori日本語入力</a><p>Mozc + local AI · Japanese input for Windows</p><p>本文確認: 2026年10月7日 · 製品版 v1.0.0 / リリース候補 v1.1.0-rc.1 · 両版とも未署名</p><p id="latest-release" aria-live="polite"><a href="https://github.com/aruiki/KotoriIME-japanese-/releases/latest">最新版の製品版を確認 →</a></p><nav aria-label="フッター"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/docs/USER_GUIDE.md">使い方と困ったとき</a></nav><p><a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/docs/licenses.md">ライセンス</a> · <a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/SECURITY.md">セキュリティ</a></p></div></footer>
+</body></html>

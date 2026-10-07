@@ -1,3 +1,48 @@
+# 最新の引き継ぎ — 2026-10-07（現行Kotori日本語入力へ紹介サイトを更新）
+
+ユーザーが現在の製品リポジトリ `aruiki/KotoriIME-japanese-` を指定。
+前回の紹介サイトは旧 `aruiki/kanai` のbeta.2を基準にしていたため、全ページを更新した。
+製品コード・配布MSI・独立VERIFICATION.mdは変更しない。完成判定のマーカーは作成しない。
+
+## 根拠と対象
+
+- 現行Kotori main: `642bd515f7a057902eb80abeab7b74fe84173843` をGitHub APIで確認。
+  README、AGENTS、HANDOFF、USER_GUIDE、eval/README、公開releaseを再読。
+- Latestは製品版 `v1.0.0`、先行版は `v1.1.0-rc.1`。両版とも未署名。
+- zenz / TinySwallow / Vulkan / CPU Low / AI変換・予測が現行製品。
+  AIが変換結果を変えないという旧KanaAI beta.2の結果を現行Kotoriへ流用しない。
+- 91.5%（AJIMEE 200問）/96.3%（最終評価300問）はStandard・前の文あり・RTX 3060、
+  2026-10-01のプロジェクト公開値。サイト作業で再測定したものではない。
+- 本作業中にorigin/mainへ多ページSEOの変更 `a4b186f` / `2ae6dc5` が追加されていた。
+  cleanな担当worktreeをfast-forwardして再読し、`codex/kotori-site-update` で変更。
+  既存の多ページ構成・公開URL `/kanai/` を保持して現行製品を案内する。
+
+## 変更とローカル確認
+
+- 日英ホーム、設計、プライバシー、導入、公開状況、FAQの7HTMLを更新。
+- 配布先と全製品リンクを現行Kotoriへ変更。製品版とRCの機能を区別。
+- メタ情報、JSON-LD、OG画像、ローカルSVGアイコン、配備文書を更新。
+- `releases.js` が最新stable版ラベルを公開APIから取得。失敗時も静的リンクを利用可能。
+- 旧リポジトリREADMEは現行製品への案内と、以下が履歴であることを追記。
+- `make-og-card.ps1`（1200x630 PNGを再生成・視認）、`sync-site.mjs`、
+  `validate-pages.mjs`、`git diff --check` はexit 0。
+  validator: HTML14、local references268、anchors16、warning/error0。
+- PC幅・390px幅をブラウザー確認。ダウンロード先、FAQ展開、英語見出し、
+  公開APIによるv1.0.0の表示を確認した。
+- 外部リンク16URLはすべてHTTP 200。sitemap.xmlは7URLでXML parse成功。
+- 配備元gh-pages: `e9c56636613012187b83136761586cc3ddfce1da` をpush済み。
+  公開側の旧kanai-mark.svgを除去し、文書に記載した14ファイルへ更新。
+- 現行KotoriのGitHub Aboutの説明・homepage・topicsを整備しAPIで反映を確認。
+  旧KanaAI Aboutも現行製品への案内と旧記録であることを明記。
+- 公開ファイルの確認結果は完了後に追記する。
+
+次: 現行サイトを配備して公開ファイル一致を確認。Search Consoleの所有者確認・登録は未実施。
+詳細・根拠・未投稿の告知文は `docs/PROMOTION.md`、配備は `docs/GITHUB_PAGES.md`。
+
+以下は前回までの履歴。旧KanaAIの製品状態と、現行Kotoriの状態を混同しない。
+
+---
+
 # 最新の引き継ぎ — 2026-10-07（紹介サイトを多ページ・SEO対応へ拡張）
 
 ユーザー依頼: 紹介サイトを複数ページ構成のSEO対応サイトへ拡張する。製品コード・配布バイナリの変更はなし。

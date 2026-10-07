@@ -1,77 +1,58 @@
-# KanaAI の公開・検索導線（2026-10-07）
+# Kotori日本語入力の紹介・検索導線（2026-10-07）
 
-## 公開する説明
+## 現在の紹介対象
 
-KanaAIはMozcを基盤にしたオープンソースのWindows日本語IMEです。
-ローカルAI同梱のbeta.2を公開しています。ただしAIが起動しても変換結果は変わらず、
-品質向上を実証した版ではありません。未署名・未完成の試用ベータとして案内します。
+現行製品: Kotori日本語入力
+リポジトリ: https://github.com/aruiki/KotoriIME-japanese-
+紹介サイト: https://aruiki.github.io/kanai/
 
-紹介ページ: https://aruiki.github.io/kanai/
-リリース: https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2
+URLは既存のものを維持し、本文・全7ページ・OG画像・JSON-LD・配布導線をKotoriへ更新する。
+旧KanaAI beta.2の状態と現行Kotoriの製品情報を混ぜない。旧リポジトリのREADMEは履歴と明記。
+公開情報の基準はv1.0.0（Latest / 製品版）とv1.1.0-rc.1（リリース候補）。両版とも未署名。
 
-## 今回の施策
+## 本文の根拠
 
-- 日本語のtitle、description、見出しと本文で「Windows日本語IME」「Mozc」「ローカルAI」を説明。
-- canonical、OGP、Twitter summary、SoftwareApplication JSON-LD、sitemap.xmlを用意。
-- FAQ、導入・削除手順、対応環境、ライセンス、制限、Issue報告へのリンクを掲載。
-- READMEとGitHub Aboutから紹介ページへリンク。
-- JavaScriptなしでも本文・導線・FAQを利用可能。外部フォント、解析タグなし。
-- 既存の古い「インストーラー未公開」説明を公開beta.2の記録に合わせて訂正。
-- 多ページ構成へ拡張: 設計と技術、プライバシー、ダウンロード・導入、検証状況、FAQ（FAQPage JSON-LD、14件）と英語ホーム `/en/` を追加。sitemap.xmlは7URL、各ページにcanonical・OGP・hreflang・BreadcrumbList、ページ間ナビゲーションとフッター導線を追加。
+2026-10-07に確認した現行main: 642bd515f7a057902eb80abeab7b74fe84173843。
+README、docs/HANDOFF.md、docs/USER_GUIDE.md、eval/README.mdと公開リリースノートを参照。
 
-## 継続運用
+- モデル: zenz-v2.5 small / medium、TinySwallow-1.5B。実行環境はllama.cpp / ggml。
+- AIは文脈に応じて候補を選び直し、入力中の文の続きを予測する。
+- Standard: AJIMEE-Bench 200問で91.5%、最終評価用300問で96.3%。前の文あり、RTX 3060。
+  プロジェクトの公開測定値であり、サイト更新で再測定したものではない。
+- 専用GPU・Vulkan・VRAM 3 GB以上。GPUなしはCPU向けLow。内蔵GPUは使わない。
+- Windows 10 1809以降 / Windows 11 x64、メモリ8 GB、ディスク1.7 GB。
+- MSIにモデルと実行環境を同梱。ユーザーデータはアンインストール後も残る。
+- 署名、長時間試験、実機確認等の残項目も現行HANDOFFに基づいて記載。
+- v1.1のアイドル時の候補表示はRCの機能。製品版v1.0.0の機能として紹介しない。
 
-1. Google Search ConsoleにURLプレフィックス `https://aruiki.github.io/kanai/` を登録。
-   所有者のGoogleアカウントでログインし、HTMLファイルまたはmetaタグで所有権を確認。
-   Googleから発行された検証ファイル／タグが必要。今回のコード変更だけでは登録済みとはならない。
-2. 所有権確認後 `https://aruiki.github.io/kanai/sitemap.xml` を送信。
-   URL検査でトップページの登録状態を確認し、必要ならインデックス登録をリクエスト。
-3. Bing Webmaster Toolsも所有権を確認してサイトマップを送信。
-4. 2〜4週間後、表示回数・クリック数・検索語・登録状況を確認。
-   最初に記録した値と比較し、検索順位や流入増を計測前に主張しない。
-5. AIの候補差分と品質改善を実証した版が公開されたら、検証環境と具体例を添えて
-   Zenn/Qiitaの開発記事とSNS告知を行う。現時点では開発・検証への参加募集として紹介する。
-   個別DM、メーリングリスト投稿、大量投稿は今回実施していない。
+## 古くしないための導線
 
-GitHub Pagesのプロジェクトサイトであるため `/kanai/robots.txt` はホスト全体の
-robots.txtとして機能しない。効果のないファイルや架空の所有権確認タグは追加しない。
-サイトマップ送信はインデックス登録・上位表示を保証しない。
+製品版のダウンロードリンクは現行リポジトリの /releases/latest へ進む。
+releases.jsがGitHubの公開APIから最新stable版のラベルだけを取得する。
+APIが失敗しても静的本文と /releases/latest リンクは使える。
+評価・機能・署名の記載は確認日を添え、次の版が出たらリリースノートを読み直して更新する。
+自動で新しい版へ過去の精度・署名状態を流用しない。
 
 ## 告知文の下書き（未投稿）
 
-> Mozcを基盤にしたWindows日本語IME「KanaAI」を開発しています。
-> PC内で動くAIを同梱した試用ベータを公開中です。
-> 現在はAIの起動を確認した段階で、変換品質の改善はこれから。
-> 未署名・未完成ですが、実装や検証に関心のある方の参加を歓迎します。
-> https://aruiki.github.io/kanai/
+> Windows向け日本語IME「Kotori日本語入力」を公開しています。
+> Mozcの操作と辞書を土台に、PC内のAIが文脈に合う候補を選び直し、文の続きを予測します。
+> モデルと実行環境を同梱したMSIで導入でき、GPUなしのPCでも利用できます。
+> 製品版v1.0.0と、手を止めたときの候補表示を加えたv1.1リリース候補を公開中。
+> 対応環境・導入方法: https://aruiki.github.io/kanai/
+> ※上記2版は未署名です。詳しい条件と評価記録は紹介サイトから確認できます。
 
-## 更新・検証・配備
+## 検索登録と効果測定の残作業
 
-`site-assets/` が紹介ページの正本。多ページ構成の一覧・canonical・検証項目は `docs/GITHUB_PAGES.md` にある。
-`node scripts/sync-site.mjs` で `pages/` のプレビューミラーを `site-assets/` から複製する。
-`node scripts/validate-pages.mjs` と `git diff --check` を実行する。
-配備対象は以下のみ。ソースツリーや開発用.envは配備しない。
+Google Search ConsoleでURLプレフィックス https://aruiki.github.io/kanai/ の所有権を確認し、
+https://aruiki.github.io/kanai/sitemap.xml を送信する。所有者アカウントでのログインと検証タグ/ファイルが必要。
+Bing Webmaster Toolsでも所有権確認後に送信する。登録済み・順位上昇とはまだ報告しない。
+2〜4週間後に表示回数、クリック数、検索語、登録状態を比較する。
+個別DM、SNS投稿、コミュニティ投稿は今回実施していない。
 
-- site-assets/index.html → gh-pages:/index.html
-- site-assets/design.html → gh-pages:/design.html
-- site-assets/privacy.html → gh-pages:/privacy.html
-- site-assets/download.html → gh-pages:/download.html
-- site-assets/status.html → gh-pages:/status.html
-- site-assets/faq.html → gh-pages:/faq.html
-- site-assets/en/index.html → gh-pages:/en/index.html
-- site-assets/landing.css → gh-pages:/landing.css
-- site-assets/kanai-mark.svg → gh-pages:/kanai-mark.svg
-- site-assets/og-card.png → gh-pages:/og-card.png
-- site-assets/og-card-en.png → gh-pages:/og-card-en.png
-- site-assets/sitemap.xml → gh-pages:/sitemap.xml
-- site-assets/.nojekyll → gh-pages:/.nojekyll
+## 配備
 
-`site-assets/site.css` と `site-assets/site.js` は旧ドラフトの残骸で現在のページから参照されておらず、配備対象ではない。
-
-GitHub Pagesは既存の `gh-pages` ブランチを使用。
-公開後にPages buildのcommit・statusとトップページ/CSS/サイトマップのHTTP応答を確認する。
-新リリース時は本文・JSON-LD・README・検証スクリプトの版番号と制限を一緒に更新する。
-
-参考:
-- https://developers.google.com/search/docs/appearance/title-link
-- https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap
+site-assets/が正本。node scripts/sync-site.mjsでpages/へ同期し、
+node scripts/validate-pages.mjsとgit diff --checkを実施する。
+配備対象はdocs/GITHUB_PAGES.mdの14ファイル。既存gh-pagesへ配備し、
+Pages buildのcommit/statusと公開ファイルのバイト一致を確認する。

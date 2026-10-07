@@ -6,21 +6,21 @@
       "file": "og-card.png",
       "language": "ja",
       "kicker": "OPEN SOURCE / WINDOWS 日本語入力",
-      "headline1": "Mozcを土台に、",
-      "headline2": "ローカルAIを育てるIME。",
-      "lede": "かな漢字変換はMozc。AIはPCの中だけ。クラウドのアカウントは不要です。",
-      "fact": "AIは起動します。変換品質の改善は、これからです。",
-      "footnote": "未署名の開発ベータです。完成版ではありません。"
+      "headline1": "文脈を読む。",
+      "headline2": "ローカルAIの日本語入力。",
+      "lede": "Mozcの操作に、AIの変換と予測を。モデルと実行環境を同梱。",
+      "fact": "Windows 10 / 11 x64 · GPUなしでも利用可能",
+      "footnote": "製品版 v1.0.0 / v1.1 RC 公開中。両版とも未署名。"
     },
     {
       "file": "og-card-en.png",
       "language": "en",
       "kicker": "OPEN SOURCE / JAPANESE IME FOR WINDOWS",
-      "headline1": "Mozc underneath.",
-      "headline2": "Local AI, growing.",
-      "lede": "KanaAI keeps Mozc conversion and runs its model on your own machine.",
-      "fact": "The AI starts. Better conversion is the next milestone.",
-      "footnote": "Unsigned development preview. Not a completed product."
+      "headline1": "Context understood.",
+      "headline2": "Japanese input, local AI.",
+      "lede": "Kotori combines Mozc with local AI conversion and prediction.",
+      "fact": "Windows x64 · Dedicated GPU or CPU",
+      "footnote": "Stable v1.0.0 and v1.1 RC available. Both unsigned."
     }
   ]
 }

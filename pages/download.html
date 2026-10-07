@@ -1,154 +1,19 @@
 <!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#142e29" />
-  <title>ダウンロード・導入｜v0.1.0-beta.2（未署名）｜KanaAI</title>
-  <meta name="description" content="KanaAI v0.1.0-beta.2の導入方法。Setup.exeのダウンロード、SHA-256の照合、UAC、Win+Spaceでの選択、AIのON/OFF、アンインストール、既知の制限と動作環境を記載します。未署名のためWindowsの警告が出ます。" />
-  <link rel="canonical" href="https://aruiki.github.io/kanai/download.html" />
-  <link rel="sitemap" type="application/xml" href="https://aruiki.github.io/kanai/sitemap.xml" />
-  <link rel="alternate" hreflang="ja" href="https://aruiki.github.io/kanai/download.html" />
-  <link rel="alternate" hreflang="x-default" href="https://aruiki.github.io/kanai/" />
-  <meta property="og:type" content="article" />
-  <meta property="og:locale" content="ja_JP" />
-  <meta property="og:site_name" content="KanaAI" />
-  <meta property="og:title" content="KanaAI beta.2の導入｜約1.1 GB・未署名・SHA-256照合あり" />
-  <meta property="og:description" content="Setup.exeを起動してUACを承認するだけ。ビルドも手動コピーもコマンド入力も不要です。ハッシュ、動作環境、AIのON/OFF、アンインストール、既知の制限を明記します。" />
-  <meta property="og:url" content="https://aruiki.github.io/kanai/download.html" />
-  <meta property="og:image" content="https://aruiki.github.io/kanai/og-card.png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="KanaAI — Mozcを土台に、ローカルAIを育てるIME" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card.png" />
-  <link rel="icon" href="kanai-mark.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="landing.css" />
-  <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"KanaAI","item":"https://aruiki.github.io/kanai/"},{"@type":"ListItem","position":2,"name":"ダウンロード・導入","item":"https://aruiki.github.io/kanai/download.html"}]}
-  </script>
-</head>
-<body>
+<html lang="ja"><head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#142e29" />
+<title>Kotori日本語入力のダウンロード・導入｜Windows 10 / 11</title><meta name="description" content="Kotori64.msiで導入するWindows日本語IME。製品版v1.0.0とv1.1リリース候補、必要な環境、SHA-256、更新と削除の方法。GPUなしでも利用できます。" />
+<link rel="canonical" href="https://aruiki.github.io/kanai/download.html" /><link rel="alternate" hreflang="ja" href="https://aruiki.github.io/kanai/download.html" /><link rel="alternate" hreflang="x-default" href="https://aruiki.github.io/kanai/download.html" />
+<meta property="og:type" content="website" /><meta property="og:locale" content="ja_JP" /><meta property="og:site_name" content="Kotori日本語入力" />
+<meta property="og:title" content="Kotori日本語入力のダウンロード・導入｜Windows 10 / 11" /><meta property="og:description" content="Kotori64.msiで導入するWindows日本語IME。製品版v1.0.0とv1.1リリース候補、必要な環境、SHA-256、更新と削除の方法。GPUなしでも利用できます。" /><meta property="og:url" content="https://aruiki.github.io/kanai/download.html" />
+<meta property="og:image" content="https://aruiki.github.io/kanai/og-card.png" /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" /><meta property="og:image:alt" content="Kotori日本語入力 — 文脈を読むローカルAI" />
+<meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card.png" />
+<link rel="icon" href="kotori-mark.svg" type="image/svg+xml" /><link rel="stylesheet" href="landing.css" />
+<script src="releases.js" defer></script><script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Kotori日本語入力","item":"https://aruiki.github.io/kanai/"},{"@type":"ListItem","position":2,"name":"ダウンロード","item":"https://aruiki.github.io/kanai/download.html"}]}
+</script>
+</head><body>
 <a class="skip-link" href="#main-content">本文へ移動</a>
-<header><div class="wrap">
-  <a class="brand" href="./"><img src="kanai-mark.svg" alt="" width="36" height="36" />KanaAI</a>
-  <nav aria-label="メインナビゲーション"><a href="./#features">特徴</a><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">検証状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/kanai">GitHub</a></nav>
-</div></header>
-<main id="main-content" class="wrap">
-  <nav class="breadcrumb" aria-label="現在地"><a href="./">ホーム</a><span>›</span><span>ダウンロード・導入</span></nav>
-  <section class="page-head" aria-labelledby="page-title">
-    <p class="eyebrow">DOWNLOAD &amp; INSTALL</p>
-    <h1 id="page-title">導入は4手順。<br />ただし、読むべき制限があります。</h1>
-    <p class="lede">公開版は <strong>v0.1.0-beta.2</strong>（未署名・未完成のプレリリース）です。モデル同梱でダウンロードは<strong>約1.1 GB</strong>、AI有効時のメモリは検証環境で<strong>子プロセス約1.6 GB</strong>でした。</p>
-    <div class="callout warn"><p class="t">導入の前に</p><p><strong>未署名です。</strong>Windows SmartScreen / publisher の警告が出ます。警告を避けるために SmartScreen、Smart App Control、ウイルス対策、企業ポリシーを<strong>無効化しないでください</strong>。日常利用の安定性は保証されません。<strong>この版のAIは起動しますが、変換結果を変えません</strong>（実測）。体感される変換品質はMozc baselineのものです。</p></div>
-    <div class="actions"><a class="button" href="https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2">リリースページを開く</a><a class="button secondary" href="status.html">検証済み・未検証の一覧</a></div>
-    <ul class="subnav">
-      <li><a href="#files">配布ファイルとSHA-256</a></li><li><a href="#requirements">動作環境</a></li><li><a href="#install">導入手順</a></li><li><a href="#first-run">導入直後</a></li><li><a href="#ai-switch">AIのON/OFF</a></li><li><a href="#uninstall">削除</a></li><li><a href="#trouble">動かないとき</a></li><li><a href="#license">ライセンス</a></li>
-    </ul>
-  </section>
-  <section class="content" id="files" aria-labelledby="files-title">
-    <p class="eyebrow">ARTIFACTS</p><h2 id="files-title">配布ファイルとSHA-256（固定）</h2>
-    <div class="table-wrap"><table class="data">
-      <thead><tr><th>ファイル</th><th>bytes</th><th>SHA-256</th></tr></thead>
-      <tbody>
-        <tr><td><code>KanaAI-0.1.0-Setup.exe</code></td><td>1,124,611,072</td><td><code>F61D86BF95AC97723D733A76B33BE6BB8FF6FFED6E9A3973BDC1FADB641A17A0</code></td></tr>
-        <tr><td><code>KanaAI-0.1.0-x64.msi</code></td><td>1,124,605,952</td><td><code>608F1B6A6D8ADBCF63B9CCAD49E19333D69175DF5E1EB90EB8350DF93CF1C288</code></td></tr>
-      </tbody>
-    </table></div>
-    <div class="prose">
-      <p>照合はPowerShellでできます。</p>
-      <pre class="code"><code>Get-FileHash .\KanaAI-0.1.0-Setup.exe -Algorithm SHA256
-Get-FileHash .\KanaAI-0.1.0-x64.msi   -Algorithm SHA256</code></pre>
-      <div class="callout"><p class="t">名前の注意</p><p>パッケージ内部の <code>ProductVersion</code> とファイル名は <strong>0.1.0</strong> です（tag / release 名は <code>v0.1.0-beta.2</code>）。同一物かどうかは<strong>必ずSHA-256で照合</strong>してください。<code>Setup.exe</code> は埋め込みMSIを一時フォルダへ展開してWindows Installerを起動するlauncherで、MSI単体でも導入できます。両者は同一候補です。</p></div>
-    </div>
-  </section>
-  <section class="content" id="requirements" aria-labelledby="requirements-title">
-    <p class="eyebrow">REQUIREMENTS</p><h2 id="requirements-title">動作環境</h2>
-    <ul class="spec-list">
-      <li><strong>Windows 11 x64</strong> — 検証は <strong>1台・1ユーザー・Windows 11 build 26200 のみ</strong>です。</li>
-      <li><strong>ARM64 は未検証。</strong>Windows 10 も未検証です。</li>
-      <li><strong>空き容量</strong> — ダウンロード約1.1 GB（モデル同梱）。</li>
-      <li><strong>メモリ</strong> — AI有効時、子プロセス（<code>llama-server</code>）で約1.6 GB。</li>
-      <li><strong>CPU実行のみ。</strong>同梱AIはGPUを使用しません。</li>
-      <li><strong>管理者権限（UAC）</strong> — per-machine の導入に必要です。</li>
-    </ul>
-  </section>
-  <section class="content" id="install" aria-labelledby="install-title">
-    <p class="eyebrow">INSTALL</p><h2 id="install-title">導入手順</h2>
-    <div class="prose"><p>Setup.exeを起動した後に<strong>ビルド・手動コピー・コマンド入力は不要</strong>です。必要なのはUACの承認だけです。</p></div>
-    <ol class="spec-list">
-      <li><a href="https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2">リリースページ</a>から <code>KanaAI-0.1.0-Setup.exe</code> をダウンロードし、<a href="#files">SHA-256</a>と照合します。</li>
-      <li><code>Setup.exe</code> を起動し、WindowsのUACを承認します。</li>
-      <li><kbd>Win</kbd>+<kbd>Space</kbd> で <strong>KanaAI</strong> を選びます。<strong>導入直後は自動で既定になりません</strong>（<a href="#first-run">理由</a>）。</li>
-      <li>半角/全角キーでIMEをONにして入力します。</li>
-    </ol>
-    <div class="callout"><p class="t">MSI単体でも導入できます</p><p><code>Setup.exe</code> は埋め込みMSIを一時フォルダへ展開してWindows Installerを起動するlauncherです。<code>KanaAI-0.1.0-x64.msi</code> を直接実行しても同じ候補が導入されます。</p></div>
-  </section>
-  <section class="content" id="first-run" aria-labelledby="first-run-title">
-    <p class="eyebrow">FIRST RUN</p><h2 id="first-run-title">導入直後の挙動（Windowsの慣例とは違います）</h2>
-    <div class="prose">
-      <p>この版には <code>0007-kanai-ime-open-by-default</code> というパッチが入っており、<strong>導入直後のIMEは既定でON</strong>になります。Windowsの慣例とは異なります。</p>
-      <p>これは<strong>欠陥修正ではなく挙動変更</strong>です。開発の初期段階では「導入直後に日本語が入力できない欠陥の修正」と位置づけていましたが、<strong>それは誤りでした</strong>。IMEのON/OFFと、かな／半角英数の入力モードは別の状態です。新しいアプリでIMEがOFFから始まり、そのまま打つと英字が出るのはMicrosoft IMEでもATOKでも通常の挙動で、欠陥ではありません。この訂正を記録として残します。</p>
-      <p>実装上は、Mozcの <code>TipStatus::IsOpen</code> が open/close compartment の存在しないとき false を返し、新規プロファイルはそれを持たないための対応です。<strong>保存済みの値は必ず勝つ</strong>ので、自分でIMEを閉じたユーザーが毎回開かされることはありません。影響は実質的に初回だけです。パッチは64bit・32bit両方のTIPに入っています。</p>
-      <div class="callout warn"><p class="t">もう1つの既知の制限</p><p><strong>導入ユーザーへの入力方式の有効化レコードが書けていません。</strong>MSIには該当のHKCUコンポーネントが含まれていますが、per-machine インストールでは導入ユーザーのhiveに着地しないことを実測しました（Setup.exe経由・MSI直接のいずれでも <code>userActivationEnable</code> が空）。入力自体はTSF登録経由で動作しますが、<strong>導入直後に <kbd>Win</kbd>+<kbd>Space</kbd> でKanaAIを選ぶ操作が必要</strong>です。</p></div>
-    </div>
-  </section>
-  <section class="content" id="ai-switch" aria-labelledby="ai-switch-title">
-    <p class="eyebrow">AI SWITCH</p><h2 id="ai-switch-title">AIを止める／戻す</h2>
-    <div class="prose"><p>同梱AIは既定でONです。止めたいときはコマンドプロンプトから実行します。</p></div>
-    <pre class="code"><code>"C:\Program Files\KanaAI\kanai-broker.exe" --disable-local-ai
-"C:\Program Files\KanaAI\kanai-broker.exe" --enable-local-ai
-"C:\Program Files\KanaAI\kanai-broker.exe" --ai-status</code></pre>
-    <div class="prose">
-      <p><strong>自分のユーザー設定だけを書き換えます。</strong>反映は次に入力方式が起動したときです。</p>
-      <p>実測では、<code>--disable-local-ai</code> を実行したブローカーは <strong>0.42秒で「起動しない」と報告し、runtime子プロセスを作りません</strong>。AIが未起動・タイムアウト・異常応答・停止のいずれでも、変換はMozc baselineがそのまま使えます。<strong>AIはキー入力の同期処理には入りません。</strong></p>
-      <p>ネットワークアクセスは一切ありません。runtimeはloopback（<code>127.0.0.1</code>）のみでlistenし、プロセスごとの鍵で保護されます。起動時に同梱バイトのハッシュ検証を行います（実測0.650秒、2ファイル・1,117,324,349バイト・runtime 51エントリ）。</p>
-    </div>
-  </section>
-  <section class="content" id="uninstall" aria-labelledby="uninstall-title">
-    <p class="eyebrow">UNINSTALL</p><h2 id="uninstall-title">削除</h2>
-    <div class="prose">
-      <p>Windowsの<strong>設定 → アプリ → インストール済みアプリ</strong>から「<strong>KanaAI Development Preview</strong>」をアンインストールします。</p>
-      <p>クリーンな削除は機械検証済みです。インストーラのライフサイクル11フェーズ（クリーン導入／TSF登録／クリーンアンインストール／MSI直接導入／同一ProductCodeへの再インストール／上位版での上書き／下位版の拒否／最終アンインストール／独立した不在確認／cleanupの冪等性）が<strong>すべてpass</strong>したreceiptがあり、cleanup後に <code>C:\Program Files\KanaAI</code> が不在で孤立要素がないことを確認しています。詳細は<a href="status.html">検証状況</a>にまとめてあります。</p>
-    </div>
-  </section>
-  <section class="content" id="trouble" aria-labelledby="trouble-title">
-    <p class="eyebrow">TROUBLESHOOTING</p><h2 id="trouble-title">動かないとき</h2>
-    <div class="prose">
-      <p>AIが起動しない場合は、次のいずれかのログの内容を添えて<a href="https://github.com/aruiki/kanai/issues/new/choose">GitHub Issues</a>へ報告してください。</p>
-    </div>
-    <pre class="code"><code>%LOCALAPPDATA%\KanaAI\broker-startup.log
-%USERPROFILE%\AppData\LocalLow\KanaAI\broker-startup.log</code></pre>
-    <div class="prose">
-      <p>このログは<strong>設定値・パス・入力テキスト・トークンを含みません</strong>。報告時は個人情報・辞書・APIキーを伏せてください。あわせてWindowsのバージョン、KanaAIのリリース番号、発生したアプリ名を添えると調査できます。</p>
-      <p>日本語入力が始まらない場合は、まず <kbd>Win</kbd>+<kbd>Space</kbd> でKanaAIが選ばれているか、半角/全角でIMEがONになっているかを確認してください。導入直後は自動で既定になりません。</p>
-    </div>
-  </section>
-  <section class="content" id="license" aria-labelledby="license-title">
-    <p class="eyebrow">LICENSE</p><h2 id="license-title">ライセンス</h2>
-    <ul class="spec-list">
-      <li><strong>KanaAI自身のソース</strong> — MIT OR Apache-2.0</li>
-      <li><strong>Mozc</strong> — 同梱の <code>MOZC-LICENSE.txt</code>（Google作成のコードはBSD-3-Clause、辞書データと第三者コンポーネントは条件が混在）</li>
-      <li><strong>モデル Qwen2.5-1.5B-Instruct</strong> — Apache-2.0（<code>ai\licenses\</code>）</li>
-      <li><strong>推論runtime llama.cpp</strong> — MIT（<code>ai\licenses\</code>）</li>
-    </ul>
-    <div class="prose"><p><strong>KanaAIはGoogleと提携しておらず、サポートも受けていません。</strong>利用・再配布時は同梱ライセンスを確認してください。</p></div>
-    <div class="actions"><a class="button" href="https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2">リリースページを開く</a><a class="button secondary" href="faq.html">よくある質問</a></div>
-  </section>
-  <nav class="page-nav" aria-label="ページ間の移動">
-    <a class="prev" href="privacy.html"><span class="dir">← 前</span><span class="ttl">プライバシーとセキュリティ</span></a>
-    <a class="next" href="status.html"><span class="dir">次 →</span><span class="ttl">検証状況とロードマップ</span></a>
-  </nav>
-</main>
-<footer><div class="wrap">
-  <div class="foot-nav">
-    <div><h4>製品</h4><ul><li><a href="./">ホーム</a></li><li><a href="design.html">設計と技術</a></li><li><a href="privacy.html">プライバシー</a></li></ul></div>
-    <div><h4>使う</h4><ul><li><a href="download.html">ダウンロード・導入</a></li><li><a href="faq.html">よくある質問</a></li><li><a href="status.html">検証状況</a></li></ul></div>
-    <div><h4>開発</h4><ul><li><a href="https://github.com/aruiki/kanai">GitHub</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/STATE.md">開発記録</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/CONTRIBUTING.md">参加方法</a></li></ul></div>
-    <div><h4>報告・法務</h4><ul><li><a href="https://github.com/aruiki/kanai/issues/new/choose">不具合報告</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/SECURITY.md">セキュリティ</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/LICENSE-MIT">ライセンス</a></li></ul></div>
-  </div>
-  <a class="brand" href="./">KanaAI</a><p>Mozc-based Japanese input for Windows. Local AI in development.</p>
-  <p>ページ更新: 2026年10月7日 · 公開版 v0.1.0-beta.2（未署名・未完成） · <span class="langswitch"><a href="./">日本語</a><a href="en/">English</a></span></p>
-</div></footer>
-</body>
-</html>
+<header><div class="wrap"><a class="brand" href="./"><img src="kotori-mark.svg" width="36" height="36" alt="" />Kotori日本語入力</a><nav aria-label="メインナビゲーション"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/KotoriIME-japanese-">GitHub</a><a href="en/">English</a></nav></div></header>
+<main id="main-content" class="wrap"><nav class="breadcrumb" aria-label="現在地"><a href="./">ホーム</a><span>›</span><span>ダウンロード</span></nav><section class="page-head"><p class="eyebrow">KOTORI JAPANESE INPUT</p><h1>ダウンロードして、いつもの入力へ。</h1><p class="lede">Kotori64.msiで導入するWindows日本語IME。製品版v1.0.0とv1.1リリース候補、必要な環境、SHA-256、更新と削除の方法。GPUなしでも利用できます。</p></section><section class="content" id="versions" aria-labelledby="versions-title"><h2 id="versions-title">ダウンロードする版を選ぶ。</h2><div class="grid"><article class="card"><h3>製品版 <span data-stable-version>v1.0.0</span></h3><p>通常の導入向け。GitHub ReleasesのLatestへ進み、Kotori64.msiをダウンロードします。</p><div class="actions"><a class="button" href="https://github.com/aruiki/KotoriIME-japanese-/releases/latest">最新版の製品版</a></div></article><article class="card"><h3>v1.1.0-rc.1</h3><p>入力後に手を止めるとAI変換と予測を表示する機能を追加したリリース候補。</p><div class="actions"><a class="button secondary" href="https://github.com/aruiki/KotoriIME-japanese-/releases/tag/v1.1.0-rc.1">先行版の詳細</a></div></article><article class="card"><h3>配布元を確認</h3><p>ファイルは現行のKotoriIME-japanese-リポジトリで配布しています。両版とも未署名です。</p><div class="actions"><a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/docs/USER_GUIDE.md">使い方と困ったとき</a></div></article></div></section><section class="content" id="requirements" aria-labelledby="requirements-title"><h2 id="requirements-title">必要な環境</h2><div class="table-wrap"><table class="data"><thead><tr><th scope="col">項目</th><th scope="col">必要な環境</th><th scope="col">おすすめ</th></tr></thead><tbody><tr><td>OS</td><td>Windows 10 1809以降 / Windows 11（x64）</td><td>Windows 11</td></tr><tr><td>メモリ</td><td>8 GB</td><td>16 GB</td></tr><tr><td>ディスク</td><td>1.7 GBの空き容量</td><td></td></tr><tr><td>GPU</td><td>なしでも動作。内蔵GPUはAIに使いません。</td><td>専用GPU・Vulkan対応・VRAM 3 GB以上</td></tr></tbody></table></div><p>AIモデルとGPU実行環境は同梱しています。GPUのドライバー以外にCUDAなどの準備は不要です。ARM版Windowsには対応していません。動作確認済みのGPUとしてRTX 3060が記録されています。</p></section><section class="content" id="install" aria-labelledby="install-title"><h2 id="install-title">MSIを実行して、入力方式を切り替える。</h2><ol class="spec-list"><li><a href="https://github.com/aruiki/KotoriIME-japanese-/releases/latest">GitHub Releases</a>でリリースノートを確認し、<strong>Kotori64.msi</strong>をダウンロードします。</li><li>MSIをダブルクリックし、管理者の確認（UAC）を承認します。</li><li><kbd>Win</kbd> + <kbd>Space</kbd>で<strong>Kotori日本語入力</strong>へ切り替えます。<kbd>半角/全角</kbd>で日本語入力をON/OFFできます。</li><li>デスクトップまたはスタートメニューの「Kotori日本語入力の設定」を開き、「AI変換」タブで品質とAIの状態を確認できます。</li></ol><p class="small">v1.0.0 / v1.1.0-rc.1は未署名のため、Windowsの警告が表示される場合があります。ファイルの照合方法と対処は<a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/docs/USER_GUIDE.md">利用ガイド</a>へ。</p></section><section class="content" id="hash" aria-labelledby="hash-title"><h2 id="hash-title">配布ファイルの照合</h2><div class="table-wrap"><table class="data"><thead><tr><th scope="col">版</th><th scope="col">Kotori64.msiのサイズ</th><th scope="col">SHA-256</th></tr></thead><tbody><tr><td>v1.0.0</td><td>1,568,464,896 bytes</td><td><code class="hash">6f1885bea52f590146b441054d2cf67514c99a9695feece19ac12b2f79378264</code></td></tr><tr><td>v1.1.0-rc.1</td><td>1,568,477,184 bytes</td><td><code class="hash">57b149e814d0724d3c7f8ba4a0fbbefbcb468bafe31a2da0f7ceedcc71894689</code></td></tr></tbody></table></div><p>各リリースにKotori64.msi.sha256を同梱しています。新しい版のハッシュは、その版の配布ページで確認してください。</p><pre class="code"><code>Get-FileHash .\Kotori64.msi -Algorithm SHA256</code></pre></section><section class="content" id="update" aria-labelledby="update-title"><h2 id="update-title">更新・アンインストール</h2><p>v0.3.0-beta.6以降は、新しいMSIを上書きして更新できます。設定・学習・ユーザー辞書は引き継ぎます。それより古い版は一度アンインストールしてから導入してください。入力中のアプリがあると、再起動を求められる場合があります。</p><p>削除はWindowsの「設定 → アプリ」から<strong>Kotori日本語入力</strong>を選びます。ユーザーデータは再導入時に引き継ぐため残ります。削除後のデータの扱いは<a href="privacy.html#delete">プライバシーと削除</a>で説明しています。</p><p>自動更新の通知はありません。<a href="https://github.com/aruiki/KotoriIME-japanese-/releases">Releases</a>で更新を確認できます。</p></section></main>
+<footer><div class="wrap"><a class="brand" href="./">Kotori日本語入力</a><p>Mozc + local AI · Japanese input for Windows</p><p>本文確認: 2026年10月7日 · 製品版 v1.0.0 / リリース候補 v1.1.0-rc.1 · 両版とも未署名</p><p id="latest-release" aria-live="polite"><a href="https://github.com/aruiki/KotoriIME-japanese-/releases/latest">最新版の製品版を確認 →</a></p><nav aria-label="フッター"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/docs/USER_GUIDE.md">使い方と困ったとき</a></nav><p><a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/docs/licenses.md">ライセンス</a> · <a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/SECURITY.md">セキュリティ</a></p></div></footer>
+</body></html>

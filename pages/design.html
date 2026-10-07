@@ -1,181 +1,19 @@
 <!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#142e29" />
-  <title>設計と技術｜Mozc連携・Fast/Slow Path・ローカルAI｜KanaAI</title>
-  <meta name="description" content="KanaAIの設計。なぜMozcを再実装せず土台にするのか、RustとC++の分担、キー入力を止めないFast Pathと非同期のSlow Path、AIが失敗しても入力を維持する仕組み、実測して不採用にした判断を解説します。" />
-  <link rel="canonical" href="https://aruiki.github.io/kanai/design.html" />
-  <link rel="sitemap" type="application/xml" href="https://aruiki.github.io/kanai/sitemap.xml" />
-  <link rel="alternate" hreflang="ja" href="https://aruiki.github.io/kanai/design.html" />
-  <link rel="alternate" hreflang="x-default" href="https://aruiki.github.io/kanai/" />
-  <meta property="og:type" content="article" />
-  <meta property="og:locale" content="ja_JP" />
-  <meta property="og:site_name" content="KanaAI" />
-  <meta property="og:title" content="KanaAIの設計と技術｜Mozcを土台に、AIを脇に置く" />
-  <meta property="og:description" content="IMEはチャットボットではない。Mozcを再実装しない理由、Fast/Slow Path、AIが落ちても入力が止まらない設計、そして実測して不採用にした6つの役割。" />
-  <meta property="og:url" content="https://aruiki.github.io/kanai/design.html" />
-  <meta property="og:image" content="https://aruiki.github.io/kanai/og-card.png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="KanaAI — Mozcを土台に、ローカルAIを育てるIME" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card.png" />
-  <link rel="icon" href="kanai-mark.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="landing.css" />
-  <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"KanaAI","item":"https://aruiki.github.io/kanai/"},{"@type":"ListItem","position":2,"name":"設計と技術","item":"https://aruiki.github.io/kanai/design.html"}]}
-  </script>
-</head>
-<body>
+<html lang="ja"><head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#142e29" />
+<title>Kotori日本語入力のしくみ｜Mozc・zenz・TinySwallow</title><meta name="description" content="Mozcの辞書と変換を土台に、zenzとTinySwallowが文脈を読んで候補を選び直す。品質モード、AI予測、GPU・CPUの使い分けと負荷制御を紹介。" />
+<link rel="canonical" href="https://aruiki.github.io/kanai/design.html" /><link rel="alternate" hreflang="ja" href="https://aruiki.github.io/kanai/design.html" /><link rel="alternate" hreflang="x-default" href="https://aruiki.github.io/kanai/design.html" />
+<meta property="og:type" content="website" /><meta property="og:locale" content="ja_JP" /><meta property="og:site_name" content="Kotori日本語入力" />
+<meta property="og:title" content="Kotori日本語入力のしくみ｜Mozc・zenz・TinySwallow" /><meta property="og:description" content="Mozcの辞書と変換を土台に、zenzとTinySwallowが文脈を読んで候補を選び直す。品質モード、AI予測、GPU・CPUの使い分けと負荷制御を紹介。" /><meta property="og:url" content="https://aruiki.github.io/kanai/design.html" />
+<meta property="og:image" content="https://aruiki.github.io/kanai/og-card.png" /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" /><meta property="og:image:alt" content="Kotori日本語入力 — 文脈を読むローカルAI" />
+<meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card.png" />
+<link rel="icon" href="kotori-mark.svg" type="image/svg+xml" /><link rel="stylesheet" href="landing.css" />
+<script src="releases.js" defer></script><script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Kotori日本語入力","item":"https://aruiki.github.io/kanai/"},{"@type":"ListItem","position":2,"name":"設計と技術","item":"https://aruiki.github.io/kanai/design.html"}]}
+</script>
+</head><body>
 <a class="skip-link" href="#main-content">本文へ移動</a>
-<header><div class="wrap">
-  <a class="brand" href="./"><img src="kanai-mark.svg" alt="" width="36" height="36" />KanaAI</a>
-  <nav aria-label="メインナビゲーション"><a href="./#features">特徴</a><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">検証状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/kanai">GitHub</a></nav>
-</div></header>
-<main id="main-content" class="wrap">
-  <nav class="breadcrumb" aria-label="現在地"><a href="./">ホーム</a><span>›</span><span>設計と技術</span></nav>
-  <section class="page-head" aria-labelledby="page-title">
-    <p class="eyebrow">ARCHITECTURE</p>
-    <h1 id="page-title">IMEはチャットボットではない。<br />だから、こう作った。</h1>
-    <p class="lede">日本語入力は1秒間に何度も呼ばれ、1回の遅延がそのまま指先の違和感になります。KanaAIは「AIで変換する」ことを目指す前に、<strong>入力を絶対に止めない</strong>ことを設計の中心に置きました。</p>
-    <ul class="subnav">
-      <li><a href="#boundary">製品境界</a></li><li><a href="#mozc">Mozcを土台にする理由</a></li><li><a href="#languages">言語の分担</a></li><li><a href="#paths">Fast / Slow Path</a></li><li><a href="#failure">失敗時の挙動</a></li><li><a href="#localai">ローカルAIの実装</a></li><li><a href="#rejected">不採用にした判断</a></li><li><a href="#ladder">モデルの選び方</a></li>
-    </ul>
-  </section>
-  <section class="content" id="boundary" aria-labelledby="boundary-title">
-    <p class="eyebrow">PRODUCT BOUNDARY</p><h2 id="boundary-title">まず「何を作らないか」を決めた</h2>
-    <div class="prose">
-      <p>KanaAIは<strong>Windowsの日本語IME（入力方式）</strong>です。チャット画面、ブラウザの作業台、CLIツールは製品ではありません。開発中にそれらを作りましたが、<strong>製品の出荷単位はTSFに対応したネイティブIME</strong>であると境界を引き直しました。</p>
-      <p>この境界は装飾ではなく、実装の優先順位を決めます。「AIと会話して文章を作る」機能より、「打った文字が正しく候補になり、確定できる」ことが常に勝ちます。</p>
-      <div class="callout"><p class="t">境界の不変条件</p><p>AIは変換の<strong>依存要素にしてはいけない</strong>。AIが応答しなくても、候補は出て、文字は確定できる。生成AIはユーザーが呼び出し、中止でき、結果を事前に確認でき、変換の前提にならない。</p></div>
-    </div>
-  </section>
-  <section class="content" id="mozc" aria-labelledby="mozc-title">
-    <p class="eyebrow">WHY MOZC</p><h2 id="mozc-title">Mozcを再実装しない理由</h2>
-    <div class="prose">
-      <p>日本語入力の難しさの大半はAIではなく、<strong>辞書・形態素解析・変換・候補生成・学習・OS統合</strong>にあります。これらはMozcが長い期間かけて作り込んでおり、理由なく書き直すのは品質を落とすだけの作業です。</p>
-      <div class="table-wrap"><table class="data">
-        <thead><tr><th>Mozcから使うもの</th><th>KanaAIが足すもの</th></tr></thead>
-        <tbody>
-          <tr><td>かな漢字変換、形態素解析、候補生成</td><td>候補の並び替え・方針決定の層（制限時間つき）</td></tr>
-          <tr><td>システム辞書、ユーザー辞書、学習</td><td>文脈の管理と、個人適応の記録</td></tr>
-          <tr><td>履歴、OS統合、TIP（Text Services Framework）</td><td>ローカル推論との接続、プライバシー方針</td></tr>
-        </tbody>
-      </table></div>
-      <p>MozcのコードはBSD-3-Clause、辞書データと一部サードパーティは別の条件が混在します。KanaAIは同梱ライセンスをそのまま保持し、1つのライセンスであると仮定しません。</p>
-      <p><strong>Google 日本語入力の独自コード、辞書、クラウドデータ、UIは複製していません。</strong>品質の基準として「成熟した日本語IMEの体験」を置きますが、比較は固定したMozcベースラインに対して再現可能な日本語ケースで行います。</p>
-    </div>
-  </section>
-  <section class="content" id="languages" aria-labelledby="languages-title">
-    <p class="eyebrow">LANGUAGE SPLIT</p><h2 id="languages-title">C++ / Rust / TypeScript の分担</h2>
-    <div class="table-wrap"><table class="data">
-      <thead><tr><th>層</th><th>言語</th><th>理由</th></tr></thead>
-      <tbody>
-        <tr><td>変換エンジン・TIP</td><td><strong>C++</strong>（Mozc）</td><td>既存の実装とWindows統合がそのまま使える。移植には測定結果か具体的な保守上の理由が必要。</td></tr>
-        <tr><td>並び替え、文脈、キャッシュ、個人適応、推論連携、ネイティブ境界</td><td><strong>Rust</strong></td><td>新規に書く部分。メモリ安全と、IMEプロセスから分離できる境界の明確さ。</td></tr>
-        <tr><td>説明用のラボUI</td><td><strong>TypeScript</strong></td><td>開発専用。ループバックで動き、本番の入力やプロファイルデータを既定では読めない。署名された配布物には含めない。</td></tr>
-      </tbody>
-    </table></div>
-    <div class="prose"><p>「Rustで書き直せば速くなる」は主張しません。既存C++の移植は、<strong>測定結果または具体的な保守上の理由</strong>があるときだけ行います。</p></div>
-  </section>
-  <section class="content" id="paths" aria-labelledby="paths-title">
-    <p class="eyebrow">FAST PATH / SLOW PATH</p><h2 id="paths-title">キー入力の同期経路に、重いものを置かない</h2>
-    <div class="prose">
-      <p>経路を2つに分けました。分けなかった場合、モデルの起動やディスク読み込みが打鍵のたびに起き、入力が止まります。</p>
-      <div class="table-wrap"><table class="data">
-        <thead><tr><th></th><th>Fast Path</th><th>Slow Path</th></tr></thead>
-        <tbody>
-          <tr><td><strong>いつ</strong></td><td>打鍵ごと（同期）</td><td>確定後（非同期）</td></tr>
-          <tr><td><strong>何を</strong></td><td>Mozc変換＋軽量な並び替え・方針決定</td><td>確定した文章と、許可された短い文脈の処理</td></tr>
-          <tr><td><strong>禁止</strong></td><td>大型モデル、ディスクI/O、通信</td><td>未確定入力からの学習</td></tr>
-          <tr><td><strong>失敗したら</strong></td><td>Mozcの候補をそのまま返す</td><td>結果を捨てて次へ</td></tr>
-        </tbody>
-      </table></div>
-      <p>さらに、<strong>世代の古い結果</strong>と<strong>候補IDの改変</strong>を拒否します。入力が進んだあとに届いた推論結果は捨て、AIが候補の識別子を書き換えることも許可しません。</p>
-    </div>
-  </section>
-  <section class="content" id="failure" aria-labelledby="failure-title">
-    <p class="eyebrow">FAILURE HANDLING</p><h2 id="failure-title">AIが落ちても、入力は止まらない</h2>
-    <div class="prose">
-      <p>AIの未起動、タイムアウト、クラッシュのいずれでもMozc入力を維持します。これは目標ではなく<strong>出荷条件</strong>です。</p>
-      <ul>
-        <li>鍵ストアが無い、ネットワークが切れた、プロバイダが使えない、同期が無効 —— いずれの場合も<strong>平文へのフォールバックは起きません</strong>（fail-closed）。</li>
-        <li>パスワード欄などの保護フィールドでは、文脈の取得・AI・学習を<strong>停止</strong>します。</li>
-        <li>診断ログは設定値・パス・入力テキスト・トークンを含みません。</li>
-      </ul>
-    </div>
-  </section>
-  <section class="content" id="localai" aria-labelledby="localai-title">
-    <p class="eyebrow">LOCAL AI IN PRACTICE</p><h2 id="localai-title">ローカルAIを実際に動かして分かったこと</h2>
-    <div class="prose">
-      <p>同梱AIは<strong>完全オフライン</strong>です。実行環境は <code>127.0.0.1</code>（ループバック）だけで待ち受け、プロセスごとの鍵で保護されます。テキストがこのPCの外へ出ることはありません。起動時には同梱バイトのハッシュを検証します。</p>
-      <h3>低整合性プロセスという落とし穴</h3>
-      <p>beta.2 の開発で、AIのコードもモデルも動くのに<strong>製品経路では一度も起動しない</strong>状態に当たりました。原因は権限ではなく整合性レベルです。</p>
-      <div class="table-wrap"><table class="data">
-        <thead><tr><th>起動元</th><th>子プロセス</th><th>メモリ</th></tr></thead>
-        <tbody>
-          <tr><td><code>mozc_server</code>（低整合性）</td><td>conhost のみ — <strong>AIなし</strong></td><td>7 MB</td></tr>
-          <tr><td><code>powershell</code>（中整合性）</td><td>conhost + llama-server</td><td>1,664 MB</td></tr>
-        </tbody>
-      </table></div>
-      <p>同じバイナリ・同じPC・同じアカウントで、違いは親プロセスだけでした。MozcはIMEサーバーを<strong>低整合性</strong>で動かし、そこから起動されるプロセスも継承します。低整合性プロセスは <code>%TEMP%</code> にディレクトリを作れず、鍵の準備に失敗してAI経路が放棄されていました。</p>
-      <p><strong>さらに深刻だったのは、理由がどこにも残らなかったことです。</strong>テキストサービスはコンソールもリダイレクト先も与えないため、診断はすべて捨てられ、外からは「設計どおりAIが無効」と「起動に失敗した」が区別できませんでした。</p>
-      <p>修正は、鍵の置き場所の候補に低整合性向けの <code>AppData\LocalLow\KanaAI</code> を追加し（<code>%TEMP%</code> が第1候補のままなので通常の挙動は不変）、起動診断を <code>broker-startup.log</code> に記録し、書けなければ <code>LocalLow</code> へフォールバックする、の2点です。鍵ファイルの保護は弱めていません。</p>
-    </div>
-  </section>
-  <section class="content" id="rejected" aria-labelledby="rejected-title">
-    <p class="eyebrow">MEASURED, THEN REJECTED</p><h2 id="rejected-title">6つの役割を測って、全部ダメだった</h2>
-    <div class="prose">
-      <p>同梱モデル（Qwen2.5-1.5B-Instruct Q4_K_M）に与えうる役割を、<strong>実物の実行環境に実物のプロンプト機構経由で聞いて</strong>測定しました。結果は次のとおりで、<strong>1つも採用できませんでした</strong>。</p>
-      <div class="table-wrap"><table class="data">
-        <thead><tr><th>役割</th><th>実測</th><th>判定</th></tr></thead>
-        <tbody>
-          <tr><td>候補の並び替え</td><td>top-1 が 6件中 <strong>0件</strong></td><td><span class="pill no">不採用</span></td></tr>
-          <tr><td>かな→漢字変換</td><td>完全一致 12件中 <strong>2件</strong></td><td><span class="pill no">不採用</span></td></tr>
-          <tr><td>読み生成（ふりがな）</td><td>完全一致 15件中 5件</td><td><span class="pill warn">出荷不可</span></td></tr>
-          <tr><td>誤りの指摘（ヒントとして）</td><td>8件中5件検出、<strong>誤検出2件</strong></td><td><span class="pill warn">出荷不可</span></td></tr>
-          <tr><td>誤りの位置特定</td><td>5件中 <strong>0件</strong></td><td><span class="pill no">不採用</span></td></tr>
-          <tr><td>Slow Path の節補完</td><td>6件中 <strong>3件が空</strong>、1件は再現せず</td><td><span class="pill warn">出荷不可</span></td></tr>
-        </tbody>
-      </table></div>
-      <p>失敗のしかたは漠然としていません。変換では、当てずっぽうではなく<strong>入力のかなや前後の文脈をそのまま返す</strong>のが主な失敗（12件中7件）でした。答えの形だけを整えて、変換をしていません。</p>
-      <p>そして、採用の判定に使っていた自己申告の <code>confidence</code> は<strong>正しさについて何も情報を含んでいませんでした</strong> — 0.9 はすべての誤答に付き、正答には付きませんでした。</p>
-      <div class="callout warn"><p class="t">これは何の主張で、何の主張ではないか</p><p>これは<strong>重みについての記述</strong>であって、配管についての記述ではありません。供給経路は固定され、実行環境は埋め込みの起動計画から立ち上がり、モデルは固定バイトから読み込まれ、すべてのプロンプトに答えます。ローカルモデル一般や llama.cpp についての記述でもなく、別の重みがどう動くかを予測するものでもありません。</p></div>
-      <p>この6つの測定は <code>crates/kanai-broker/tests/ai_decision_probe.rs</code> にゲートつきテストとして書いてあります。<code>KANAI_AI_EVIDENCE=1</code> を設定しない限り <code>KANAI_AI_EVIDENCE=NOT-PERFORMED</code> を出力するので、<strong>新しいモデルは同じ計器で測られます</strong>。新しい議論では測りません。</p>
-    </div>
-  </section>
-  <section class="content" id="ladder" aria-labelledby="ladder-title">
-    <p class="eyebrow">MODEL LADDER</p><h2 id="ladder-title">モデルは「積む」のではなく「選ぶ」</h2>
-    <div class="table-wrap"><table class="data">
-      <thead><tr><th>実行クラス</th><th>想定モデル</th><th>用途</th><th>メモリ目標</th></tr></thead>
-      <tbody>
-        <tr><td><code>MozcOnly</code></td><td>なし</td><td>変換、候補生成、ローカル学習</td><td>0–256 MiB</td></tr>
-        <tr><td><code>FastRanker</code></td><td>小型分類器／埋め込み</td><td>候補の特徴スコアリング</td><td>&lt;1 GiB</td></tr>
-        <tr><td><code>Tiny</code></td><td>0.6B Q4 級</td><td>短い曖昧性・修正プロンプト</td><td>1–2 GiB</td></tr>
-        <tr><td><code>Compact</code></td><td>1.7B Q4 級</td><td>意味的な並び替え・明示的な書き換え</td><td>2–4 GiB</td></tr>
-        <tr><td><code>Balanced</code></td><td>4B Q4 級</td><td>長文の明示的な支援</td><td>4–6 GiB</td></tr>
-      </tbody>
-    </table></div>
-    <div class="prose"><p>推奨クラスは<strong>空きメモリと使える加速器の余裕</strong>から決めます。搭載VRAMだけでは決めません。余裕がなければ <code>MozcOnly</code> が正しい答えです。</p></div>
-    <div class="actions"><a class="button" href="privacy.html">プライバシー設計を読む</a><a class="button secondary" href="status.html">検証状況とロードマップ</a></div>
-  </section>
-  <nav class="page-nav" aria-label="ページ間の移動">
-    <a class="prev" href="./"><span class="dir">← 前</span><span class="ttl">ホーム</span></a>
-    <a class="next" href="privacy.html"><span class="dir">次 →</span><span class="ttl">プライバシーとセキュリティ</span></a>
-  </nav>
-</main>
-<footer><div class="wrap">
-  <div class="foot-nav">
-    <div><h4>製品</h4><ul><li><a href="./">ホーム</a></li><li><a href="design.html">設計と技術</a></li><li><a href="privacy.html">プライバシー</a></li></ul></div>
-    <div><h4>使う</h4><ul><li><a href="download.html">ダウンロード・導入</a></li><li><a href="faq.html">よくある質問</a></li><li><a href="status.html">検証状況</a></li></ul></div>
-    <div><h4>開発</h4><ul><li><a href="https://github.com/aruiki/kanai">GitHub</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/STATE.md">開発記録</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/CONTRIBUTING.md">参加方法</a></li></ul></div>
-    <div><h4>報告・法務</h4><ul><li><a href="https://github.com/aruiki/kanai/issues/new/choose">不具合報告</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/SECURITY.md">セキュリティ</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/LICENSE-MIT">ライセンス</a></li></ul></div>
-  </div>
-  <a class="brand" href="./">KanaAI</a><p>Mozc-based Japanese input for Windows. Local AI in development.</p>
-  <p>ページ更新: 2026年10月7日 · 公開版 v0.1.0-beta.2（未署名・未完成） · <span class="langswitch"><a href="./">日本語</a><a href="en/">English</a></span></p>
-</div></footer>
-</body>
-</html>
-
+<header><div class="wrap"><a class="brand" href="./"><img src="kotori-mark.svg" width="36" height="36" alt="" />Kotori日本語入力</a><nav aria-label="メインナビゲーション"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/KotoriIME-japanese-">GitHub</a><a href="en/">English</a></nav></div></header>
+<main id="main-content" class="wrap"><nav class="breadcrumb" aria-label="現在地"><a href="./">ホーム</a><span>›</span><span>設計と技術</span></nav><section class="page-head"><p class="eyebrow">KOTORI JAPANESE INPUT</p><h1>MozcとAI、それぞれの得意を。</h1><p class="lede">Mozcの辞書と変換を土台に、zenzとTinySwallowが文脈を読んで候補を選び直す。品質モード、AI予測、GPU・CPUの使い分けと負荷制御を紹介。</p></section><section class="content" id="conversion" aria-labelledby="conversion-title"><h2 id="conversion-title">Mozcの候補と、AIの文脈判断。</h2><ol class="spec-list"><li><strong>Mozcが候補を組み立てる。</strong>辞書・かな漢字変換・文節処理を土台にし、変換用AIのzenzも読みから文を生成します。</li><li><strong>AIが候補を採点する。</strong>zenzと日本語モデルTinySwallow-1.5Bが、前の文に続けて自然な日本語かを採点します。結果に合わせて文節の区切りも調整します。</li><li><strong>読みを辞書で確かめる。</strong>生成した文が読みと一致するかをMozcの辞書で確認し、合わない候補を拒否します。ユーザー辞書の登録語はAIが書き換えません。</li></ol></section><section class="content" id="predict" aria-labelledby="predict-title"><h2 id="predict-title">文の続きを、裏で考える。</h2><p>1文字ずつの入力はMozcが処理し、AI予測は裏で計算します。候補に「AI」と付いた続きをTabで選べます。v1.1.0-rc.1では、手を止めたときにもAI変換と予測を表示する機能を追加しました。製品版v1.0.0と先行版の機能範囲は区別して案内しています。</p></section><section class="content" id="quality" aria-labelledby="quality-title"><h2 id="quality-title">PCに合わせる、4つの品質。</h2><div class="table-wrap"><table class="data"><thead><tr><th scope="col">品質</th><th scope="col">AJIMEE-Bench</th><th scope="col">変換の中央値</th><th scope="col">利用環境</th></tr></thead><tbody><tr><td>Low（GPU測定）</td><td>88.0%</td><td>約0.06秒</td><td>小さい専用GPU</td></tr><tr><td>Standard（既定）</td><td>91.5%</td><td>約0.06秒</td><td>専用GPU</td></tr><tr><td>High</td><td>92.5%</td><td>約0.08秒</td><td>速い専用GPU</td></tr><tr><td>Unreal</td><td>93.0%</td><td>約0.26秒</td><td>十分に速い専用GPU</td></tr><tr><td>CPU向けLow</td><td>83.0%</td><td>約0.12〜0.16秒</td><td>GPUなし・内蔵GPUのみ</td></tr></tbody></table></div><p class="small">READMEの公開値。GPUの行はRTX 3060、CPUの行はデスクトップCPU、前の文あり。変換結果や時間は環境・読み・入力のタイミングに依存します。<a href="https://github.com/aruiki/KotoriIME-japanese-#品質の段階">測定条件</a> · <a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/docs/PERFORMANCE.md">性能記録</a>。現行mainではGPU Lowが87.5%になったことも引き継ぎに記載されています。</p></section><section class="content" id="resources" aria-labelledby="resources-title"><h2 id="resources-title">負荷と待ち時間を抑える。</h2><p>AIの計算には時間の上限があり、間に合わなければMozcの結果を出します。内蔵GPUは使わずCPU向けに切り替えます。日本語を10分入力しなければAIモデルを外してVRAMを空け、次の入力時に裏で読み込み直します。</p><p>モデルはzenz-v2.5 small / medium、TinySwallow-1.5B。実行環境はllama.cpp / ggmlを使い、専用GPUはVulkanで利用します。</p></section><section class="content" id="source" aria-labelledby="source-title"><h2 id="source-title">設計とコードを公開する。</h2><p><a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/mozc/README.md">Mozcへの変更</a> · <a href="https://github.com/aruiki/KotoriIME-japanese-/tree/main/docs/adr">設計判断の記録</a> · <a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/eval/README.md">精度の評価</a></p></section></main>
+<footer><div class="wrap"><a class="brand" href="./">Kotori日本語入力</a><p>Mozc + local AI · Japanese input for Windows</p><p>本文確認: 2026年10月7日 · 製品版 v1.0.0 / リリース候補 v1.1.0-rc.1 · 両版とも未署名</p><p id="latest-release" aria-live="polite"><a href="https://github.com/aruiki/KotoriIME-japanese-/releases/latest">最新版の製品版を確認 →</a></p><nav aria-label="フッター"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/docs/USER_GUIDE.md">使い方と困ったとき</a></nav><p><a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/docs/licenses.md">ライセンス</a> · <a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/SECURITY.md">セキュリティ</a></p></div></footer>
+</body></html>

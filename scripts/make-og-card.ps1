@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Renders the KanaAI Open Graph card (1200x630) as a PNG.
+  Renders the Kotori IME Open Graph card (1200x630) as a PNG.
 
 .DESCRIPTION
   Social crawlers (X, Facebook, LinkedIn, Slack) do not render SVG og:image
@@ -9,8 +9,7 @@
   becoming a binary with no source.
 
   Colours and wording match site-assets/landing.css and site-assets/index.html.
-  The card states the published beta and its limits; it must not be reworded
-  into a quality claim that STATE.md does not support.
+  The card follows the current Kotori release notes and the dated site text.
 
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-og-card.ps1
@@ -54,22 +53,18 @@ function New-RoundedPath {
 }
 
 function Draw-Mark {
-  # Vector replica of site-assets/kanai-mark.svg, scaled to $Size.
+  # Vector replica of site-assets/kotori-mark.svg.
   param($Graphics, [float]$X, [float]$Y, [float]$Size)
   $s = $Size / 64.0
-  $background = New-Object System.Drawing.SolidBrush($inkDeep)
+  $background = New-Object System.Drawing.SolidBrush($ink)
   $graphics.FillPath($background, (New-RoundedPath -X $X -Y $Y -W $Size -H $Size -Radius (16 * $s)))
-  $lime = New-Object System.Drawing.SolidBrush($accent)
-  $graphics.FillRectangle($lime, $X + 16 * $s, $Y + 17 * $s, 32 * $s, 7 * $s)
-  $graphics.FillRectangle($lime, $X + 16 * $s, $Y + 24 * $s, 7 * $s, 23 * $s)
-  $graphics.FillRectangle($lime, $X + 23 * $s, $Y + 24 * $s, 19 * $s, 7 * $s)
-  $graphics.FillRectangle($lime, $X + 23 * $s, $Y + 31 * $s, 19 * $s, 7 * $s)
-  $graphics.FillRectangle($lime, $X + 16 * $s, $Y + 38 * $s, 14 * $s, 9 * $s)
-  $blue = New-Object System.Drawing.SolidBrush($accentSoft)
-  $graphics.FillRectangle($blue, $X + 41 * $s, $Y + 31 * $s, 7 * $s, 16 * $s)
-  $warm = New-Object System.Drawing.SolidBrush($accentWarm)
-  $graphics.FillEllipse($warm, $X + 44 * $s, $Y + 13 * $s, 8 * $s, 8 * $s)
-  $background.Dispose(); $lime.Dispose(); $blue.Dispose(); $warm.Dispose()
+  $pen = New-Object System.Drawing.Pen($accent, (7 * $s))
+  $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+  $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+  $graphics.DrawLine($pen, $X + 19 * $s, $Y + 16 * $s, $X + 19 * $s, $Y + 48 * $s)
+  $graphics.DrawLine($pen, $X + 25 * $s, $Y + 32 * $s, $X + 45 * $s, $Y + 15 * $s)
+  $graphics.DrawLine($pen, $X + 25 * $s, $Y + 32 * $s, $X + 45 * $s, $Y + 49 * $s)
+  $background.Dispose(); $pen.Dispose()
 }
 
 function Render-Card {
@@ -106,7 +101,7 @@ function Render-Card {
   Draw-Mark -Graphics $graphics -X 96 -Y 96 -Size 88
   $paperBrush = New-Object System.Drawing.SolidBrush($paper)
   $wordFont = New-Object System.Drawing.Font('Yu Gothic UI', 40, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
-  $graphics.DrawString('KanaAI', $wordFont, $paperBrush, 208, 108)
+  $graphics.DrawString('Kotori IME', $wordFont, $paperBrush, 208, 108)
   $wordFont.Dispose()
 
   $kickerFont = New-Object System.Drawing.Font('Yu Gothic UI', 21, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
@@ -179,7 +174,7 @@ foreach ($card in $copy.cards) {
   $probe.Dispose()
 }
 
-Write-Host 'KanaAI OG cards'
+Write-Host 'Kotori IME OG cards'
 foreach ($card in $cards) {
   Write-Host ("  {0}  {1}x{2}  {3} bytes" -f $card.File, $card.Width, $card.Height, $card.Bytes)
 }
