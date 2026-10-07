@@ -1,3 +1,18 @@
+# 最新の引き継ぎ — 2026-10-07（三製品の実入力比較）
+
+Microsoft IME・Google日本語入力との差をデータで示すユーザー依頼。
+トップとstatus.htmlへ比較図を追加。AJIMEE198問の88.4 / 59.6 / 58.1%、差28.8 / 30.3ポイント。
+2026-10-01、Kotori beta.8 / Unreal、前の文なし、RTX 3060という条件を明示。
+statusには打ち間違いを含む全5セット・版・問題数・再現手順を掲載。新規IME計測なし。
+出典: 現行Kotori main 642bd51のeval/imebench/README.md。
+現行Kotori READMEの比較もPR136で冒頭へ移動。製品コード・既存検証記録は変更しない。
+図を生成・目視確認、sync-site / validate-pages / diff checkは成功。HTML14、local refs274。
+公開結果とREADME CI/統合状況は追記する。
+
+---
+
+以下は過去の引き継ぎ。
+
 # 最新の引き継ぎ — 2026-10-07（現行Kotori日本語入力へ紹介サイトを更新）
 
 ユーザーが現在の製品リポジトリ `aruiki/KotoriIME-japanese-` を指定。
