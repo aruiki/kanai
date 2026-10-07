@@ -1,114 +1,25 @@
 <!doctype html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#142e29" />
-  <title>KanaAI（カナエーアイ）｜MozcベースのWindows日本語IME・ローカルAI開発</title>
-  <meta name="description" content="KanaAIはMozcを基盤にしたオープンソースのWindows日本語IME。ローカルAI同梱の試用ベータを公開中。対応環境、導入方法、AIの現状と既知の制限を紹介します。" />
-  <link rel="canonical" href="https://aruiki.github.io/kanai/" />
-  <link rel="sitemap" type="application/xml" href="https://aruiki.github.io/kanai/sitemap.xml" />
-  <link rel="alternate" hreflang="ja" href="https://aruiki.github.io/kanai/" />
-  <link rel="alternate" hreflang="en" href="https://aruiki.github.io/kanai/en/" />
-  <link rel="alternate" hreflang="x-default" href="https://aruiki.github.io/kanai/" />
-  <meta property="og:type" content="website" />
-  <meta property="og:locale" content="ja_JP" />
-  <meta property="og:site_name" content="KanaAI" />
-  <meta property="og:title" content="KanaAI｜MozcベースのWindows日本語IME" />
-  <meta property="og:description" content="ローカルAIを育てる、オープンソースの日本語入力。AI同梱の試用ベータを公開中。導入方法と現在の制限を確認できます。" />
-  <meta property="og:url" content="https://aruiki.github.io/kanai/" />
-  <meta property="og:image" content="https://aruiki.github.io/kanai/og-card.png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="KanaAI — Mozcを土台に、ローカルAIを育てるIME" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card.png" />
-  <link rel="icon" href="kanai-mark.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="landing.css" />
-  <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"KanaAI","alternateName":"カナエーアイ","url":"https://aruiki.github.io/kanai/","applicationCategory":"UtilitiesApplication","operatingSystem":"Windows 11 x64","softwareVersion":"0.1.0-beta.2","inLanguage":"ja","description":"Mozcを基盤にしたオープンソースのWindows日本語IME。ローカルAI同梱の未署名ベータ。beta.2の実測ではAIが起動しても変換結果は変わりません。","downloadUrl":"https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2","codeRepository":"https://github.com/aruiki/kanai"}
-  </script>
-</head>
-<body>
+<html lang="ja"><head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#142e29" />
+<title>Kotori日本語入力｜文脈を読むローカルAI・Windows日本語IME</title><meta name="description" content="Mozcの辞書と変換にローカルAIを組み合わせたWindows日本語IME。文脈に合う変換とAI予測、GPU・CPU対応。製品版のダウンロード、導入方法、評価記録を紹介。" />
+<link rel="canonical" href="https://aruiki.github.io/kanai/" /><link rel="alternate" hreflang="ja" href="https://aruiki.github.io/kanai/" /><link rel="alternate" hreflang="en" href="https://aruiki.github.io/kanai/en/" /><link rel="alternate" hreflang="x-default" href="https://aruiki.github.io/kanai/" />
+<meta property="og:type" content="website" /><meta property="og:locale" content="ja_JP" /><meta property="og:site_name" content="Kotori日本語入力" />
+<meta property="og:title" content="Kotori日本語入力｜文脈を読むローカルAI・Windows日本語IME" /><meta property="og:description" content="Mozcの辞書と変換にローカルAIを組み合わせたWindows日本語IME。文脈に合う変換とAI予測、GPU・CPU対応。製品版のダウンロード、導入方法、評価記録を紹介。" /><meta property="og:url" content="https://aruiki.github.io/kanai/" />
+<meta property="og:image" content="https://aruiki.github.io/kanai/og-card.png" /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" /><meta property="og:image:alt" content="Kotori日本語入力 — 文脈を読むローカルAI" />
+<meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card.png" />
+<link rel="icon" href="kotori-mark.svg" type="image/svg+xml" /><link rel="stylesheet" href="landing.css" />
+<script src="releases.js" defer></script><script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Kotori日本語入力","alternateName":"Kotori IME","url":"https://aruiki.github.io/kanai/","applicationCategory":"UtilitiesApplication","operatingSystem":"Windows 10 1809 or later, Windows 11 (x64)","softwareVersion":"1.0.0","inLanguage":"ja","description":"MozcとローカルAIによる文脈に合う日本語変換と入力中の予測。製品版v1.0.0は未署名。","downloadUrl":"https://github.com/aruiki/KotoriIME-japanese-/releases/latest","codeRepository":"https://github.com/aruiki/KotoriIME-japanese-"}
+</script>
+</head><body>
 <a class="skip-link" href="#main-content">本文へ移動</a>
-<header><div class="wrap">
-  <a class="brand" href="#top"><img src="kanai-mark.svg" alt="" width="36" height="36" />KanaAI</a>
-  <nav aria-label="メインナビゲーション"><a href="#features">特徴</a><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">検証状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/kanai">GitHub</a></nav>
-</div></header>
-<main id="main-content" class="wrap">
-  <section class="hero" id="top" aria-labelledby="hero-title">
-    <div>
-      <p class="eyebrow">OPEN SOURCE · WINDOWS 日本語入力</p>
-      <h1 id="hero-title">Mozcを土台に。<br />ローカルAIを育てる<br />日本語IME、KanaAI。</h1>
-      <p class="lede">KanaAI（カナエーアイ）は、Windowsで使う日本語入力ソフトです。Mozcのかな漢字変換と、PC内で動くAIを組み合わせる開発を進めています。</p>
-      <div class="actions"><a class="button" href="download.html">試用ベータの導入方法</a><a class="button secondary" href="https://github.com/aruiki/kanai">ソースコードを見る</a></div>
-      <p class="small">公開版 v0.1.0-beta.2 · Windows x64 · 未署名・未完成</p>
-    </div>
-    <aside class="status" aria-label="公開ベータの現在地">
-      <span class="tag">開発・検証への参加者向け</span>
-      <strong>AIは起動します。<br />変換品質の改善は、<br />これからです。</strong>
-      <p>beta.2 はモデルと実行環境を同梱しています。ただし、公開版の実測ではAIを動かしても変換結果は変わりません。</p>
-      <a href="https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2">検証結果と既知の制限を読む →</a>
-    </aside>
-  </section>
-  <section class="content" id="features" aria-labelledby="features-title">
-    <p class="eyebrow">ABOUT KANAAI</p><h2 id="features-title">日本語入力を、手元のPCで。</h2>
-    <div class="grid">
-      <article class="card"><h3>Mozcのかな漢字変換</h3><p>辞書や変換、候補生成はMozcを基盤にしています。Windowsの入力方式として切り替えて使うIMEです。</p></article>
-      <article class="card"><h3>ローカルAIを同梱</h3><p>Qwen2.5-1.5Bとllama.cppのCPU実行環境を同梱。クラウドAIのアカウントは不要で、PC内で推論を行う設計です。</p></article>
-      <article class="card"><h3>開発過程を公開</h3><p>KanaAI自身のソースはMITまたはApache-2.0。実装、検証結果、未解決の課題をGitHubで確認できます。</p></article>
-    </div>
-    <div class="notice"><strong>現在使えることと、開発中のこと</strong><p>Mozcベースの日本語入力と同梱AIの起動を確認したベータです。AIによる変換精度向上や、日常利用の安定性を保証する段階には達していません。完成版の独立検証は未完了です。</p></div>
-  </section>
-  <section class="content" id="pages" aria-labelledby="pages-title">
-    <p class="eyebrow">PAGES</p><h2 id="pages-title">詳しいページ</h2>
-    <div class="grid">
-      <a class="cardlink" href="design.html"><h3>設計と技術</h3><p>Mozcを活かす分担、Fast Path／Slow Path、世代番号、AI役割の実測と棄却、モデルの階段。</p><span class="go">設計を読む →</span></a>
-      <a class="cardlink" href="privacy.html"><h3>プライバシー</h3><p>外部送信なし、loopbackのみ、保護フィールドでの停止、保存場所と削除、脅威モデル。</p><span class="go">プライバシーを読む →</span></a>
-      <a class="cardlink" href="download.html"><h3>ダウンロード・導入</h3><p>SHA-256、動作環境、4手順の導入、AIのON/OFF、削除、動かないときのログ。</p><span class="go">導入手順を読む →</span></a>
-      <a class="cardlink" href="status.html"><h3>検証状況</h3><p>receiptがある項目と、まだ証拠がない項目。実機ログの実測値と残作業。</p><span class="go">証拠を確認する →</span></a>
-      <a class="cardlink" href="faq.html"><h3>よくある質問</h3><p>14の回答。変換結果、外部送信、約1.1 GBの理由、未署名の警告、導入直後の操作。</p><span class="go">FAQを読む →</span></a>
-      <a class="cardlink" href="https://github.com/aruiki/kanai"><h3>GitHub</h3><p>ソース、開発記録（STATE.md）、リリース、Issue。MIT OR Apache-2.0。</p><span class="go">リポジトリを開く →</span></a>
-    </div>
-  </section>
-  <section class="content" id="download" aria-labelledby="download-title">
-    <p class="eyebrow">TRY THE BETA</p><h2 id="download-title">ダウンロードとインストール</h2>
-    <p>公開版は <strong>v0.1.0-beta.2</strong>。モデル同梱で約1.1 GBです。Windows 11 x64の1台で検証されており、ARM64は未検証です。AI有効時の子プロセスのメモリ使用量は検証環境で約1.6 GBでした。</p>
-    <ol>
-      <li><a href="https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2">GitHubのリリースノート</a>で制限を確認し、<strong>KanaAI-0.1.0-Setup.exe</strong>をダウンロードします。配布元のSHA-256と照合できます。</li>
-      <li>Setup.exeを起動し、WindowsのUACを承認してインストールします。</li>
-      <li><strong>Win + Space</strong>でKanaAIを選択します。必要に応じて半角／全角キーで日本語入力をONにします。</li>
-    </ol>
-    <p><strong>未署名のためWindowsの警告が表示される場合があります。</strong>保護機能を無効化する手順は案内していません。導入の詳細、既知の問題、ファイルのハッシュはリリースノートを確認してください。</p>
-    <div class="actions"><a class="button" href="https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2">リリースノート・配布ファイル</a></div>
-    <p class="small">削除はWindowsの「設定 → アプリ → インストール済みアプリ」から「KanaAI Development Preview」をアンインストールします。</p>
-  </section>
-  <section class="content" id="faq" aria-labelledby="faq-title">
-    <p class="eyebrow">FAQ</p><h2 id="faq-title">よくある質問</h2>
-    <details open><summary>KanaAIとは何ですか？</summary><p>Mozcを基盤にした、オープンソースのWindows向け日本語IME（日本語入力ソフト）です。通常のかな漢字変換に、ローカルAIによる候補の調整を組み合わせることを目指しています。</p></details>
-    <details><summary>AIで日本語変換の精度が上がりますか？</summary><p>公開済みのbeta.2について、改善を主張していません。AIの起動は確認できていますが、AI ON/OFFの比較では変換結果は変わりませんでした。品質改善は今後の実装と評価の課題です。</p></details>
-    <details><summary>オフラインで使えますか？ 入力内容の扱いは？</summary><p>モデルと実行環境を同梱し、導入後の変換・推論をPC内で行う設計です。モデルの実行環境はローカルのループバック接続を使います。検証範囲は<a href="https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2">リリースノート</a>、安全性に関する報告先は<a href="https://github.com/aruiki/kanai/blob/main/SECURITY.md">セキュリティポリシー</a>をご覧ください。</p></details>
-    <details><summary>Microsoft IMEやGoogle 日本語入力の代わりになりますか？</summary><p>Windowsの入力方式として使えますが、現時点では開発中の試用ベータです。他のIMEと同等以上の精度・速度・安定性を示す比較結果はありません。KanaAIはGoogleと提携しておらず、サポートも受けていません。</p></details>
-    <details><summary>無料ですか？ 商用利用できますか？</summary><p>公開ベータは無償でダウンロードできます。KanaAI自身のソースはMITまたはApache-2.0で公開しています。Mozc、辞書、モデル、推論環境にはそれぞれのライセンスが適用されるため、利用・再配布時には同梱ライセンスを確認してください。</p></details>
-    <details><summary>MacやLinuxでも使えますか？</summary><p>このページで案内する配布版はWindows x64向けです。macOS・Linux向けの完成したIME配布版は案内していません。</p></details>
-    <div class="actions"><a class="button secondary" href="faq.html">14の回答すべてを見る</a><a class="button secondary" href="status.html">検証状況と残作業</a></div>
-  </section>
-  <section class="content" id="contribute" aria-labelledby="contribute-title">
-    <p class="eyebrow">BUILD WITH US</p><h2 id="contribute-title">試す。報告する。一緒に育てる。</h2>
-    <p>不具合の再現手順や利用環境の報告、実装への貢献を歓迎します。報告にはWindowsのバージョン、KanaAIのリリース番号、発生したアプリ名を添え、個人情報や入力した機密文は含めないでください。</p>
-    <div class="actions"><a class="button secondary" href="https://github.com/aruiki/kanai/issues/new/choose">不具合・要望を報告する</a><a class="button secondary" href="https://github.com/aruiki/kanai/blob/main/CONTRIBUTING.md">開発への参加方法</a></div>
-    <p><a href="https://github.com/aruiki/kanai/blob/main/STATE.md">最新の開発記録</a> · <a href="https://github.com/aruiki/kanai/releases">リリース一覧</a></p>
-  </section>
-</main>
-<footer><div class="wrap">
-  <div class="foot-nav">
-    <div><h4>製品</h4><ul><li><a href="./">ホーム</a></li><li><a href="design.html">設計と技術</a></li><li><a href="privacy.html">プライバシー</a></li></ul></div>
-    <div><h4>使う</h4><ul><li><a href="download.html">ダウンロード・導入</a></li><li><a href="faq.html">よくある質問</a></li><li><a href="status.html">検証状況</a></li></ul></div>
-    <div><h4>開発</h4><ul><li><a href="https://github.com/aruiki/kanai">GitHub</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/STATE.md">開発記録</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/CONTRIBUTING.md">参加方法</a></li></ul></div>
-    <div><h4>報告・法務</h4><ul><li><a href="https://github.com/aruiki/kanai/issues/new/choose">不具合報告</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/SECURITY.md">セキュリティ</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/LICENSE-MIT">ライセンス</a></li></ul></div>
-  </div>
-  <a class="brand" href="#top">KanaAI</a><p>Mozc-based Japanese input for Windows. Local AI in development.</p>
-  <p>ページ更新: 2026年10月7日 · 公開版 v0.1.0-beta.2（未署名・未完成） · <span class="langswitch"><a href="./">日本語</a><a href="en/">English</a></span></p>
-</div></footer>
-</body>
-</html>
+<header><div class="wrap"><a class="brand" href="./"><img src="kotori-mark.svg" width="36" height="36" alt="" />Kotori日本語入力</a><nav aria-label="メインナビゲーション"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/KotoriIME-japanese-">GitHub</a><a href="en/">English</a></nav></div></header>
+<main id="main-content" class="wrap"><section class="hero" id="top" aria-labelledby="hero-title"><div>
+<p class="eyebrow">LOCAL AI · WINDOWS 日本語入力</p>
+<h1 id="hero-title">文脈を読む。<br />言葉が届く。<br />Kotori日本語入力。</h1>
+<p class="lede">いつものMozcの操作に、PC内で動くAIを。前後の文脈に合うかな漢字変換と、文の続きを予測する日本語IMEです。</p>
+<div class="actions"><a class="button" href="download.html">Windows版をダウンロード</a><a class="button secondary" href="#examples">変換の例を見る</a></div>
+<p class="small">製品版 <span data-stable-version>v1.0.0</span> 公開中 · Windows 10 / 11 x64 · GPUなしでも利用可能</p>
+</div><aside class="status" aria-label="Kotoriの特徴"><span class="tag">モデル・実行環境を同梱</span><strong>AIは、あなたのPCに。<br />言葉は、外へ送らない。</strong><p>MSIをひとつ実行するだけ。クラウドのアカウントも、CUDAの追加導入もいりません。</p><a href="privacy.html">データとプライバシーを見る →</a></aside></section><section class="content" id="features" aria-labelledby="features-title"><h2 id="features-title">Mozcの使いやすさに、文脈の理解を。</h2><div class="grid"><article class="card"><h3>文脈に合う変換</h3><p>AIが文全体と前の文を読み、同音異義語や言い回しに合う候補を選び直します。ユーザー辞書の登録語は保護します。</p></article><article class="card"><h3>入力中のAI予測</h3><p>AIが文の続きを裏で考え、候補に「AI」と付けて表示します。Tabで予測へ移って選べます。</p></article><article class="card"><h3>GPUでも、CPUでも</h3><p>専用GPUを自動で見つけて利用します。GPUがないPCはCPU向け設定へ切り替え、時間内に終わらないときはMozcの結果を表示します。</p></article></div></section><section class="content" id="examples" aria-labelledby="examples-title"><h2 id="examples-title">同じ読みでも、選ぶ言葉が変わる。</h2><div class="table-wrap"><table class="data"><thead><tr><th scope="col">読み・前の文</th><th scope="col">Mozc単体</th><th scope="col">Kotori日本語入力</th></tr></thead><tbody><tr><td>かれはこうえんでこうえんをした</td><td>彼は公園で公園をした</td><td>彼は公園で<strong>公演</strong>をした</td></tr><tr><td>おんせいにんしきのせいどがあがった</td><td>音声認識の制度が上がった</td><td>音声認識の<strong>精度</strong>が上がった</td></tr><tr><td>このやくはむずかしい<br /><small>前の文: 英語の文を日本語にしています。</small></td><td>この薬は難しい</td><td>この<strong>訳</strong>は難しい</td></tr></tbody></table></div><p class="small">Standard・2026年10月1日の公開例。「前の文」は直前に確定した文として渡したものです。<a href="https://github.com/aruiki/KotoriIME-japanese-#変換の例">READMEの例と条件</a></p></section><section class="content" id="accuracy" aria-labelledby="accuracy-title"><h2 id="accuracy-title">変換の正確さを、公開して測る。</h2><div class="grid"><article class="card"><h3>91.5%</h3><p>AJIMEE-Bench 200問で、最初の候補が正解と一致した割合。Standard・前の文あり。Mozc単体は51.0%。</p></article><article class="card"><h3>96.3%</h3><p>調整に使わない最終評価用300問での一致率。Standard・前の文あり。Mozc単体は82.3%。</p></article><article class="card"><h3>記録も公開</h3><p>ニュース、仕事、日常、固有名詞、数字などを評価。実際の文章では誤変換も起こるため、評価条件と失敗例も確認できます。</p></article></div><p class="small">プロジェクトが公開した測定値（2026年10月1日、RTX 3060）。すべてのPCや文章で同じ結果になるとは限りません。<a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/eval/README.md">測定方法・記録</a> · <a href="status.html">版ごとの状態</a></p></section><section class="content" id="releases" aria-labelledby="releases-title"><h2 id="releases-title">製品版と、次の機能。</h2><div class="grid"><article class="card"><h3>製品版 <span data-stable-version>v1.0.0</span></h3><p>AI変換・予測・設定画面を備えたWindows版。通常の導入はこちらから。</p><div class="actions"><a href="https://github.com/aruiki/KotoriIME-japanese-/releases/latest">最新版の製品版 →</a></div></article><article class="card"><h3>リリース候補 v1.1.0-rc.1</h3><p>手を止めると、Spaceを押す前にAIの変換と文の続きが候補に並ぶ機能を追加。先行機能を試す方へ。</p><div class="actions"><a href="https://github.com/aruiki/KotoriIME-japanese-/releases/tag/v1.1.0-rc.1">リリース候補の詳細 →</a></div></article><article class="card"><h3>導入前に</h3><p>両版とも未署名です。Windowsの警告が表示される場合があります。対応環境と導入方法を確認できます。</p><div class="actions"><a href="download.html">導入方法 →</a></div></article></div></section><section class="content" id="explore" aria-labelledby="explore-title"><h2 id="explore-title">使い方も、しくみも。</h2><div class="grid"><a class="cardlink" href="design.html"><h3>設計と技術</h3><p>Mozc、zenz、TinySwallowの役割。</p><span class="go">詳しく見る →</span></a><a class="cardlink" href="privacy.html"><h3>プライバシー</h3><p>保存するデータ、診断、削除の方法。</p><span class="go">詳しく見る →</span></a><a class="cardlink" href="faq.html"><h3>FAQ・よくある質問</h3><p>GPU、ライセンス、更新、他のIMEとの違い。</p><span class="go">詳しく見る →</span></a></div></section></main>
+<footer><div class="wrap"><a class="brand" href="./">Kotori日本語入力</a><p>Mozc + local AI · Japanese input for Windows</p><p>本文確認: 2026年10月7日 · 製品版 v1.0.0 / リリース候補 v1.1.0-rc.1 · 両版とも未署名</p><p id="latest-release" aria-live="polite"><a href="https://github.com/aruiki/KotoriIME-japanese-/releases/latest">最新版の製品版を確認 →</a></p><nav aria-label="フッター"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/docs/USER_GUIDE.md">使い方と困ったとき</a></nav><p><a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/docs/licenses.md">ライセンス</a> · <a href="https://github.com/aruiki/KotoriIME-japanese-/blob/main/SECURITY.md">セキュリティ</a></p></div></footer>
+</body></html>
