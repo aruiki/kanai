@@ -128,19 +128,19 @@ function checkHtmlFile(filePath) {
   if (!/class\s*=\s*(["'])skip-link\1/i.test(html)) reportError(`${source}: missing skip link`);
 
   const requiredPhrases = [
-    "local-first Japanese Language Runtime",
-    "Mozc",
-    "Phase 1",
-    "Workbench/CLI",
-    "NOT A TSF / IME",
-    "Google 日本語入力",
-    "PROPRIETARY CODE + DATA / DO NOT REUSE",
-    "プライバシー",
-    "ロードマップ",
-    "engineering preview",
-    "ダウンロード",
-    "FAQ",
+    "Mozc", "Windows", "v0.1.0-beta.2", "未署名", "未完成",
+    "変換結果は変わりません", "ダウンロード", "FAQ", "約1.1 GB",
   ];
+  if ((html.match(/<h1\b/gi) || []).length !== 1) reportError(`${source}: expected exactly one h1`);
+  if (!html.includes('<link rel="canonical" href="https://aruiki.github.io/kanai/"')) reportError(`${source}: missing canonical`);
+  if (!html.includes('name="description"')) reportError(`${source}: missing description`);
+  if ((html.match(/type="application\/ld\+json"/g) || []).length !== 1) reportError(`${source}: expected one structured-data block`);
+  for (const match of html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) {
+    try {
+      const data = JSON.parse(match[1]);
+      if (data.softwareVersion !== '0.1.0-beta.2' || data['@type'] !== 'SoftwareApplication') reportError(`${source}: incorrect software metadata`);
+    } catch { reportError(`${source}: invalid structured data`); }
+  }
   for (const phrase of requiredPhrases) {
     if (!html.includes(phrase)) reportError(`${source}: required product content missing: ${phrase}`);
   }

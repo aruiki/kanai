@@ -4,7 +4,7 @@
 
 <div align="center">
 
-# 日本語入力を、遅らせずにAIで整える。
+# Mozcを基盤に、ローカルAIを育てるWindows日本語IME。
 
 **A local-first Windows Japanese IME built on Mozc, Rust, and bounded local AI.**
 
@@ -20,9 +20,9 @@
 > (`KanaAI-0.1.0-Setup.exe` / `KanaAI-0.1.0-x64.msi`, Windows x64, **about
 > 1.1 GB** - the model is in the package).
 >
-> This repository is the public source and engineering record for KanaAI, and
-> this README plus the GitHub Release body are the only published product
-> surface. There is no product website.
+> Japanese introduction and installation guide: **[KanaAI website](https://aruiki.github.io/kanai/)**.
+> This repository contains the public source and engineering record.
+> The Release body records the evidence and limitations of each published binary.
 > The product is a native Windows TSF text service, not the retired
 > Workbench/CLI demo. Do not treat a local build, a DLL load, a source test, or
 > a loopback model mock as proof that the end-user IME is ready.
@@ -34,7 +34,8 @@
 > own opt-in** on the product path - a 1.1 GB model loaded into a child process
 > at a 1.6 GB working set, with byte-hash verification and a completed
 > inference. What is **not** established is that any of that improves a
-> conversion: the AI-on/AI-off candidate difference is unmeasured, and the last
+> conversion: the published beta.2 AI-on/AI-off measurement found no change
+> in conversion results, and the last
 > recorded model-quality evaluation in [STATE.md](STATE.md) was **not shippable
 > in any of its six roles**. Read the Release body before installing.
 >
@@ -92,12 +93,12 @@ This table describes evidence, not marketing claims.
 | Area | Current state |
 | --- | --- |
 | Mozc/TIP and Windows runtime build | Windows x64 TIP/server/renderer artifacts have been built and statically checked. |
-| Installer | The unsigned MSI/Setup candidate for this beta is **published** as [v0.1.0-beta.1](https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.1). It is **Mozc-baseline only, with no AI bundle**. |
+| Installer | [v0.1.0-beta.2](https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2): unsigned Windows x64 Setup/MSI, about 1.1 GB, with a bundled local AI model and runtime. Read the release limitations before installing. |
 | Windows registration | The installed candidate has x64/x86 COM registration (`mozc_tip64.dll` / `mozc_tip32.dll`) and a Japanese input profile. |
 | Real app input | **Operator-confirmed, no machine-verified receipt.** On 2026-09-27 the operator confirmed on the validation machine that the installed candidate works as an IME (kana input, conversion, commit). `mozc_tip64.dll` was independently observed loaded in several live processes of that session. The automatic W1 harness has **not** produced a passing receipt; the blockers were harness observation defects, documented in the Release body. Notepad/Edge/Office composition, candidate, cancel, focus-loss, and restart checks are **not machine-verified**. |
-| AI bundle | Qwen2.5-1.5B official GGUF + `llama.cpp` CPU runtime were selected for implementation. Both pinned inputs have been downloaded and hash-verified in local staging, but have not been installed into KanaAI, executed as the product runtime, or quality-tested on Windows. **The AI bundle is not part of this beta.** |
+| AI bundle | beta.2 includes Qwen2.5-1.5B GGUF and the llama.cpp CPU runtime. Startup on the product path is measured; the published AI-on/AI-off comparison found no change in conversion results. No quality improvement is claimed. |
 | W1/W2 | W2 (installer lifecycle) is machine-verified by receipt for this exact hash. W1 (real-app Japanese input) is operator-confirmed only. |
-| Public release | Published as a GitHub **prerelease**: tag `v0.1.0-beta.1`, assets `KanaAI-0.1.0-Setup.exe` and `KanaAI-0.1.0-x64.msi` with SHA-256 in the Release body. There is no product website; everything is published here and in the Release body. |
+| Public release | GitHub prerelease [v0.1.0-beta.2](https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2), with fixed hashes and limitations in the Release body. [Japanese introduction and installation guide](https://aruiki.github.io/kanai/). |
 | Code signing | Not required for the beta by user decision. This beta is **unsigned** (`NotSigned` for both MSI and Setup), and the Release body states the resulting Windows warning. |
 | Product completion | Not complete. `.goal-complete` has not been created. |
 

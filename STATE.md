@@ -1,3 +1,30 @@
+# 最新の引き継ぎ — 2026-10-07（紹介サイト・検索導線の更新）
+
+ユーザー依頼: SEO等による周知。製品コード・配布バイナリの変更はなし。
+開始時の作業机mainはa77d114で、origin/mainのeb13138より6コミット古かった。
+既存作業を保持するため、origin/mainから分離worktree・codex/kanaai-seoを作成。
+GitHub APIの公開release beta.2、Pages設定（gh-pages）、実際の公開元HTMLを再確認した。
+
+- 紹介サイトの古い「インストーラー未公開」説明を公開beta.2の事実へ更新。
+- 日本語title/description、canonical、OGP、SoftwareApplication JSON-LD、sitemap、FAQ、導入/削除導線。
+- READMEのサイト不在・beta.1配布表記・AI比較未測定の古い記述を訂正。
+- ローカルで `node scripts/sync-site.mjs` / `node scripts/validate-pages.mjs` / `git diff --check` はexit 0。
+  validator: HTML 2、local references 6、anchors 14。ブラウザーで表示を確認。
+- 公開手順・Search Consoleの残作業・未投稿の告知文はdocs/PROMOTION.md。
+- 製品は未完成。公開beta.2はAIが起動しても変換結果を変えないという実測を明記。
+  独立検証記録VERIFICATION.mdと.goal-completeの扱いは変更なし。
+- 公開元gh-pagesへpush済み: `02af7c3b6b3fbf3e9c36c1ffeb114f4e724728a0`。
+  配備差分で末尾CRLFが検出されたためUTF-8/LFへ正規化し、再度diff --checkで確認した。
+- GitHub Aboutの説明とhomepage URLを更新し、APIから反映を確認。
+- 外部リンク8件はHTTP 200。390px幅とPC幅の表示、導入リンクとFAQ展開をブラウザー確認。
+- Search Consoleはログイン前の案内ページとなり、所有者確認・サイトマップ送信は未実施。
+- 次の作業: 所有者のSearch Consoleで所有権確認後、サイトマップ送信・流入測定。
+  Googleの検証タグ/ファイルは未取得。検索登録・順位上昇は未確認。
+
+以下は2026-09-28以前の引き継ぎ履歴（製品の詳細・証拠を保持）。
+
+---
+
 # 最新の引き継ぎ — 2026-09-28（§0-N: beta.2 公開。AI は起動するが**変換に関与していない**（実測））
 
 Status: **NOT COMPLETE** / `.goal-complete` **未作成** / 公開済み = GitHub prerelease
