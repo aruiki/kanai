@@ -1,556 +1,85 @@
 <!doctype html>
 <html lang="ja">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#122126" />
-    <meta name="color-scheme" content="light dark" />
-    <meta
-      name="description"
-      content="KanaAIは、Mozcを基盤にしたlocal-first Japanese Language Runtime。説明できるパーソナライズと任意のローカルAIを、IMEの途中から動かします。"
-    />
-    <meta property="og:type" content="website" />
-    <meta property="og:locale" content="ja_JP" />
-    <meta property="og:title" content="KanaAI — 変換は、Mozcに。理解は、あなたに。" />
-    <meta property="og:url" content="https://aruiki.github.io/kanai/" />
-    <link rel="canonical" href="https://aruiki.github.io/kanai/" />
-    <meta
-      property="og:description"
-      content="説明できるローカルAIを、壊さない日本語入力に。KanaAIの現在地とロードマップ。"
-    />
-    <title>KanaAI — local-first Japanese Language Runtime</title>
-    <link rel="icon" href="kanai-mark.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="site.css" />
-    <script src="site.js" defer></script>
-  </head>
-  <body>
-    <a class="skip-link" href="#main-content">本文へ移動</a>
-
-    <header class="site-header" id="site-header">
-      <div class="container header-inner">
-        <a class="brand" href="#top" aria-label="KanaAI ホーム">
-          <img class="brand-mark" src="kanai-mark.svg" alt="" width="40" height="40" />
-          <span class="brand-copy">
-            <span class="brand-name">KanaAI</span>
-            <span class="brand-caption">日本語入力ランタイム</span>
-          </span>
-        </a>
-
-        <nav class="site-nav" id="site-nav" aria-label="メインナビゲーション">
-          <a href="#product">$KanaAI</a>
-          <a href="#beta">Phase 1</a>
-          <a href="#architecture">設計</a>
-          <a href="#privacy">プライバシー</a>
-          <a href="#roadmap">ロードマップ</a>
-          <a href="#limitations">現状</a>
-        </nav>
-
-        <div class="header-actions">
-          <span class="header-status"><span class="status-dot"></span> engineering preview</span>
-          <button class="theme-toggle" type="button" aria-label="テーマを切り替える" aria-pressed="false">
-            <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="12" r="3.5"></circle>
-              <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"></path>
-            </svg>
-            <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M20.2 15.5A8.5 8.5 0 0 1 8.5 3.8 8.5 8.5 0 1 0 20.2 15.5Z"></path>
-            </svg>
-            <span class="sr-only">dark / light</span>
-          </button>
-          <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
-            <span class="sr-only">メニューを開く</span>
-            <span class="menu-lines" aria-hidden="true"><span></span><span></span></span>
-          </button>
-        </div>
-      </div>
-    </header>
-
-    <main id="main-content">
-      <section class="hero" id="top" aria-labelledby="hero-title">
-        <div class="container hero-grid">
-          <div class="hero-copy reveal">
-            <p class="eyebrow"><span class="eyebrow-mark"></span> local-first Japanese Language Runtime</p>
-            <h1 id="hero-title">変換は、<span class="headline-accent">Mozcに。</span><br />理解は、<span class="headline-ink">あなたに。</span></h1>
-            <p class="hero-lede">
-              KanaAIは、Mozcの確かな日本語変換を土台に、説明できるローカルポリシーと任意のローカルAIを重ねるIME产品规格です。チャットボックスの代わりに、キーボードの途中から自然に動くことを目指します。
-            </p>
-            <div class="hero-actions">
-              <a class="button button-primary" href="#beta">TSF betaの進捗を見る <span aria-hidden="true">↓</span></a>
-              <a class="button button-quiet" href="https://github.com/aruiki/kanai" target="_blank" rel="noreferrer">GitHubでソースを見る <span aria-hidden="true">↗</span></a>
-              <a class="text-arrow-link" href="https://github.com/aruiki/kanai/blob/main/docs/PLATFORM_ROADMAP.md" target="_blank" rel="noreferrer">Windows TSF roadmap <span aria-hidden="true">↗</span></a>
-            </div>
-            <p class="hero-note">公開可能なWindows IME betaはまだありません。既存Mozc TIPをhostに、TSF native betaを実装中です。Workbench/CLIをIME betaとは呼びません。</p>
-            <div class="hero-facts" aria-label="KanaAIの原則">
-              <div class="hero-fact"><span class="fact-number">01</span><span>アカウント不要</span></div>
-              <div class="hero-fact"><span class="fact-number">02</span><span>ネットワーク不要</span></div>
-              <div class="hero-fact"><span class="fact-number">03</span><span>AIは任意</span></div>
-            </div>
-          </div>
-
-          <div class="hero-visual reveal reveal-delay" aria-label="KanaAIの入力ループのUIコンセプト" role="region">
-            <div class="visual-topline">
-              <span class="visual-label">KANA_AI / CONCEPT VIEW</span>
-              <span class="visual-live"><span class="status-dot"></span> local by default</span>
-            </div>
-            <div class="visual-stage">
-              <div class="stage-glow" aria-hidden="true"></div>
-              <div class="kana-ghost" aria-hidden="true">かな</div>
-              <div class="input-composition">
-                <span class="composition-label">preedit</span>
-                <span class="composition-text">にほんご</span>
-                <span class="composition-cursor" aria-hidden="true"></span>
-              </div>
-              <div class="candidate-window">
-                <div class="candidate-header"><span>変換候補</span><span>1 / 3</span></div>
-                <ol class="candidate-list">
-                  <li><span class="candidate-number">01</span><strong>日本語</strong><span class="candidate-source source-mozc">MOZC</span></li>
-                  <li class="candidate-selected"><span class="candidate-number">02</span><strong>日本語入力</strong><span class="candidate-source source-local">LOCAL POLICY</span></li>
-                  <li><span class="candidate-number">03</span><strong>日本語仕様</strong><span class="candidate-source source-mozc">MOZC</span></li>
-                </ol>
-                <div class="candidate-explain"><span class="explain-mark" aria-hidden="true">✦</span><span>文脈再順位</span><span class="explain-detail">mozc base order を維持</span></div>
-              </div>
-            </div>
-            <div class="visual-bottomline">
-              <span><span class="keycap">Space</span> 選択</span>
-              <span>generation 042</span>
-            </div>
-            <p class="visual-caption">UI concept — 実際の変換結果ではありません。候補ウィンドウに、由来と理由が同居する。</p>
-          </div>
-        </div>
-        <div class="hero-rule container" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
-      </section>
-
-      <section class="preview-notice" aria-label="プロジェクトの現在地">
-        <div class="container notice-inner">
-          <span class="notice-icon" aria-hidden="true">i</span>
-          <p><strong>Engineering preview</strong><span>— 最初の公開betaはWindows TSF TIPです。OS全体に登録できる実機buildと検証が完了するまで、ダウンロード可能なIME betaは公開しません。</span></p>
-          <a href="#beta">TSF roadmapを見る <span aria-hidden="true">↓</span></a>
-        </div>
-      </section>
-
-      <section class="section section-intro" id="product" aria-labelledby="product-title">
-        <div class="container">
-          <div class="section-heading split-heading reveal">
-            <div>
-              <p class="section-kicker">01 / POSITIONING</p>
-              <h2 id="product-title">日本語入力は、<br /><span>会話の島ではない。</span></h2>
-            </div>
-            <p class="section-intro-copy">KanaAIが向き合うのは、変換の品質そのものではなく、人が候補を選び、文脈を積み、入力を残すというループの信頼です。</p>
-          </div>
-
-          <div class="positioning-board reveal">
-            <div class="positioning-side positioning-primary">
-              <span class="positioning-label">FOUNDATION</span>
-              <strong>Mozc</strong>
-              <p>composition・segmentation・conversion・rewriter・辞書。実績のある日本語変換の基盤を壊さず、そのまま土台にします。</p>
-              <span class="underlined-word">壊さない</span>
-            </div>
-            <div class="positioning-connector" aria-hidden="true"><span>+</span></div>
-            <div class="positioning-side positioning-secondary">
-              <span class="positioning-label">KANA_AI LAYER</span>
-              <strong>説明できる<br />ローカル政策</strong>
-              <p>ユーザー語彙、領域ごとの affinity、最近の選択、任意の semantic rerank。影響は bounded に、根拠は traceable に。</p>
-              <span class="underlined-word">重ねる</span>
-            </div>
-            <div class="positioning-result">
-              <span class="result-mark" aria-hidden="true">↘</span>
-              <span>結論として、<br /><b>ふつうの日本語入力</b>のまま</span>
-            </div>
-          </div>
-
-          <div class="principle-strip reveal" aria-label="KanaAIの製品境界">
-            <div class="principle-item"><span class="principle-index">A</span><div><strong>AIが状態を持つか？</strong><p>いいえ。mode・preedit・commit・undo は Rust/native shell の権限です。</p></div></div>
-            <div class="principle-item"><span class="principle-index">B</span><div><strong>AIは常にonlineか？</strong><p>いいえ。Mozc-only でも成立します。AI は bounded second stage です。</p></div></div>
-            <div class="principle-item"><span class="principle-index">C</span><div><strong>チャット窓か？</strong><p>いいえ。候補 window の中で、通常の Space / Enter / Tab を保ちます。</p></div></div>
-          </div>
-        </div>
-      </section>
-
-      <section class="section section-features" id="features" aria-labelledby="features-title">
-        <div class="container">
-          <div class="section-heading reveal">
-            <p class="section-kicker">02 / THE DIFFERENCE</p>
-            <h2 id="features-title">速さは、決定論的に。<br /><span>理解は、見える。</span></h2>
-            <p>一つの大きなモデルで入力を置き換えるのではなく、キー入力に敏感な部分と、判断が要る部分を分離します。</p>
-          </div>
-
-          <div class="feature-grid">
-            <article class="feature-card feature-card-wide reveal">
-              <div class="feature-card-top"><span class="feature-number">01</span><span class="feature-icon" aria-hidden="true">あ</span></div>
-              <h3>変換の土台は、変えない。</h3>
-              <p>固定したMozcをconversion foundationとして使い、composition、segmentation、rewriter、辞書のbehaviorを再実装しません。</p>
-              <span class="feature-tag">MOZC-ENHANCED</span>
-            </article>
-            <article class="feature-card reveal reveal-delay-short">
-              <div class="feature-card-top"><span class="feature-number">02</span><span class="feature-icon" aria-hidden="true">順</span></div>
-              <h3>順位には、理由を持たせる。</h3>
-              <p>local policyはMozcのbase orderをwrap。user、domain、recent、privacy influenceはboundedに。候補の順序を黙って学習させません。</p>
-              <span class="feature-tag">EXPLAINABLE POLICY</span>
-            </article>
-            <article class="feature-card reveal">
-              <div class="feature-card-top"><span class="feature-number">03</span><span class="feature-icon" aria-hidden="true">AI</span></div>
-              <h3>AIは、第二段階。</h3>
-              <p>optionalなlocal rerankerは短いreadingとcandidate windowだけを受け取り、timeoutなら即座にMozcへfallbackします。</p>
-              <span class="feature-tag">OPTIONAL / LOOPBACK</span>
-            </article>
-            <article class="feature-card reveal reveal-delay-short">
-              <div class="feature-card-top"><span class="feature-number">04</span><span class="feature-icon" aria-hidden="true">守</span></div>
-              <h3>状態は、AIに渡さない。</h3>
-              <p>mode変更、preedit、commit range、undo、learning persistenceはRust/session FSMの権限で管理します。AIは候補をproposeするだけ。</p>
-              <span class="feature-tag">STATE SAFE</span>
-            </article>
-            <article class="feature-card reveal">
-              <div class="feature-card-top"><span class="feature-number">05</span><span class="feature-icon" aria-hidden="true">OS</span></div>
-              <h3>プラットフォームは、薄い殻。</h3>
-              <p>一つのRust coreをFcitx5、Windows TSF、macOS InputMethodKitから使います。日本語変換をOSごとに増やしません。</p>
-              <span class="feature-tag">ONE CORE / THREE SHELLS</span>
-            </article>
-            <article class="feature-card feature-card-wide feature-card-dark reveal reveal-delay-short">
-              <div class="feature-card-top"><span class="feature-number">06</span><span class="feature-icon" aria-hidden="true">見</span></div>
-              <h3>開発基盤の实物まで、公開。</h3>
-              <p>Rustの変換・learning contracts、分離したMozc bridge、loopback API、候補の理由を見るTypeScript workbenchを同じリポジトリで確認できます。</p>
-              <a class="inline-link" href="https://github.com/aruiki/kanai/tree/main/crates" target="_blank" rel="noreferrer">crates/ を見る <span aria-hidden="true">↗</span></a>
-              <span class="feature-tag">OPEN DEVELOPMENT PATH</span>
-            </article>
-          </div>
-
-          <div class="loop-panel reveal" aria-labelledby="loop-title">
-            <div class="loop-header">
-              <div><p class="section-kicker">THE INPUT LOOP</p><h3 id="loop-title">一つのキーに、五つの責任。</h3></div>
-              <p>AIが遅れても、base resultは残ります。AIを足すことは、入力を不安定にすることではありません。</p>
-            </div>
-            <ol class="input-loop" aria-label="KanaAIの入力フロー">
-              <li><span class="loop-step">01</span><strong>key</strong><span>物理キー</span></li>
-              <li><span class="loop-step">02</span><strong>mode / preedit</strong><span>決定論的FSM</span></li>
-              <li><span class="loop-step">03</span><strong>Mozc</strong><span>base candidates</span></li>
-              <li><span class="loop-step">04</span><strong>KanaAI policy</strong><span>bounded ranking</span></li>
-              <li><span class="loop-step">05</span><strong>commit</strong><span>explicit choice</span></li>
-            </ol>
-          </div>
-        </div>
-      </section>
-
-      <section class="section section-architecture" id="architecture" aria-labelledby="architecture-title">
-        <div class="container">
-          <div class="section-heading architecture-heading reveal">
-            <p class="section-kicker">03 / ARCHITECTURE</p>
-            <h2 id="architecture-title">Rustが全体を調整。<br /><span>shellはただの入口。</span></h2>
-            <p>一つのsession contractを、OSごと・言語ごとに再利用します。Browser labは実験室であり、本番IMEの依存関係ではありません。</p>
-          </div>
-
-          <figure class="architecture-figure reveal" aria-labelledby="architecture-caption">
-            <div class="architecture-canvas">
-              <div class="architecture-band architecture-band-target">
-                <div class="band-label"><span class="band-dot"></span>TARGET NATIVE RUNTIME</div>
-                <div class="flow-row">
-                  <div class="flow-node node-host"><span>HOST</span><strong>アプリ</strong><small>key / edit / commit</small></div>
-                  <span class="flow-arrow" aria-hidden="true">→</span>
-                  <div class="flow-node node-shell"><span>THIN SHELL</span><strong>Fcitx5 / TSF / IMK</strong><small>native event glue</small></div>
-                  <span class="flow-arrow" aria-hidden="true">→</span>
-                  <div class="flow-node node-core"><span>RUST CORE</span><strong>orchestrator</strong><small>FSM · policy · privacy</small></div>
-                  <span class="flow-arrow" aria-hidden="true">→</span>
-                  <div class="flow-node node-mozc"><span>CONVERSION</span><strong>pinned Mozc</strong><small>base candidates</small></div>
-                  <span class="flow-arrow" aria-hidden="true">→</span>
-                  <div class="flow-node node-ai"><span>OPTIONAL</span><strong>local AI</strong><small>bounded, not required</small></div>
-                </div>
-              </div>
-              <div class="architecture-band architecture-band-current">
-                <div class="band-label"><span class="band-dot band-dot-muted"></span>CURRENT DEVELOPER PATH</div>
-                <div class="flow-row">
-                  <div class="flow-node node-lab"><span>LAB ONLY</span><strong>TypeScript workbench</strong><small>synthetic / loopback</small></div>
-                  <span class="flow-arrow" aria-hidden="true">→</span>
-                  <div class="flow-node node-api"><span>RUST API</span><strong>local API</strong><small>development contract</small></div>
-                  <span class="flow-arrow" aria-hidden="true">→</span>
-                  <div class="flow-node node-core"><span>CORE</span><strong>same contracts</strong><small>inspect / rerank / explain</small></div>
-                  <span class="flow-arrow" aria-hidden="true">→</span>
-                  <div class="flow-node node-mozc"><span>BRIDGE</span><strong>Mozc adapter</strong><small>isolated profile</small></div>
-                </div>
-              </div>
-              <div class="architecture-return"><span>candidate / commit result</span><span class="return-line" aria-hidden="true"></span><strong>explicit commit → local learning event</strong></div>
-            </div>
-            <figcaption id="architecture-caption">ターゲットと現在の開発経路を分け、KanaAIが既に持つ部分と、まだ設計目標の部分を混同しません。</figcaption>
-          </figure>
-
-          <div class="boundary-grid reveal">
-            <div class="boundary-card">
-              <span class="boundary-label">L1 / NATIVE</span>
-              <h3>イベントを運ぶだけ</h3>
-              <p>Fcitx5・TSF・InputMethodKitは、キーと候補・commitを翻訳。順位・学習・HTTPを持ちません。</p>
-            </div>
-            <div class="boundary-card boundary-card-highlight">
-              <span class="boundary-label">L2 / RUST</span>
-              <h3>状態の唯一の持ち主</h3>
-              <p>generation、deadline、privacy、ranking、learning。AI resultが古ければdropします。</p>
-            </div>
-            <div class="boundary-card">
-              <span class="boundary-label">L3+ / OPTIONAL</span>
-              <h3>境界の向こう側</h3>
-              <p>Mozc adapterはprotocolを隔離。network layerはkey pathの外。local resultが常にfallbackです。</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="section section-models" id="models" aria-labelledby="models-title">
-        <div class="container">
-          <div class="section-heading split-heading reveal">
-            <div>
-              <p class="section-kicker">04 / MODEL TIERS</p>
-              <h2 id="models-title">モデルの大きさを、<br /><span>自分の機械に合う選択に。</span></h2>
-            </div>
-            <p class="section-intro-copy">KanaAIはモデルを同梱・ダウンロードしません。tierは、変換コアを動かしたままで追加する能力の目安です。</p>
-          </div>
-
-          <div class="model-explorer reveal">
-            <div class="tier-picker" role="group" aria-label="KanaAI model tier overview">
-              <button class="tier-button is-active" type="button" data-tier="mozc" aria-pressed="true"><span class="tier-key">00</span>MozcOnly</button>
-              <button class="tier-button" type="button" data-tier="tiny" aria-pressed="false"><span class="tier-key">01</span>Tiny</button>
-              <button class="tier-button" type="button" data-tier="compact" aria-pressed="false"><span class="tier-key">02</span>Compact</button>
-              <button class="tier-button" type="button" data-tier="balanced" aria-pressed="false"><span class="tier-key">03</span>Balanced</button>
-            </div>
-            <div class="tier-detail" id="tier-detail" aria-live="polite">
-              <div class="tier-detail-heading"><span class="tier-badge" id="tier-badge">NO MODEL</span><span class="tier-ram" id="tier-ram">model file 0</span></div>
-              <h3 id="tier-name">MozcOnly</h3>
-              <p id="tier-description">変換、composition、local learning。モデルなしでも成立する基準のtierです。</p>
-              <div class="tier-use-list" id="tier-use-list">
-                <span>base conversion</span><span>offline profile</span><span>zero model memory</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="model-table-wrap reveal">
-            <table class="model-table">
-              <caption>KanaAI local runtime model tier guidance（目安であり、同梱モデル・品質保証ではありません）</caption>
-              <thead>
-                <tr><th scope="col">Tier</th><th scope="col">model class</th><th scope="col">file size目安</th><th scope="col">recommended RAM</th><th scope="col">主な役割</th></tr>
-              </thead>
-              <tbody>
-                <tr><th scope="row"><span class="table-tier table-tier-base">MozcOnly</span></th><td>modelなし</td><td>0</td><td>0–256 MiB app data</td><td>変換・local learning</td></tr>
-                <tr><th scope="row"><span class="table-tier">Tiny</span></th><td>~0.6B / Q4</td><td>~500 MiB</td><td>~4 GiB</td><td>短いambiguity / repair</td></tr>
-                <tr><th scope="row"><span class="table-tier">Compact</span></th><td>~1.7B / Q4</td><td>~1.2 GiB</td><td>~6 GiB</td><td>semantic rerank / explicit repair</td></tr>
-                <tr><th scope="row"><span class="table-tier">Balanced</span></th><td>~4B / Q4</td><td>~2.7 GiB</td><td>~12 GiB</td><td>long-form explicit assist</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <p class="fine-print reveal"><strong>重要:</strong> model size、RAM、contextは目安です。quantization、runtime overhead、model license、再配布条件は利用者自身が確認してください。KanaAIはmodel vendorを推奨・承認する意味ではありません。</p>
-        </div>
-      </section>
-
-      <section class="section section-privacy" id="privacy" aria-labelledby="privacy-title">
-        <div class="container">
-          <div class="section-heading split-heading reveal">
-            <div>
-              <p class="section-kicker">05 / PRIVACY</p>
-              <h2 id="privacy-title">入力を守るのは、<br /><span>「ローカル」の一語だけじゃない。</span></h2>
-            </div>
-            <p class="section-intro-copy">必要なものは、ユーザーが確認できる許可だけです。composition、conversion、local policyはaccountもnetworkも要りません。</p>
-          </div>
-
-          <div class="privacy-layout">
-            <div class="privacy-principles reveal">
-              <div class="privacy-rule"><span class="rule-number">01</span><div><h3>まず、入力できる。</h3><p>composition・conversion・mode changeはofflineで成立。AIがtimeoutしても、Mozcのbase candidateを返します。</p></div></div>
-              <div class="privacy-rule"><span class="rule-number">02</span><div><h3>保存するものを、選ぶ。</h3><p>learningはconfirmed commitのlocal eventだけ。password / protected fieldでは保存・optional assistを止めます。</p></div></div>
-              <div class="privacy-rule"><span class="rule-number">03</span><div><h3>送るものは、見える。</h3><p>cloud、sync、diagnostics、writingはそれぞれ別 consent。将来もrequest previewとcancelを前提にしています。</p></div></div>
-              <div class="privacy-rule"><span class="rule-number">04</span><div><h3>消したものは、消す。</h3><p>entry、aggregate、history、profileを区別して削除します。target architectureであり、現在のpreviewにおける完成機能ではありません。</p></div></div>
-            </div>
-
-            <div class="privacy-console reveal reveal-delay-short">
-              <div class="console-label"><span>DATA BOUNDARY</span><span>content-free by default</span></div>
-              <div class="data-row"><div><span class="data-icon data-icon-local" aria-hidden="true">⌁</span><span>composition / conversion</span></div><strong>LOCAL</strong><span class="data-note">account不要</span></div>
-              <div class="data-row"><div><span class="data-icon data-icon-learn" aria-hidden="true">◇</span><span>confirmed learning</span></div><strong>LOCAL</strong><span class="data-note">opt-in / inspectable</span></div>
-              <div class="data-row"><div><span class="data-icon data-icon-ai" aria-hidden="true">✦</span><span>semantic rerank</span></div><strong>LOOPBACK</strong><span class="data-note">explicit / bounded</span></div>
-              <div class="data-row data-row-muted"><div><span class="data-icon" aria-hidden="true">↗</span><span>cloud / sync</span></div><strong>FUTURE</strong><span class="data-note">not shipped</span></div>
-              <div class="console-warning"><span aria-hidden="true">!</span><p>現在のweb workbenchはprofile stateをbrowser <code>localStorage</code>に保存します。これは将来のKanaAI encrypted storeではありません。</p></div>
-            </div>
-          </div>
-
-          <div class="privacy-bottom reveal">
-            <p><span class="privacy-check" aria-hidden="true">✓</span> KanaAI telemetry / analytics serviceは同梱していません。</p>
-            <p><span class="privacy-check" aria-hidden="true">✓</span> 任意のmodel weightsも自動ダウンロードされません。</p>
-            <p><span class="privacy-check" aria-hidden="true">✓</span> protected field、API hardening、encrypted persistenceはrelease gateです。</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="section section-roadmap" id="roadmap" aria-labelledby="roadmap-title">
-        <div class="container">
-          <div class="section-heading split-heading reveal">
-            <div>
-              <p class="section-kicker">06 / ROADMAP</p>
-              <h2 id="roadmap-title">まず Linux。<br /><span>その後に、OSを一つずつ。</span></h2>
-            </div>
-            <p class="section-intro-copy">platform orderはproposed delivery planで、calendarの約束ではありません。privacy、accessibility、recoveryのgateを先に通します。</p>
-          </div>
-
-          <ol class="roadmap-list reveal">
-            <li class="roadmap-step roadmap-current">
-              <div class="roadmap-marker"><span>NOW</span></div>
-              <div class="roadmap-content"><p class="roadmap-phase">PHASE 1 / WINDOWS TSF</p><h3>Windows TSF betaを実装する</h3><p>既存Mozc Windows TIPをhostに、KanaAI AI/broker接続、x64 TIP、candidate UI、実機登録を実装します。</p><span class="status-label status-label-current">進行中 / TSF native</span></div>
-            </li>
-            <li class="roadmap-step">
-              <div class="roadmap-marker"><span>M1–M3</span></div>
-              <div class="roadmap-content"><p class="roadmap-phase">LINUX / FCITX5</p><h3>headless integration → alpha → beta</h3><p>X11 / Wayland、GTK / Qt、focus loss、secure field、accessibility、crash recoveryをテストします。</p><span class="status-label">proposed next</span></div>
-            </li>
-            <li class="roadmap-step">
-              <div class="roadmap-marker"><span>M4–M5</span></div>
-              <div class="roadmap-content"><p class="roadmap-phase">WINDOWS / TSF</p><h3>32/64-bit TIPを個別に検証</h3><p>TSF registration、UIA、owned candidate window、app-container、signing gate。</p><span class="status-label">roadmap only</span></div>
-            </li>
-            <li class="roadmap-step">
-              <div class="roadmap-marker"><span>M6–M7</span></div>
-              <div class="roadmap-content"><p class="roadmap-phase">MACOS / INPUTMETHODKIT</p><h3>IMKServerからpublic betaへ</h3><p>clientごとのcontroller、secure input、universal binary、notarizationを確認します。</p><span class="status-label">roadmap only</span></div>
-            </li>
-          </ol>
-
-          <div class="roadmap-gates reveal">
-            <div><span class="gate-icon" aria-hidden="true">✓</span><strong>変換 conformance</strong><span>golden Unicode / segment / commit</span></div>
-            <div><span class="gate-icon" aria-hidden="true">✓</span><strong>privacy gates</strong><span>redaction / delete / secure field</span></div>
-            <div><span class="gate-icon" aria-hidden="true">✓</span><strong>accessibility</strong><span>keyboard / pointer / UIA / IMK</span></div>
-            <div><span class="gate-icon" aria-hidden="true">✓</span><strong>distribution</strong><span>signed artifact / SBOM / notices</span></div>
-          </div>
-        </div>
-      </section>
-
-      <section class="section section-beta" id="beta" aria-labelledby="beta-title">
-        <div class="container">
-          <div class="section-heading split-heading beta-heading reveal">
-            <div>
-              <p class="section-kicker">07 / WINDOWS TSF BETA</p>
-              <h2 id="beta-title">IMEとして使えるまで、<br /><span>ベータとは呼びません。</span></h2>
-            </div>
-            <div class="beta-heading-note">
-              <span class="beta-label">TSF NATIVE / IN DEVELOPMENT</span>
-              <p>次の公開ベータは、Windowsのすべてのアプリに接続するTSF TIPです。Workbench/CLIをIMEと表記したmiddleware版は公開しません。</p>
-              <p class="beta-availability"><strong>NO BINARY YET</strong><span>Windows build、安装、署名取得、実機検証は次のgateです。</span></p>
-            </div>
-          </div>
-          <div class="beta-stage reveal">
-            <div class="beta-try">
-              <div class="beta-panel-heading">
-                <div><p class="beta-panel-kicker">RELEASE TARGET</p><h3>必要なのは、変換DLLだけではありません。</h3></div>
-                <span class="beta-phase-mark" aria-hidden="true">TSF</span>
-              </div>
-              <ul class="beta-capability-list">
-                <li><span class="beta-index" aria-hidden="true">01</span><div><h4>Mozc変換とlocal AI policy</h4><p>共通Rust coreの変換・再順位付け・学習を維持し、TSF shellはイベントとcandidate表示だけを担当します。</p></div></li>
-                <li><span class="beta-index" aria-hidden="true">02</span><div><h4>Windows text service</h4><p>COM/TSF lifecycle、x86/x64 TIP、text-service registration、preedit、candidate window、確定を実装します。</p></div></li>
-                <li><span class="beta-index" aria-hidden="true">03</span><div><h4>実アプリでの回復性</h4><p>Notepad、Edge、Office、secure field、focus loss、bridge再起動、upgrade/uninstallを実機で検証します。</p></div></li>
-                <li><span class="beta-index" aria-hidden="true">04</span><div><h4>Open distribution</h4><p>checksum、SBOM、provenanceを添付したpreview ZIP可以作为最初の公開βにします。</p></div></li>
-              </ul>
-            </div>
-            <aside class="beta-boundary" aria-labelledby="beta-boundary-title">
-              <p class="beta-panel-kicker">NOT A TSF / IME — CURRENTLY NOT A BETA</p>
-              <h3 id="beta-boundary-title">ダウンロード可能な<br />Windows IMEはありません。</h3>
-              <p>現在公開できるのは、Mozc/Rust/local AIのsourceと開発環境のみです。TSF native betaの完成までは、IMEとしてインストールできない成果物をベータと呼いません。</p>
-              <ul class="beta-boundary-list">
-                <li>TSF TIP / DLLは未実装</li>
-                <li>OS全体へのpreedit・candidate統合は未実装</li>
-                <li>secure field、UIA、app-container testは未実装</li>
-                <li>署名済みWindows artifactは未作成</li>
-              </ul>
-              <p class="beta-boundary-note">目标是完成度，不是把未完成のWorkbenchをIMEと呼ぶことです。</p>
-            </aside>
-          </div>
-          <div class="beta-build reveal" aria-labelledby="beta-build-title">
-            <div class="beta-build-grid">
-              <div class="beta-build-copy">
-                <p class="beta-panel-kicker">NEXT BUILD GATE</p>
-                <h3 id="beta-build-title">まず x64 TSFを実機で通す。</h3>
-                <p>TSF shell、private broker、session/generation state、candidate UI、secure-field policyのexit gateを追跡します。</p>
-                <ul class="beta-prereqs" aria-label="TSF betaの実装前提"><li><span>SHELL</span><strong>Windows 10/11 x64、MSVC、Windows SDK</strong></li><li><span>CORE</span><strong>Rust、Mozc submodule、Bazelisk</strong></li><li><span>NATIVE</span><strong>TSF / COM / UIA / app-container tests</strong></li><li><span>RELEASE</span><strong>未署名previewから署名betaへ</strong></li></ul>
-              </div>
-              <div class="beta-build-copy">
-                <p class="beta-panel-kicker">SOURCE OF TRUTH</p>
-                <h3>進捗を隠さない。</h3>
-                <p>設計、 Roadmap、privacy、TSFの未完了項目をGitHubで管理します。存在しないダウンロードボタンや「すでにIMEです」という表現は使いません。</p>
-                <a class="text-arrow-link" href="https://github.com/aruiki/kanai/blob/main/docs/PLATFORM_ROADMAP.md" target="_blank" rel="noreferrer">Windows roadmapを読む <span aria-hidden="true">↗</span></a>
-              </div>
-            </div>
-          </div>
-          <aside class="reference-note reveal" aria-labelledby="reference-title">
-            <div class="reference-label"><span>POSITIONING NOTE</span><span>INDEPENDENT / NOT AFFILIATED</span></div>
-            <div class="reference-main"><span class="reference-glyph" aria-hidden="true">対</span><div><p class="beta-panel-kicker">PRODUCT REFERENCE</p><h3 id="reference-title">Google 日本語入力を、<br />完成度の物差しに。</h3><p>Google日本語入力はMozc ecosystem上の完成済みconsumer IMEです。KanaAIが参考にするのはUX、辞書品質、feedback、端末統合の完成度であり、proprietary code/dataをコピーする対象ではありません。</p></div></div>
-            <div class="reference-boundary"><div><span>PRODUCT LESSONS / KEEP</span><p>完成した入力loop、辞書管理、個人化、端末ごとの設定。</p></div><div><span>PROPRIETARY CODE + DATA / DO NOT REUSE</span><p>Google 日本語入力の実装・ユーザー情報・私有データを取り込みません。</p></div></div>
-          </aside>
-        </div>
-      </section>
-
-      <section class="section section-limitations" id="limitations" aria-labelledby="limitations-title">
-        <div class="container">
-          <div class="section-heading split-heading reveal">
-            <div>
-              <p class="section-kicker">08 / HONEST LIMITATIONS</p>
-              <h2 id="limitations-title">できることに、<br /><span>見える線を引く。</span></h2>
-            </div>
-            <p class="section-intro-copy">early-stage projectのpreviewとして、期待と現実を同じ場所に置きます。</p>
-          </div>
-          <div class="limitations-grid reveal">
-            <article><span class="limitation-index">01</span><h3>ネイティブIMEは roadmap only</h3><p>公開betaはWindows TSF native版のみです。OSへのIME登録、system-wide candidate window、secure field behaviorを存在するものとして扱うことはできません。</p></article>
-            <article><span class="limitation-index">02</span><h3>Mozcはbuild prerequisite</h3><p>pinned submoduleからC++ bridgeをbuildします。floatingなMozcやBazel versionを同じものとみなさず、現時点でstableなupstream releaseはありません。</p></article>
-            <article><span class="limitation-index">03</span><h3>AI modelは別物</h3><p>モデルの重みは同梱・ダウンロードしません。model sizeは目安で、品質、速度、互換性を保証しません。誤変換は起こり得ます。</p></article>
-            <article><span class="limitation-index">04</span><h3>privacyは目標とpreviewが違う</h3><p>encrypted profile、Protect Mode、secure-field enforcement、sync、削除の証明、release hardeningはtarget architectureです。dev APIをproduction扱いしないでください。</p></article>
-            <article><span class="limitation-index">05</span><h3>benchmarksは未公開</h3><p>記載したlatencyやmemoryはengineering budgetです。platform、CPU、power mode、dictionaryを含む実測値をreleaseで公開するまでclaimではありません。</p></article>
-            <article><span class="limitation-index">06</span><h3>第三者termsは別</h3><p>Mozc code、dictionary data、model、font、domain packはそれぞれのlicenseとnoticeを維持します。KanaAIのlicenseがそれらを再licenseすることはありません。</p></article>
-          </div>
-          <p class="limits-note reveal"><span aria-hidden="true">→</span> Android / iOS keyboard、hosted conversion、mandatory telemetry、ad-based personalizationは初期desktop roadmapのscope外です。</p>
-        </div>
-      </section>
-
-      <section class="section section-faq" id="faq" aria-labelledby="faq-title">
-        <div class="container faq-layout">
-          <div class="faq-intro reveal">
-            <p class="section-kicker">09 / FAQ</p>
-            <h2 id="faq-title">気になることを、<br /><span>そのまま。</span></h2>
-            <p>product promiseとpreviewのgapを明示することが、KanaAIのprivacy設計の中心です。</p>
-            <a class="inline-link" href="https://github.com/aruiki/kanai/blob/main/docs/PRODUCT.md" target="_blank" rel="noreferrer">product contractを読む <span aria-hidden="true">↗</span></a>
-          </div>
-          <div class="faq-list reveal">
-            <details open>
-              <summary><span>今、Mozcだけで使えますか？</span><span class="summary-mark" aria-hidden="true">+</span></summary>
-              <div class="faq-answer"><p>はい。KanaAIのtargetは、Mozc conversionを土台にしたlocal-first runtimeです。modelやnetworkがなくても、compositionとconversionは成立する設計です。現在のsnapshotで利用できる範囲はsource workbenchであり、installable IMEではありません。</p></div>
-            </details>
-            <details>
-              <summary><span>ダウンロードしてインストールできますか？</span><span class="summary-mark" aria-hidden="true">+</span></summary>
-              <div class="faq-answer"><p>現在、Windows TSF native betaのbuildと実機検証を進めています。Workbench/CLI、HTTP API、Mozc bridgeだけではIME betaとは呼びません。TSF DLLの登録、候補、確定、secure field、回復処理がWindows appで通るまで、公式binary、installer、ZIP、Scoop packageは公開しません。source metadataの <code>0.1.0</code> も公開版とはみなされません。</p></div>
-            </details>
-            <details>
-              <summary><span>入力した文章はデフォルトで送られますか？</span><span class="summary-mark" aria-hidden="true">+</span></summary>
-              <div class="faq-answer"><p>target designでは、composition、conversion、local learningはaccountやnetworkなしで動きます。任意のwriting assistやcloud featureは別々に明示して有効化します。remote endpointsは初期状態では無効です。ただしdev APIとbrowser workbenchはproduction privacy implementationではありません。</p></div>
-            </details>
-            <details>
-              <summary><span>AIは変換を奪いますか？</span><span class="summary-mark" aria-hidden="true">+</span></summary>
-              <div class="faq-answer"><p>奪いません。Mozc resultを先に返し、AIはbounded reranking、ambiguity、explicit repairというsecond stageです。mode、preedit、commit、undo、learning persistenceはRust/session FSMがauthoritativeです。timeoutや不正なresponseはbase resultへfallbackします。</p></div>
-            </details>
-            <details>
-              <summary><span>対応OSは決まっていますか？</span><span class="summary-mark" aria-hidden="true">+</span></summary>
-              <div class="faq-answer"><p>proposed orderはLinux/Fcitx5 first、Windows/TSF second、macOS/InputMethodKit thirdです。public betaやstableな日付を約束するものではありません。各platformでaccessibility、secure input、focus recovery、signingのgateを通してから公開します。</p></div>
-            </details>
-            <details>
-              <summary><span>ライセンスと第三者componentは？</span><span class="summary-mark" aria-hidden="true">+</span></summary>
-              <div class="faq-answer"><p>KanaAI-owned sourceはMITまたはApache-2.0の選択です。Mozc本体、Google-authored code、dictionary data、モデルの重みなどはそれぞれのtermsを保持します。sourceやbinaryを配布する前に、third-party notices、licenses、SBOMを確認してください。</p></div>
-            </details>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <footer class="site-footer">
-      <div class="container footer-top">
-        <div class="footer-brand-block">
-          <a class="brand" href="#top" aria-label="KanaAI ページ上部へ">
-            <img class="brand-mark" src="kanai-mark.svg" alt="" width="40" height="40" />
-            <span class="brand-copy"><span class="brand-name">KanaAI</span><span class="brand-caption">local-first Japanese input</span></span>
-          </a>
-          <p>変換の信頼性を保ち、パーソナライズを進める。<br />壊さずに、入力の未来をつくる。</p>
-        </div>
-        <div class="footer-links">
-          <div><p class="footer-label">EXPLORE</p><a href="#product">Product</a><a href="#architecture">Architecture</a><a href="#models">Model tiers</a></div>
-          <div><p class="footer-label">PROJECT</p><a href="https://github.com/aruiki/kanai" target="_blank" rel="noreferrer">GitHub source ↗</a><a href="https://github.com/aruiki/kanai/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noreferrer">Architecture docs ↗</a><a href="https://github.com/aruiki/kanai/blob/main/CONTRIBUTING.md" target="_blank" rel="noreferrer">Contributing ↗</a></div>
-          <div><p class="footer-label">OPEN SOURCE</p><a href="https://github.com/aruiki/kanai/blob/main/LICENSE-MIT" target="_blank" rel="noreferrer">MIT License</a><a href="https://github.com/aruiki/kanai/blob/main/LICENSE-APACHE" target="_blank" rel="noreferrer">Apache 2.0</a><a href="https://github.com/aruiki/kanai/blob/main/SECURITY.md" target="_blank" rel="noreferrer">Security ↗</a></div>
-        </div>
-      </div>
-      <div class="container footer-bottom">
-        <p>© <span id="current-year">2026</span> KanaAI contributors. Open source, with boundaries.</p>
-        <p>Mozc is an independent project. KanaAI is not affiliated with or supported by Google.</p>
-      </div>
-    </footer>
-  </body>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#142e29" />
+  <title>KanaAI（カナエーアイ）｜MozcベースのWindows日本語IME・ローカルAI開発</title>
+  <meta name="description" content="KanaAIはMozcを基盤にしたオープンソースのWindows日本語IME。ローカルAI同梱の試用ベータを公開中。対応環境、導入方法、AIの現状と既知の制限を紹介します。" />
+  <link rel="canonical" href="https://aruiki.github.io/kanai/" />
+  <link rel="sitemap" type="application/xml" href="https://aruiki.github.io/kanai/sitemap.xml" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="ja_JP" />
+  <meta property="og:site_name" content="KanaAI" />
+  <meta property="og:title" content="KanaAI｜MozcベースのWindows日本語IME" />
+  <meta property="og:description" content="ローカルAIを育てる、オープンソースの日本語入力。AI同梱の試用ベータを公開中。導入方法と現在の制限を確認できます。" />
+  <meta property="og:url" content="https://aruiki.github.io/kanai/" />
+  <meta name="twitter:card" content="summary" />
+  <link rel="icon" href="kanai-mark.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="landing.css" />
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"KanaAI","alternateName":"カナエーアイ","url":"https://aruiki.github.io/kanai/","applicationCategory":"UtilitiesApplication","operatingSystem":"Windows 11 x64","softwareVersion":"0.1.0-beta.2","inLanguage":"ja","description":"Mozcを基盤にしたオープンソースのWindows日本語IME。ローカルAI同梱の未署名ベータ。beta.2の実測ではAIが起動しても変換結果は変わりません。","downloadUrl":"https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2","codeRepository":"https://github.com/aruiki/kanai"}
+  </script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">本文へ移動</a>
+<header><div class="wrap">
+  <a class="brand" href="#top"><img src="kanai-mark.svg" alt="" width="36" height="36" />KanaAI</a>
+  <nav aria-label="メインナビゲーション"><a href="#features">特徴</a><a href="#download">ダウンロード・導入</a><a href="#faq">よくある質問</a><a href="https://github.com/aruiki/kanai">GitHub</a></nav>
+</div></header>
+<main id="main-content" class="wrap">
+  <section class="hero" id="top" aria-labelledby="hero-title">
+    <div>
+      <p class="eyebrow">OPEN SOURCE · WINDOWS 日本語入力</p>
+      <h1 id="hero-title">Mozcを土台に。<br />ローカルAIを育てる<br />日本語IME、KanaAI。</h1>
+      <p class="lede">KanaAI（カナエーアイ）は、Windowsで使う日本語入力ソフトです。Mozcのかな漢字変換と、PC内で動くAIを組み合わせる開発を進めています。</p>
+      <div class="actions"><a class="button" href="#download">試用ベータの導入方法</a><a class="button secondary" href="https://github.com/aruiki/kanai">ソースコードを見る</a></div>
+      <p class="small">公開版 v0.1.0-beta.2 · Windows x64 · 未署名・未完成</p>
+    </div>
+    <aside class="status" aria-label="公開ベータの現在地">
+      <span class="tag">開発・検証への参加者向け</span>
+      <strong>AIは起動します。<br />変換品質の改善は、<br />これからです。</strong>
+      <p>beta.2 はモデルと実行環境を同梱しています。ただし、公開版の実測ではAIを動かしても変換結果は変わりません。</p>
+      <a href="https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2">検証結果と既知の制限を読む →</a>
+    </aside>
+  </section>
+  <section class="content" id="features" aria-labelledby="features-title">
+    <p class="eyebrow">ABOUT KANAAI</p><h2 id="features-title">日本語入力を、手元のPCで。</h2>
+    <div class="grid">
+      <article class="card"><h3>Mozcのかな漢字変換</h3><p>辞書や変換、候補生成はMozcを基盤にしています。Windowsの入力方式として切り替えて使うIMEです。</p></article>
+      <article class="card"><h3>ローカルAIを同梱</h3><p>Qwen2.5-1.5Bとllama.cppのCPU実行環境を同梱。クラウドAIのアカウントは不要で、PC内で推論を行う設計です。</p></article>
+      <article class="card"><h3>開発過程を公開</h3><p>KanaAI自身のソースはMITまたはApache-2.0。実装、検証結果、未解決の課題をGitHubで確認できます。</p></article>
+    </div>
+    <div class="notice"><strong>現在使えることと、開発中のこと</strong><p>Mozcベースの日本語入力と同梱AIの起動を確認したベータです。AIによる変換精度向上や、日常利用の安定性を保証する段階には達していません。完成版の独立検証は未完了です。</p></div>
+  </section>
+  <section class="content" id="download" aria-labelledby="download-title">
+    <p class="eyebrow">TRY THE BETA</p><h2 id="download-title">ダウンロードとインストール</h2>
+    <p>公開版は <strong>v0.1.0-beta.2</strong>。モデル同梱で約1.1 GBです。Windows 11 x64の1台で検証されており、ARM64は未検証です。AI有効時の子プロセスのメモリ使用量は検証環境で約1.6 GBでした。</p>
+    <ol>
+      <li><a href="https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2">GitHubのリリースノート</a>で制限を確認し、<strong>KanaAI-0.1.0-Setup.exe</strong>をダウンロードします。配布元のSHA-256と照合できます。</li>
+      <li>Setup.exeを起動し、WindowsのUACを承認してインストールします。</li>
+      <li><strong>Win + Space</strong>でKanaAIを選択します。必要に応じて半角／全角キーで日本語入力をONにします。</li>
+    </ol>
+    <p><strong>未署名のためWindowsの警告が表示される場合があります。</strong>保護機能を無効化する手順は案内していません。導入の詳細、既知の問題、ファイルのハッシュはリリースノートを確認してください。</p>
+    <div class="actions"><a class="button" href="https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2">リリースノート・配布ファイル</a></div>
+    <p class="small">削除はWindowsの「設定 → アプリ → インストール済みアプリ」から「KanaAI Development Preview」をアンインストールします。</p>
+  </section>
+  <section class="content" id="faq" aria-labelledby="faq-title">
+    <p class="eyebrow">FAQ</p><h2 id="faq-title">よくある質問</h2>
+    <details open><summary>KanaAIとは何ですか？</summary><p>Mozcを基盤にした、オープンソースのWindows向け日本語IME（日本語入力ソフト）です。通常のかな漢字変換に、ローカルAIによる候補の調整を組み合わせることを目指しています。</p></details>
+    <details><summary>AIで日本語変換の精度が上がりますか？</summary><p>公開済みのbeta.2について、改善を主張していません。AIの起動は確認できていますが、AI ON/OFFの比較では変換結果は変わりませんでした。品質改善は今後の実装と評価の課題です。</p></details>
+    <details><summary>オフラインで使えますか？ 入力内容の扱いは？</summary><p>モデルと実行環境を同梱し、導入後の変換・推論をPC内で行う設計です。モデルの実行環境はローカルのループバック接続を使います。検証範囲は<a href="https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2">リリースノート</a>、安全性に関する報告先は<a href="https://github.com/aruiki/kanai/blob/main/SECURITY.md">セキュリティポリシー</a>をご覧ください。</p></details>
+    <details><summary>Microsoft IMEやGoogle 日本語入力の代わりになりますか？</summary><p>Windowsの入力方式として使えますが、現時点では開発中の試用ベータです。他のIMEと同等以上の精度・速度・安定性を示す比較結果はありません。KanaAIはGoogleと提携しておらず、サポートも受けていません。</p></details>
+    <details><summary>無料ですか？ 商用利用できますか？</summary><p>公開ベータは無償でダウンロードできます。KanaAI自身のソースはMITまたはApache-2.0で公開しています。Mozc、辞書、モデル、推論環境にはそれぞれのライセンスが適用されるため、利用・再配布時には同梱ライセンスを確認してください。</p></details>
+    <details><summary>MacやLinuxでも使えますか？</summary><p>このページで案内する配布版はWindows x64向けです。macOS・Linux向けの完成したIME配布版は案内していません。</p></details>
+  </section>
+  <section class="content" id="contribute" aria-labelledby="contribute-title">
+    <p class="eyebrow">BUILD WITH US</p><h2 id="contribute-title">試す。報告する。一緒に育てる。</h2>
+    <p>不具合の再現手順や利用環境の報告、実装への貢献を歓迎します。報告にはWindowsのバージョン、KanaAIのリリース番号、発生したアプリ名を添え、個人情報や入力した機密文は含めないでください。</p>
+    <div class="actions"><a class="button secondary" href="https://github.com/aruiki/kanai/issues/new/choose">不具合・要望を報告する</a><a class="button secondary" href="https://github.com/aruiki/kanai/blob/main/CONTRIBUTING.md">開発への参加方法</a></div>
+    <p><a href="https://github.com/aruiki/kanai/blob/main/STATE.md">最新の開発記録</a> · <a href="https://github.com/aruiki/kanai/releases">リリース一覧</a></p>
+  </section>
+</main>
+<footer><div class="wrap"><a class="brand" href="#top">KanaAI</a><p>Mozc-based Japanese input for Windows. Local AI in development.</p><p>ページ更新: 2026年10月7日 · <a href="https://github.com/aruiki/kanai">GitHub</a> · <a href="https://github.com/aruiki/kanai/blob/main/LICENSE-MIT">ライセンス</a></p></div></footer>
+</body>
 </html>
