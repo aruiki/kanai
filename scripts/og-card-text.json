@@ -6,18 +6,18 @@
       "file": "og-card.png",
       "language": "ja",
       "kicker": "OPEN SOURCE / WINDOWS 日本語入力",
-      "headline1": "文脈を読む。",
-      "headline2": "ローカルAIの日本語入力。",
-      "lede": "Mozcの操作に、AIの変換と予測を。モデルと実行環境を同梱。",
+      "headline1": "Kotori日本語入力",
+      "headline2": "オープンソースの日本語IME",
+      "lede": "Mozcをもとに、PC内で動くAIの変換と予測を追加しています。",
       "fact": "Windows 10 / 11 x64 · GPUなしでも利用可能",
-      "footnote": "製品版 v1.0.0 / v1.1 RC 公開中。両版とも未署名。"
+      "footnote": "公開版 v1.0.0 / v1.1 RC。両版とも未署名。"
     },
     {
       "file": "og-card-en.png",
       "language": "en",
       "kicker": "OPEN SOURCE / JAPANESE IME FOR WINDOWS",
-      "headline1": "Context understood.",
-      "headline2": "Japanese input, local AI.",
+      "headline1": "Kotori Japanese Input",
+      "headline2": "Free, open-source Japanese IME",
       "lede": "Kotori combines Mozc with local AI conversion and prediction.",
       "fact": "Windows x64 · Dedicated GPU or CPU",
       "footnote": "Stable v1.0.0 and v1.1 RC available. Both unsigned."
