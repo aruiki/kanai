@@ -83,3 +83,5 @@ dl.spec dt { font-weight:700; font-size:14px; } dl.spec dd { margin:0; font-size
 .langswitch { display:inline-flex; gap:8px; font-size:13px; } .langswitch a { border:1px solid #cbd3c5; border-radius:30px; padding:3px 12px; text-decoration:none; }
 @media(max-width:760px) { .page-nav { grid-template-columns:1fr; } .page-nav a.next { text-align:left; } .foot-nav { grid-template-columns:1fr 1fr; } dl.spec > div { grid-template-columns:1fr; gap:4px; } }
 code.hash { overflow-wrap:anywhere; word-break:break-all; } header .brand { white-space:nowrap; } header .wrap { gap:18px; }
+
+.ime-figure { margin:24px 0; } .ime-figure img { display:block; width:100%; height:auto; border-radius:16px; } .ime-figure figcaption { margin-top:12px; font-size:13px; color:var(--muted); line-height:1.7; }
