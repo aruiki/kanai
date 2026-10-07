@@ -9,7 +9,9 @@ statusには打ち間違いを含む全5セット・版・問題数・再現手�
 図を生成・目視確認、sync-site / validate-pages / diff checkは成功。HTML14、local refs274。
 AJIMEE原データcommit401666cのSHA-256を照合し、ID1890/1982/2128の原文・許容解を掲載。
 出典・CC BY-SA 3.0・個別IME出力とは違うことを明記。既存集計値のCSVを追加。
-公開結果とREADME CI/統合状況は追記する。
+サイト配備commit a4d558e、Pages buildはbuilt。全16URLでHTTP200・正本との一致を確認（テキスト改行は正規化）。
+公開ブラウザーで図・実例・CSVリンクを確認。確認画像 .local/ajimee-examples-published.png。
+README PR136は最後のCI待ち。
 
 ---
 
