@@ -3,7 +3,9 @@
 ユーザーは決め台詞や製品としての売り込みを希望せず、オープンソースの優しいソフトを目指す。
 今後も穏やかで具体的な機能・使い方・結果の説明を使う。全7HTML・OGカード・比較図の見出しを修正。
 製品版の呼び方を公開版へ変更。測定値・条件・制限は保持。READMEはPR137で同様に修正。
-sync-site、validate-pages（HTML14、参照276）、diff check成功。公開結果は追記。
+sync-site、validate-pages（HTML14、参照276）、diff check成功。公開先c22f21aのPages buildはbuilt。変更した11資産はHTTP取得で正本と一致。
+公開トップで見出し・紹介文の反映を確認。確認画像 .local/plain-open-source-published.png。
+README PR137はCI全7項目成功後に統合。製品コードや測定結果の変更なし。
 
 ---
 
