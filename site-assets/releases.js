@@ -16,7 +16,7 @@
     if (!container) return;
     const link = document.createElement('a');
     link.href = url.href;
-    link.textContent = `${document.documentElement.lang === 'en' ? 'Latest stable release' : '最新の製品版'}: ${release.tag_name} →`;
+    link.textContent = `${document.documentElement.lang === 'en' ? 'Latest stable release' : '最新の公開版'}: ${release.tag_name} →`;
     container.replaceChildren(link);
   } catch { /* Public API unavailable: use the working static fallback. */ }
 })();
