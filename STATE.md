@@ -28,9 +28,23 @@
   `/` `/en/` `/design.html` `/privacy.html` `/download.html` `/status.html`
   `/faq.html` `/landing.css` `/og-card.png` `/og-card-en.png` `/kanai-mark.svg`
   `/sitemap.xml` の**12件すべて HTTP 200**。
-- 公開中サイトの現状をHTTPで再確認: `https://aruiki.github.io/kanai/` は
-  **旧・単一ページ（10406 bytes）を配信中**。`sitemap.xml` も旧1URL。
-  `gh-pages` ブランチは `02af7c3` のまま。
+- 作業開始時点の公開サイトをHTTPで確認: `https://aruiki.github.io/kanai/` は
+  **旧・単一ページ（10406 bytes）を配信中**、`sitemap.xml` も旧1URL、
+  `gh-pages` は `02af7c3` だった。配備後は下記の「配備と公開確認」を参照。
+
+## 配備と公開確認（実施済み）
+
+- `site-assets/` の6HTMLを `.gitattributes`（`* text=auto eol=lf`）に合わせてLFへ正規化し、
+  `sync-site.mjs` → `validate-pages.mjs`（exit 0、warning 0）→ `git diff --check`
+  （出力なし）を再実行。
+- ソースを **`a4b186f`** としてcommitし `origin/main` へpush（`7fe2eb2..a4b186f`）。
+- `gh-pages` へ配備13ファイルを配置し、commit **`383256f`** をpush（`02af7c3..383256f`）。
+  以前の配備が紛れ込ませていた `.env.example` `.github/` `.gitignore` `.gitmodules`
+  `.release/` `site.css` `site.js` を削除し、公開対象を文書どおりの13ファイルに限定した。
+- 公開確認: `/` `/en/` `/design.html` `/privacy.html` `/download.html` `/status.html`
+  `/faq.html` `/landing.css` `/sitemap.xml` `/og-card.png` `/og-card-en.png`
+  `/kanai-mark.svg` の**12件すべて HTTP 200**、かつ**ローカルファイルとバイト一致**。
+  削除した5件は 404 を確認。
 - `site-assets/faq.html` の破損を修正: 別セッションの追記が衝突してFAQ節とフッターが
   二重化していた（`</body>` 2つ、`<details>` 28件）。完全な方の本体を残して末尾の孤立
   ブロックを削除し、`FAQPage` JSON-LD の14件を可視の14件（13番目が
@@ -61,13 +75,14 @@ AI ON/OFF 20文脈 **0差分** `ai-does-not-change-output`（20/20 success、
 
 ## 未完了・次の作業
 
-1. **`gh-pages` への配備が未実施。** 公開サイトはまだ旧・単一ページ。
-   `docs/GITHUB_PAGES.md` の配備13ファイルを `gh-pages` ルートへ写してpushし、
-   Pages build と `/` `/en/` 各内部ページのHTTP応答を確認する。
-2. Search Console / Bing の所有権確認とサイトマップ送信（Google発行の検証ファイル/タグが必要）。
-3. 編集時の注意: `status.html` への追記で一度**内容が二重に書き込まれ**、
+1. Search Console / Bing の所有権確認とサイトマップ送信（Google発行の検証ファイル/タグが必要）。
+   送信後もインデックス登録・検索順位は未確認。計測前に流入増を主張しない。
+2. 編集時の注意: `status.html` への追記で一度**内容が二重に書き込まれ**、
    `design.html` 末尾に `</ul></section>` が残った。両方とも最初の `</html>` 以降を
    削除して修正済み。**大きい追記のあとは必ず末尾と `</html>` の個数を確認する。**
+3. 製品側の残作業（AI品質評価、W1 receipt、導入ユーザーへの有効化レコード、署名など）は
+   `site-assets/status.html` のロードマップと本ファイルの履歴を参照。
+   receiptが増えたら `status.html` と `faq.html` の数値を一緒に更新する。
 
 ---
 
