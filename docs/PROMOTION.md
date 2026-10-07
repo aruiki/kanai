@@ -17,6 +17,7 @@ KanaAIはMozcを基盤にしたオープンソースのWindows日本語IMEです
 - READMEとGitHub Aboutから紹介ページへリンク。
 - JavaScriptなしでも本文・導線・FAQを利用可能。外部フォント、解析タグなし。
 - 既存の古い「インストーラー未公開」説明を公開beta.2の記録に合わせて訂正。
+- 多ページ構成へ拡張: 設計と技術、プライバシー、ダウンロード・導入、検証状況、FAQ（FAQPage JSON-LD、14件）と英語ホーム `/en/` を追加。sitemap.xmlは7URL、各ページにcanonical・OGP・hreflang・BreadcrumbList、ページ間ナビゲーションとフッター導線を追加。
 
 ## 継続運用
 
@@ -46,16 +47,26 @@ robots.txtとして機能しない。効果のないファイルや架空の所�
 
 ## 更新・検証・配備
 
-`site-assets/index.html` が紹介ページの正本。
-`node scripts/sync-site.mjs` で `pages/index.html` のプレビューを同期する。
+`site-assets/` が紹介ページの正本。多ページ構成の一覧・canonical・検証項目は `docs/GITHUB_PAGES.md` にある。
+`node scripts/sync-site.mjs` で `pages/` のプレビューミラーを `site-assets/` から複製する。
 `node scripts/validate-pages.mjs` と `git diff --check` を実行する。
-配備対象は以下の5ファイルのみ。ソースツリーや開発用.envは配備しない。
+配備対象は以下のみ。ソースツリーや開発用.envは配備しない。
 
 - site-assets/index.html → gh-pages:/index.html
+- site-assets/design.html → gh-pages:/design.html
+- site-assets/privacy.html → gh-pages:/privacy.html
+- site-assets/download.html → gh-pages:/download.html
+- site-assets/status.html → gh-pages:/status.html
+- site-assets/faq.html → gh-pages:/faq.html
+- site-assets/en/index.html → gh-pages:/en/index.html
 - site-assets/landing.css → gh-pages:/landing.css
 - site-assets/kanai-mark.svg → gh-pages:/kanai-mark.svg
+- site-assets/og-card.png → gh-pages:/og-card.png
+- site-assets/og-card-en.png → gh-pages:/og-card-en.png
 - site-assets/sitemap.xml → gh-pages:/sitemap.xml
 - site-assets/.nojekyll → gh-pages:/.nojekyll
+
+`site-assets/site.css` と `site-assets/site.js` は旧ドラフトの残骸で現在のページから参照されておらず、配備対象ではない。
 
 GitHub Pagesは既存の `gh-pages` ブランチを使用。
 公開後にPages buildのcommit・statusとトップページ/CSS/サイトマップのHTTP応答を確認する。

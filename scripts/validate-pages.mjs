@@ -8,6 +8,9 @@ const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(scriptDirectory, "..");
 const pagesRoot = join(repositoryRoot, "pages");
 const assetsRoot = join(repositoryRoot, "site-assets");
+const siteOrigin = "https://aruiki.github.io/kanai/";
+const releaseVersion = "0.1.0-beta.2";
+const canonicalOwners = new Map();
 const errors = [];
 const warnings = [];
 const counts = {
@@ -59,8 +62,37 @@ function localPathFor(value, sourceFile) {
   const withoutFragment = value.split("#", 1)[0].split("?", 1)[0];
   if (withoutFragment === "") return null;
   const decoded = decodePath(withoutFragment);
-  if (decoded.startsWith("/")) return resolve(repositoryRoot, decoded.slice(1));
-  return resolve(dirname(sourceFile), decoded);
+  // A link to a directory means the directory index, as it does on the server.
+  const target = decoded.endsWith("/") ? `${decoded}index.html` : decoded;
+  if (target.startsWith("/")) return resolve(repositoryRoot, target.slice(1));
+  return resolve(dirname(sourceFile), target);
+}
+
+// Editors and copy/paste have previously mixed non-Japanese scripts into the
+// Japanese copy (for example Arabic or Hangul characters that look like
+// corruption rather than typos). Reject anything outside the ranges the site
+// legitimately uses so that damage is caught by a command, not by a reader.
+// The allowed set is deliberately narrow: accented Latin letters are not used on
+// this site, so a stray "composicion"-style intrusion from an editor is caught.
+const allowedScriptRanges = [
+  [0x0000, 0x007f], [0x00a0, 0x00a0], [0x00a9, 0x00ae], [0x00b7, 0x00b7],
+  [0x2000, 0x206f], [0x2190, 0x21ff],
+  [0x2460, 0x24ff], [0x25a0, 0x27bf], [0x2e80, 0x30ff], [0x31f0, 0x31ff],
+  [0x4e00, 0x9fff], [0xf900, 0xfaff], [0xfe30, 0xfe4f], [0xff00, 0xffef],
+  [0x1f000, 0x1faff], [0x20000, 0x2fa1f],
+];
+
+function checkScriptSanity(text, sourceFile) {
+  const source = displayPath(sourceFile);
+  const unexpected = new Map();
+  for (const character of text) {
+    const code = character.codePointAt(0);
+    if (allowedScriptRanges.some(([low, high]) => code >= low && code <= high)) continue;
+    unexpected.set(character, (unexpected.get(character) || 0) + 1);
+  }
+  for (const [character, count] of unexpected) {
+    reportError(`${source}: unexpected character U+${character.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")} (${character}) x${count} - wrong-script corruption, not a typo`);
+  }
 }
 
 function checkUrl(value, sourceFile, kind, allowEmpty = false) {
@@ -114,36 +146,94 @@ function checkAnchors(html, ids, sourceFile) {
   }
 }
 
+function pageLanguage(html) {
+  const match = html.match(/<html\b[^>]*\blang\s*=\s*(["'])([a-zA-Z-]+)\1/i);
+  return match ? match[2].toLowerCase() : "";
+}
+
+function pageTree(filePath) {
+  const relativePath = displayPath(filePath).split("\\").join("/");
+  return relativePath.startsWith("pages/") ? "pages" : "site-assets";
+}
+
+function pageKind(filePath) {
+  const relativePath = displayPath(filePath).split("\\").join("/");
+  const withinTree = relativePath.replace(/^(?:pages|site-assets)\//, "");
+  if (withinTree === "index.html" || withinTree === "en/index.html") return "home";
+  if (withinTree.endsWith("faq.html")) return "faq";
+  return "interior";
+}
+
 function checkHtmlFile(filePath) {
   const html = readFileSync(filePath, "utf8");
   const source = displayPath(filePath);
   const ids = collectIds(html, filePath);
   checkAnchors(html, ids, filePath);
+  const language = pageLanguage(html);
+  const kind = pageKind(filePath);
 
   if (!/<!doctype\s+html>/i.test(html)) reportError(`${source}: missing HTML5 doctype`);
-  if (!/<html\b[^>]*\blang\s*=\s*(["'])ja\1/i.test(html)) reportError(`${source}: html element must declare lang="ja"`);
+  if (!["ja", "en"].includes(language)) reportError(`${source}: html element must declare lang="ja" or lang="en"`);
   if (!/<title\b[^>]*>[^<]+<\/title>/i.test(html)) reportError(`${source}: missing non-empty title`);
   if (!/<main\b/i.test(html)) reportError(`${source}: missing main landmark`);
   if (!/<h1\b/i.test(html)) reportError(`${source}: missing h1`);
   if (!/class\s*=\s*(["'])skip-link\1/i.test(html)) reportError(`${source}: missing skip link`);
+  checkScriptSanity(html, filePath);
 
-  const requiredPhrases = [
-    "Mozc", "Windows", "v0.1.0-beta.2", "未署名", "未完成",
-    "変換結果は変わりません", "ダウンロード", "FAQ", "約1.1 GB",
-  ];
-  if ((html.match(/<h1\b/gi) || []).length !== 1) reportError(`${source}: expected exactly one h1`);
-  if (!html.includes('<link rel="canonical" href="https://aruiki.github.io/kanai/"')) reportError(`${source}: missing canonical`);
-  if (!html.includes('name="description"')) reportError(`${source}: missing description`);
-  if ((html.match(/type="application\/ld\+json"/g) || []).length !== 1) reportError(`${source}: expected one structured-data block`);
-  for (const match of html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) {
-    try {
-      const data = JSON.parse(match[1]);
-      if (data.softwareVersion !== '0.1.0-beta.2' || data['@type'] !== 'SoftwareApplication') reportError(`${source}: incorrect software metadata`);
-    } catch { reportError(`${source}: invalid structured data`); }
+  const title = (html.match(/<title\b[^>]*>([^<]+)<\/title>/i) || [])[1] || "";
+  const description = (html.match(/<meta\b[^>]*\bname\s*=\s*(["'])description\1[^>]*\bcontent\s*=\s*(["'])(.*?)\2/i) || [])[3] || "";
+  if (title.length > 70) reportWarning(`${source}: title is ${title.length} characters; search results usually truncate past 70`);
+  if (description.length === 0) reportError(`${source}: missing description`);
+  if (description.length > 160) reportWarning(`${source}: description is ${description.length} characters; search results usually truncate past 160`);
+
+  // Honest-disclosure phrases. Every published page must pin the release and say
+  // the beta is unsigned and unfinished, in the language of that page. The home
+  // page additionally carries the measured-result and size statements.
+  const phrases = language === "en"
+    ? ["Mozc", "Windows", `v${releaseVersion}`, "unsigned", "not a completed product"]
+    : ["Mozc", "Windows", `v${releaseVersion}`, "未署名", "未完成"];
+  if (kind === "home" && language === "ja") {
+    phrases.push("変換結果は変わりません", "ダウンロード", "FAQ", "約1.1 GB");
   }
-  for (const phrase of requiredPhrases) {
+  for (const phrase of phrases) {
     if (!html.includes(phrase)) reportError(`${source}: required product content missing: ${phrase}`);
   }
+
+  if ((html.match(/<h1\b/gi) || []).length !== 1) reportError(`${source}: expected exactly one h1`);
+
+  const canonicals = [...html.matchAll(/<link\b[^>]*>/gi)]
+    .filter((match) => /\brel\s*=\s*(["'])canonical\1/i.test(match[0]))
+    .map((match) => (match[0].match(/\bhref\s*=\s*(["'])(.*?)\1/i) || [])[2] || "");
+  if (canonicals.length !== 1) reportError(`${source}: expected exactly one canonical link, found ${canonicals.length}`);
+  for (const canonical of canonicals) {
+    if (!canonical.startsWith(siteOrigin)) reportError(`${source}: canonical must stay on ${siteOrigin} (found ${canonical})`);
+    else canonicalOwners.set(canonical, (canonicalOwners.get(canonical) || []).concat(`${pageTree(filePath)}:${displayPath(filePath)}`));
+  }
+
+  for (const property of ["og:title", "og:description", "og:url", "og:image"]) {
+    if (!html.includes(`property="${property}"`)) reportError(`${source}: missing ${property} (required for social sharing)`);
+  }
+  if (!/name\s*=\s*(["'])twitter:card\1/i.test(html)) reportError(`${source}: missing twitter:card`);
+  if (!/hreflang\s*=\s*(["'])x-default\1/i.test(html)) reportWarning(`${source}: missing an hreflang x-default alternate`);
+
+  const blocks = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];
+  if (blocks.length === 0) reportError(`${source}: expected at least one structured-data block`);
+  const types = [];
+  for (const match of blocks) {
+    try {
+      const data = JSON.parse(match[1]);
+      types.push(data["@type"]);
+      if (data["@type"] === "SoftwareApplication" && data.softwareVersion !== releaseVersion) {
+        reportError(`${source}: incorrect software metadata`);
+      }
+      if (data["@type"] === "FAQPage" && !(Array.isArray(data.mainEntity) && data.mainEntity.length > 0)) {
+        reportError(`${source}: FAQPage structured data has no questions`);
+      }
+    } catch { reportError(`${source}: invalid structured data`); }
+  }
+  if (kind === "home" && !types.includes("SoftwareApplication")) reportError(`${source}: home page must expose SoftwareApplication structured data`);
+  if (kind === "faq" && !types.includes("FAQPage")) reportError(`${source}: FAQ page must expose FAQPage structured data`);
+  if (kind === "interior" && !types.includes("BreadcrumbList")) reportError(`${source}: interior page must expose BreadcrumbList structured data`);
 
   for (const match of html.matchAll(/<img\b[^>]*>/gi)) {
     const tag = match[0];
@@ -235,6 +325,20 @@ for (const filePath of jsFiles) {
   checkJsFile(filePath);
 }
 counts.assets = assetFiles.length;
+
+// Two pages in the same published tree claiming one canonical URL means one of
+// them will be dropped from the index. The pages/ mirror shares URLs with
+// site-assets/ by design, so uniqueness is enforced per tree.
+for (const [canonical, owners] of canonicalOwners) {
+  const byTree = new Map();
+  for (const owner of owners) {
+    const tree = owner.split(":", 1)[0];
+    byTree.set(tree, (byTree.get(tree) || []).concat(owner));
+  }
+  for (const [, list] of byTree) {
+    if (list.length > 1) reportError(`canonical ${canonical} is claimed by ${list.length} pages in one tree: ${list.join(", ")}`);
+  }
+}
 
 if (warnings.length > 0) {
   console.warn("Warnings:");

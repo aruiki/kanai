@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">KanaAI mark</title>
+  <desc id="desc">A lime kana-inspired KanaAI symbol on a deep ink background.</desc>
+  <rect width="64" height="64" rx="16" fill="#122126"/>
+  <path d="M16 17h32v7H23v7h19v7H23v9h-7V17Z" fill="#D8F58B"/>
+  <path d="M41 31h7v16h-7z" fill="#B9D8FF"/>
+  <circle cx="48" cy="17" r="4" fill="#F5B67A"/>
+</svg>

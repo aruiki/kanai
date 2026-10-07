@@ -1,3 +1,79 @@
+# 最新の引き継ぎ — 2026-10-07（紹介サイトを多ページ・SEO対応へ拡張）
+
+ユーザー依頼: 紹介サイトを複数ページ構成のSEO対応サイトへ拡張する。製品コード・配布バイナリの変更はなし。
+
+## 追加・更新したページ
+
+- 新規: `site-assets/design.html`（設計と技術）、`privacy.html`（プライバシー）、
+  `download.html`（ダウンロード・導入）、`status.html`（検証状況とロードマップ）、
+  `faq.html`（14件、`FAQPage` JSON-LD）、`en/index.html`（English overview）。
+- 更新: `index.html`（多ページナビ、ページ一覧カード、og:image/twitter:image、
+  hreflang ja/en/x-default、フッター導線）、`landing.css`（`.subnav` `.cardlink`
+  `.foot-nav` `.page-nav` `.spec-list` `.callout` `.table-wrap` `table.data` `.pill`
+  `.statusbox`）、`sitemap.xml`（7URL＋hreflang）、`scripts/sync-site.mjs`
+  （`site-assets/` 全体を `pages/` へ複製し、なくなったファイルを削除）。
+- 文書: `docs/GITHUB_PAGES.md` を「公開しない・validatorなし」という古い記述から
+  実態（公開済み・多ページ・`validate-pages.mjs` あり）へ改訂。
+  `docs/PROMOTION.md` の配備対象を5ファイルから13ファイルへ更新。
+- 全ページに canonical・OG/Twitter・hreflang・`BreadcrumbList`（内部ページ）・
+  パンくず・ページ間ナビ・共通フッター。
+
+## 実行したコマンドと結果
+
+- `node scripts/sync-site.mjs` → `15 file(s) copied, 0 stale removed`。
+- `node scripts/validate-pages.mjs` → **exit 0、error 0、warning 0**
+  （HTML 14、CSS 2、JS 1、local references 326、anchors 112）。
+- `git diff --check` → 出力なし。
+- `python -m http.server 8088 --directory site-assets` でローカル確認 →
+  `/` `/en/` `/design.html` `/privacy.html` `/download.html` `/status.html`
+  `/faq.html` `/landing.css` `/og-card.png` `/og-card-en.png` `/kanai-mark.svg`
+  `/sitemap.xml` の**12件すべて HTTP 200**。
+- 公開中サイトの現状をHTTPで再確認: `https://aruiki.github.io/kanai/` は
+  **旧・単一ページ（10406 bytes）を配信中**。`sitemap.xml` も旧1URL。
+  `gh-pages` ブランチは `02af7c3` のまま。
+- `site-assets/faq.html` の破損を修正: 別セッションの追記が衝突してFAQ節とフッターが
+  二重化していた（`</body>` 2つ、`<details>` 28件）。完全な方の本体を残して末尾の孤立
+  ブロックを削除し、`FAQPage` JSON-LD の14件を可視の14件（13番目が
+  `キー入力が重くなりませんか。`）と**順序まで一致**させた。JSON-LD は `ConvertFrom-Json`
+  で解析し、可視の `<summary>` 14件との差分0を機械確認。他6ページに同種の破損がないことは
+  `</body>` / `<footer` / `<h1` / canonical の件数走査で確認。
+- `scripts/make-og-card.ps1 -OutDirectory <一時dir>` で再生成し、公開用 `og-card.png`
+  （47889 bytes）/ `og-card-en.png`（43066 bytes）と**SHA-256が一致**することを確認。
+  `.ps1` は非ASCII 0バイト（PowerShell 5.1 が BOM なし UTF-8 を ANSI として読む問題を回避）、
+  文言は `scripts/og-card-text.json`（UTF-8）側に保持。OGカードは PNG（ラスター）で、
+  配信時の Content-Type も `image/png`（SVG は SNS クローラが描画しないため不使用）。
+- `pages/` ミラーは `site-assets/` の全15ファイルと**ハッシュ一致**（差分0）。
+
+
+## 掲載内容の根拠
+
+receiptのある項目のみ数値を記載した: インストーラ receipt
+`wixstdba-runId=installer-lifecycle-20260924T180741Z-46504-17760`（11/11 pass、
+digest `F61D86BF...641A17A0`、cleanup後 `C:\Program Files\KanaAI` 不在）、
+AI起動ログ（`llama-server`、`C:\Program Files\KanaAI\ai\`、build 7859、context 8192、
+ctx 209.9 MiB、子プロセス約1.6 GB、0.094 s / 30 s bound、`broker-startup.log`
+2026-09-25T04:35:35Z / broker pid 31552 / runtime pid 53792）、
+AI ON/OFF 20文脈 **0差分** `ai-does-not-change-output`（20/20 success、
+`runtime-startup-log-matches-tip-log`）。
+未検証として明記した項目: 日本語変換品質の評価、W1 receipt、導入ユーザーへの
+入力方式の有効化レコード、secure field/UIA/high-DPI/app-container policy、
+変換遅延・AI起動時間の機械測定、ARM64/Windows 10、コード署名、Search Console登録。
+
+## 未完了・次の作業
+
+1. **`gh-pages` への配備が未実施。** 公開サイトはまだ旧・単一ページ。
+   `docs/GITHUB_PAGES.md` の配備13ファイルを `gh-pages` ルートへ写してpushし、
+   Pages build と `/` `/en/` 各内部ページのHTTP応答を確認する。
+2. Search Console / Bing の所有権確認とサイトマップ送信（Google発行の検証ファイル/タグが必要）。
+3. 編集時の注意: `status.html` への追記で一度**内容が二重に書き込まれ**、
+   `design.html` 末尾に `</ul></section>` が残った。両方とも最初の `</html>` 以降を
+   削除して修正済み。**大きい追記のあとは必ず末尾と `</html>` の個数を確認する。**
+
+---
+
+以下は同日の前作業（単一ページの公開）と、それ以前の引き継ぎ履歴。
+
+
 # 最新の引き継ぎ — 2026-10-07（紹介サイト・検索導線の更新）
 
 ユーザー依頼: SEO等による周知。製品コード・配布バイナリの変更はなし。

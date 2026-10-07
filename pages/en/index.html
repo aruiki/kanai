@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#142e29" />
+  <title>KanaAI — a Mozc-based Japanese IME for Windows with local AI</title>
+  <meta name="description" content="KanaAI is an open-source Japanese IME for Windows built on Mozc. Build v0.1.0-beta.2 bundles a local AI. Unsigned, not a completed product." />
+  <link rel="canonical" href="https://aruiki.github.io/kanai/en/" />
+  <link rel="sitemap" type="application/xml" href="https://aruiki.github.io/kanai/sitemap.xml" />
+  <link rel="alternate" hreflang="ja" href="https://aruiki.github.io/kanai/" />
+  <link rel="alternate" hreflang="en" href="https://aruiki.github.io/kanai/en/" />
+  <link rel="alternate" hreflang="x-default" href="https://aruiki.github.io/kanai/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:site_name" content="KanaAI" />
+  <meta property="og:title" content="KanaAI — a Mozc-based Japanese IME for Windows with local AI" />
+  <meta property="og:description" content="Open-source Japanese input for Windows. The beta bundles a local model and runtime: no cloud AI, no API key, no telemetry. Unsigned and not a completed product." />
+  <meta property="og:url" content="https://aruiki.github.io/kanai/en/" />
+  <meta property="og:image" content="https://aruiki.github.io/kanai/og-card-en.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="KanaAI — a Mozc-based Japanese IME for Windows, with local AI in development" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card-en.png" />
+  <link rel="icon" href="../kanai-mark.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="../landing.css" />
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"KanaAI","url":"https://aruiki.github.io/kanai/en/","applicationCategory":"UtilitiesApplication","operatingSystem":"Windows 11 x64","softwareVersion":"0.1.0-beta.2","inLanguage":"en","description":"An open-source Japanese input method for Windows built on Mozc, with a bundled local AI. The unsigned beta starts the AI but measured results show the conversion output does not change.","downloadUrl":"https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2","codeRepository":"https://github.com/aruiki/kanai"}
+  </script>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to content</a>
+<header><div class="wrap">
+  <a class="brand" href="#top"><img src="../kanai-mark.svg" alt="" width="36" height="36" />KanaAI</a>
+  <nav aria-label="Main navigation"><a href="#what">What it is</a><a href="#status">Status</a><a href="#install">Install</a><a href="#privacy">Privacy</a><a href="https://github.com/aruiki/kanai">GitHub</a></nav>
+</div></header>
+<main id="main-content" class="wrap">
+  <section class="hero" id="top" aria-labelledby="hero-title">
+    <div>
+      <p class="eyebrow">OPEN SOURCE · JAPANESE INPUT FOR WINDOWS</p>
+      <h1 id="hero-title">Built on Mozc.<br />Growing a local AI<br />inside your IME.</h1>
+      <p class="lede">KanaAI is a Japanese input method editor for Windows. It keeps Mozc for kana-kanji conversion and adds an AI that runs entirely on your own PC.</p>
+      <div class="actions"><a class="button" href="#install">Install the beta</a><a class="button secondary" href="https://github.com/aruiki/kanai">View the source</a></div>
+      <p class="small">Public build v0.1.0-beta.2 · Windows 11 x64 · unsigned · not a completed product</p>
+    </div>
+    <aside class="status" aria-label="Current state of the public beta">
+      <span class="tag">For developers and testers</span>
+      <strong>The AI starts.<br />Better conversion<br />is still ahead.</strong>
+      <p>beta.2 bundles the model and the runtime. In the measured comparison of the public build, turning the AI on did not change the conversion output.</p>
+      <a href="https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2">Read the release notes →</a>
+    </aside>
+  </section>
+  <section class="content" id="what" aria-labelledby="what-title">
+    <p class="eyebrow">ABOUT KANAAI</p><h2 id="what-title">What KanaAI is</h2>
+    <div class="grid">
+      <article class="card"><h3>Mozc does the conversion</h3><p>Dictionary, morphological analysis, candidate generation, history and OS integration come from Mozc. KanaAI does not reimplement them without a measured or maintenance reason.</p></article>
+      <article class="card"><h3>The AI runs on your PC</h3><p>Qwen2.5-1.5B-Instruct and a llama.cpp runtime are bundled and run on the CPU. No cloud AI account, no API key, no network access, no telemetry.</p></article>
+      <article class="card"><h3>The work is public</h3><p>KanaAI's own source is MIT OR Apache-2.0. Implementation, measured receipts and open problems are recorded in the repository.</p></article>
+    </div>
+    <div class="notice"><strong>What works today, and what does not</strong><p>Mozc-based Japanese input and startup of the bundled AI are confirmed on one machine. The AI does not yet improve conversion accuracy, and daily-use stability is not guaranteed. Independent verification of the finished product is not complete.</p></div>
+  </section>
+  <section class="content" id="status" aria-labelledby="status-title">
+    <p class="eyebrow">STATUS</p><h2 id="status-title">What is measured, and what is not</h2>
+    <div class="table-wrap"><table class="data">
+      <thead><tr><th>Item</th><th>State</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Installer lifecycle</strong></td><td><span class="pill ok">11/11 phases pass</span></td><td>Clean install, TSF registration, clean uninstall, direct MSI install, reinstall, upgrade, downgrade rejection, final uninstall, absence check, cleanup idempotence. <code>C:\Program Files\KanaAI</code> absent after cleanup.</td></tr>
+        <tr><td><strong>Japanese input on a real machine</strong></td><td><span class="pill ok">confirmed</span></td><td>The TIP DLL loaded into 11 real processes and the text service started <code>mozc_server → kanai-broker</code>.</td></tr>
+        <tr><td><strong>Local AI startup</strong></td><td><span class="pill ok">confirmed</span></td><td><code>llama-server</code> child process from <code>C:\Program Files\KanaAI\ai\</code>; about 1.6 GB for the child process; inference returned in 0.094 s warm with a 30 s bound.</td></tr>
+        <tr><td><strong>Conversion quality</strong></td><td><span class="pill no">not evaluated</span></td><td>AI on/off over 20 contexts produced <strong>0 differences</strong>; verdict <code>ai-does-not-change-output</code>. The AI starts but does not change the output. No quality claim is made.</td></tr>
+        <tr><td><strong>Code signing</strong></td><td><span class="pill no">unsigned</span></td><td>Windows SmartScreen / publisher warnings appear.</td></tr>
+        <tr><td><strong>Coverage</strong></td><td><span class="pill warn">one machine</span></td><td>Windows 11 x64 build 26200, one user. ARM64 and Windows 10 are unverified.</td></tr>
+        <tr><td><strong>Independent completion verdict</strong></td><td><span class="pill no">not done</span></td><td>The independent verification record still reads FAIL / NOT COMPLETE and has not been rewritten.</td></tr>
+      </tbody>
+    </table></div>
+    <div class="prose"><p>The Japanese <a href="../status.html">verification page</a> lists every receipt, run id and known limitation.</p></div>
+  </section>
+  <section class="content" id="install" aria-labelledby="install-title">
+    <p class="eyebrow">INSTALL</p><h2 id="install-title">Installing the beta</h2>
+    <div class="prose"><p>The download is about <strong>1.1 GB</strong> because the model and runtime are bundled. After Setup.exe starts there is no build step, no manual copy and no command to type — only the Windows UAC prompt.</p></div>
+    <ol class="spec-list">
+      <li>Download <code>KanaAI-0.1.0-Setup.exe</code> from the <a href="https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2">release page</a> and compare its SHA-256 (<code>F61D86BF95AC97723D733A76B33BE6BB8FF6FFED6E9A3973BDC1FADB641A17A0</code>).</li>
+      <li>Run Setup.exe and approve the UAC prompt.</li>
+      <li>Press <kbd>Win</kbd>+<kbd>Space</kbd> and choose <strong>KanaAI</strong>. It does not become the default automatically in this build.</li>
+      <li>Turn the IME on with the 半角/全角 key and type.</li>
+    </ol>
+    <div class="callout warn"><p class="t">Read this before installing</p><p>The build is <strong>unsigned</strong>. Do not disable SmartScreen, Smart App Control, antivirus or corporate policy to get past the warning. Daily-use stability is not guaranteed, and this build is <strong>not a completed product</strong>.</p></div>
+    <div class="prose">
+      <p>To turn the AI off, run <code>"C:\Program Files\KanaAI\kanai-broker.exe" --disable-local-ai</code>. It writes only your own user setting and takes effect the next time the text service starts. Conversion keeps working through Mozc whether the AI is off, slow, unavailable or crashed.</p>
+      <p>To remove KanaAI, use <strong>Settings → Apps → Installed apps</strong> and uninstall <strong>KanaAI Development Preview</strong>.</p>
+    </div>
+    <div class="actions"><a class="button" href="https://github.com/aruiki/kanai/releases/tag/v0.1.0-beta.2">Release page and files</a><a class="button secondary" href="../download.html">Japanese install guide</a></div>
+  </section>
+  <section class="content" id="privacy" aria-labelledby="privacy-title">
+    <p class="eyebrow">PRIVACY</p><h2 id="privacy-title">Where your text goes</h2>
+    <div class="prose">
+      <p><strong>Nowhere outside your PC.</strong> There is no network access at all. The runtime listens on loopback <code>127.0.0.1</code> only and is protected by a per-process key. There is no telemetry, no account and no API key.</p>
+      <p>In protected fields such as password boxes, context collection, the AI and learning are stopped. The IME never treats an untrusted interpretation of the context reported by the OS as a security boundary. Learning never happens from uncommitted input, and stale results or rewritten candidate ids are rejected.</p>
+      <p>Mozc history and learning data live in the Mozc profile and can be deleted from Mozc's own settings. KanaAI caches stay on your PC.</p>
+    </div>
+    <div class="actions"><a class="button secondary" href="../privacy.html">プライバシーの詳細（日本語）</a></div>
+  </section>
+  <section class="content" id="contribute" aria-labelledby="contribute-title">
+    <p class="eyebrow">BUILD WITH US</p><h2 id="contribute-title">Try it. Report it. Grow it with us.</h2>
+    <div class="prose"><p>Reports and contributions are welcome. Please include your Windows version, the KanaAI release and the application where it happened, and leave out personal data and anything you typed in confidence. The unfinished work is the measured AI quality evaluation and the W1 receipt for the text-service lifecycle.</p></div>
+    <div class="grid">
+      <a class="cardlink" href="https://github.com/aruiki/kanai/issues/new/choose"><h3>Report a problem</h3><p>GitHub Issues. Attach <code>broker-startup.log</code> if the AI does not start.</p><span class="go">Open an issue →</span></a>
+      <a class="cardlink" href="https://github.com/aruiki/kanai/blob/main/CONTRIBUTING.md"><h3>Contribute</h3><p>How to work on the implementation, the harnesses and the evaluation.</p><span class="go">CONTRIBUTING.md →</span></a>
+      <a class="cardlink" href="https://github.com/aruiki/kanai/blob/main/SECURITY.md"><h3>Security</h3><p>How to report a vulnerability before it is public.</p><span class="go">SECURITY.md →</span></a>
+    </div>
+    <div class="prose"><p>KanaAI is not affiliated with or endorsed by Google. Mozc keeps its own license; the bundled model is Apache-2.0 and the runtime is MIT.</p></div>
+  </section>
+</main>
+<footer><div class="wrap">
+  <div class="foot-nav">
+    <div><h4>PRODUCT</h4><ul><li><a href="./">Home</a></li><li><a href="../design.html">設計と技術（日本語）</a></li><li><a href="../privacy.html">プライバシー（日本語）</a></li></ul></div>
+    <div><h4>USE</h4><ul><li><a href="../download.html">ダウンロード・導入（日本語）</a></li><li><a href="../faq.html">よくある質問（日本語）</a></li><li><a href="../status.html">検証状況（日本語）</a></li></ul></div>
+    <div><h4>DEVELOP</h4><ul><li><a href="https://github.com/aruiki/kanai">GitHub</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/STATE.md">Development log</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/CONTRIBUTING.md">Contributing</a></li></ul></div>
+    <div><h4>REPORT &amp; LEGAL</h4><ul><li><a href="https://github.com/aruiki/kanai/issues/new/choose">Issues</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/SECURITY.md">Security</a></li><li><a href="https://github.com/aruiki/kanai/blob/main/LICENSE-MIT">License</a></li></ul></div>
+  </div>
+  <a class="brand" href="#top">KanaAI</a><p>Mozc-based Japanese input for Windows. Local AI in development.</p>
+  <p>Page updated: 2026-10-07 · public build v0.1.0-beta.2 (unsigned, not a completed product) · <span class="langswitch"><a href="../">日本語</a><a href="./">English</a></span></p>
+  <p class="small">The detailed pages (design, privacy, install, verification, FAQ) are currently written in Japanese.</p>
+</div></footer>
+</body>
+</html>

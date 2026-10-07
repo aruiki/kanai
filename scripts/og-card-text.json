@@ -1,0 +1,26 @@
+{
+  "note": "Wording for scripts/make-og-card.ps1. Kept outside the script because Windows PowerShell 5.1 reads BOM-less .ps1 files as the ANSI code page and turns Japanese literals into mojibake. The script reads this file with an explicit UTF-8 decoder, so the encoding of this file (UTF-8, with or without BOM) does not change the output.",
+  "url": "aruiki.github.io/kanai",
+  "cards": [
+    {
+      "file": "og-card.png",
+      "language": "ja",
+      "kicker": "OPEN SOURCE / WINDOWS 日本語入力",
+      "headline1": "Mozcを土台に、",
+      "headline2": "ローカルAIを育てるIME。",
+      "lede": "かな漢字変換はMozc。AIはPCの中だけ。クラウドのアカウントは不要です。",
+      "fact": "AIは起動します。変換品質の改善は、これからです。",
+      "footnote": "未署名の開発ベータです。完成版ではありません。"
+    },
+    {
+      "file": "og-card-en.png",
+      "language": "en",
+      "kicker": "OPEN SOURCE / JAPANESE IME FOR WINDOWS",
+      "headline1": "Mozc underneath.",
+      "headline2": "Local AI, growing.",
+      "lede": "KanaAI keeps Mozc conversion and runs its model on your own machine.",
+      "fact": "The AI starts. Better conversion is the next milestone.",
+      "footnote": "Unsigned development preview. Not a completed product."
+    }
+  ]
+}
