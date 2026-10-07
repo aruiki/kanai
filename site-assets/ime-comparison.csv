@@ -1,0 +1,4 @@
+date,ime,version,quality,gpu,previous_context,ajimee_198_percent,daily_81_percent,homophones_40_percent,names_40_percent,typos_40_percent
+2026-10-01,Kotori,0.3.0-beta.8,Unreal,RTX 3060,none,88.4,97.5,97.5,97.5,5.0
+2026-10-01,Microsoft IME,Windows 11,default,RTX 3060,none,59.6,86.4,82.5,82.5,5.0
+2026-10-01,Google Japanese Input,3.34.6260,default,RTX 3060,none,58.1,81.5,65.0,95.0,10.0

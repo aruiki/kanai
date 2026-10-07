@@ -46,17 +46,17 @@ releases.jsは製品版のラベルとフッターリンクのみ公開APIから
 本文の評価・機能・署名は確認時点の事実であり、自動更新しない。
 OG画像はscripts/make-og-card.ps1による再現可能な生成物。
 
-## 配備ファイル（15件）
+## 配備ファイル（16件）
 
 index.html / design.html / privacy.html / download.html / status.html / faq.html /
 en/index.html / landing.css / releases.js / kotori-mark.svg / og-card.png /
-og-card-en.png / ime-comparison.png / sitemap.xml / .nojekyll
+og-card-en.png / ime-comparison.png / ime-comparison.csv / sitemap.xml / .nojekyll
 
 site-assets/site.css・site.js・kanai-mark.svgは旧ドラフトの資産で、配備対象に含めない。
 ソースツリー、.env、開発用設定は配備しない。
 
 既存aruiki/kanaiのgh-pagesを使用。push後にPages buildが対象commitでbuiltになることを確認。
-全15ファイルでHTTP 200かつ公開バイトと正本の一致を確認する。
+全16ファイルでHTTP 200かつ公開バイトと正本の一致を確認する。
 公開トップの見出しと現行リポジトリへのリンクもブラウザーで確認する。
 
 ## 検索登録
@@ -70,3 +70,6 @@ Search Consoleは所有者アカウントでの確認・サイトマップ送信
 トップとstatus.htmlはeval/imebench/README.mdの2026-10-01の実入力結果を掲載。
 Kotori beta.8 / Unreal、前の文なし。前の文あり91.5%と混ぜない。全5セットを掲載。
 図は現行Kotoriのdocs/images/gen_ime_comparison.pyで再生成できる。新規計測ではない。
+
+AJIMEE例は固定commit401666cの原データから3問。fetch.shと同じSHA-256を照合。
+出典とCC BY-SA 3.0を表の直下へ表示。CSVは既存集計値の転記、問ごとの出力ではない。
