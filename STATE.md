@@ -8,8 +8,8 @@
 - 2026-10-01のKotori beta.8比較・CSV・出典・測定条件は維持。現在版の新規品質測定ではない。
 - sync-site / validate-pages（HTML14・参照277）/ git diff --check成功。Edge+Playwrightで7ページ×1440/390px、横はみ出し・画像欠落・JS例外なし。原票 .local/site-refresh/browser-check.json、home-1440.png、home-390.png。
 - 未完了: 実入力GIF/動画のREADME・サイト掲載。Windows Computer Useがtimeout→trusted Node process exited unexpectedly→timeoutで収録不能。このPCの導入版は3.34.6337.100で最新版とも異なる。生成UIはイメージと明記し、実録画として掲載していない。難文3例・収録条件・掲載手順はdocs/design/2026-10-asteria-site/recording-plan.md。
-- 公開未実施: mainへのpushを含むコマンドがauto-reviewで拒否。理由は今回の依頼に既定ブランチへの公開pushの明示許可が不足するという判断。コマンド全体が開始前に拒否され、push・配備は実施されていない。別ブランチ等で回避しない。
-- 次: ユーザーに公開承認を得てmainとgh-pagesへ反映後、Pages buildと公開ファイルの一致を確認する。録画はWindows操作環境の復旧後に実際の版・設定・操作・出力を記録し、Asteria READMEとサイトへ掲載する。
+- 公開完了: ユーザー承認後、main 899b645、gh-pages f9cbacfへpush。Pages build status=built（f9cbacf8802d63c6eb08e855270e23aea310d3f8）。公開トップ・download/status・アイコン・月画像をHTTP200で確認。Edge+Playwrightで公開版を7ページ×1440/390px表示し、横はみ出し・画像欠落・JS例外なし。原票 .local/site-refresh/public-check.json、public-1440.png、public-390.png。
+- 次: Windows操作環境の復旧後、実際の版・設定・操作・出力を固定して難文の入力を収録し、Asteria READMEとサイトへ掲載する。
 
 ---
 
