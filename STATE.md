@@ -4,9 +4,9 @@
 
 - 表示内容は「おんせいにんしきのせいどがあがった」→Space 1回→「音声認識の精度が上がった」→Enter。候補巡回なし。
 - 元録画single-space-no-period、フレーム75〜136、680×112、6.79秒、27,138 bytes。原票は .local/typing-demo/one-space-loop/receipt.json。文字を大きくし、説明・操作欄なしで自動ループする。
-- サイト日英トップとAsteria READMEへ同じGIFを復帰。README PR166（head d7773d6）。CI成功後に統合する。
+- サイト日英トップとAsteria READMEへ同じGIFを復帰。README PR166の最終head 9517401で全7CI成功後、72b8b6cへ統合済み。公開READMEで680×112のGIFを確認。
 - 同音語の先頭候補の問題は未修正。今回の動画をその修正の証拠として扱わない。
-- 次: サイト公開を確認、PR166のCI確認・統合、公開READMEのGIF確認。
+- 公開確認済み: Pages 8c0351eはbuilt。日英×PC/390pxで自動フレーム変化・横はみ出しなし。公開GIFのSHAは原票と一致。古いGIFのキャッシュを避けるため参照に?v=one-spaceを付加。原票は .local/typing-demo/one-space-loop/public-check.json とreadme-published.json。自動ループ表示の復帰は完了。
 
 ---
 
