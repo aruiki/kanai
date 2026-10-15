@@ -1,9 +1,9 @@
 // Refresh only release labels; capability descriptions remain dated and sourced.
 // Failure leaves the static guide and the /releases/latest links fully usable.
 (async () => {
-  const base = 'https://github.com/aruiki/KotoriIME-japanese-';
+  const base = 'https://github.com/aruiki/Asteria-Japanese-IME';
   try {
-    const response = await fetch('https://api.github.com/repos/aruiki/KotoriIME-japanese-/releases/latest', {
+    const response = await fetch('https://api.github.com/repos/aruiki/Asteria-Japanese-IME/releases/latest', {
       credentials: 'omit', signal: AbortSignal.timeout(5000),
     });
     if (!response.ok) return;
