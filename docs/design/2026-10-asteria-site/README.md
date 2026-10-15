@@ -20,6 +20,6 @@ Edit this landing page mockup. Preserve its overall midnight navy and warm ivory
 - Edge / Playwrightで7ページ×1440px・390pxを確認。横はみ出し・画像欠落・JS例外なし。`.local/site-refresh/browser-check.json`。
 - `node scripts/sync-site.mjs`、`node scripts/validate-pages.mjs`、`git diff --check`。
 
-## 実入力GIF・動画の残項目
+## 実入力GIF・動画
 
-[収録案と掲載手順](recording-plan.md)。Windows Computer Useは初回timeout、再接続でtrusted Node process exited unexpectedly、最終再試行もtimeout。実入力収録は未実施。生成UIや変換器の出力から実録画を作ったとは扱わない。
+[制作記録](recording-plan.md)。導入済みAsteriaで36秒の実入力デモを収録し、README用GIFと日本語・英語サイト用MP4を生成。候補選択の実操作を含む。動画は1152×576、PC/390pxの再生・シーク・寸法・エラーなしを確認。原票は .local/typing-demo/。

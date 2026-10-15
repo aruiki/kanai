@@ -1,3 +1,18 @@
+# 最新の引き継ぎ — 2026-10-15（Asteria実入力GIF・動画）
+
+ユーザーが導入済みAsteriaで制作し、動画内に版番号を表示しない方針を明示。約36秒の実入力デモを収録した。
+
+- Windows Computer Useの初期化timeout後、既存eval/imebench/ImeBench.csを基に収録専用TextBoxを作成。当該TIPのロード、実キー入力、候補選択、確定文と実フレームを取得。難文は文節ごとに実際の候補を選ぶ操作を含む。
+- 確定文: 貴社の記者が汽車で帰社した。 / 音声認識の精度が上がった。 / 明日の会議は１０時からです。
+- 成果物: README用GIF224,890 bytes・36.12秒、サイトMP4 226,553 bytes・36.16秒、1152×576。元330枚の実フレームと時間間隔から生成、速度変更なし。ポスターは実フレーム140。公開素材に版表示なし。
+- 根拠: .local/typing-demo/take-06（results.tsv/candidate-trace.tsv/frames.tsv/tip-path.txt/PNG）。初期の入力・前面取得・候補選択の失敗はtake-01〜05に保持。制作記録はdocs/design/2026-10-asteria-site/recording-plan.md。
+- サイト: 日英トップへcontrols付きMP4・ポスターを追加。自動再生なし。sync/validator成功（HTML14・参照289）。Edge/Playwrightで日英×1440/390px、動画デコード・再生・15秒へのシーク、寸法、横はみ出しなしを確認。.local/typing-demo/video-check.json。
+- README: 別作業ツリー .local/typing-demo/product-worktree、branch codex/typing-demo-20261015、PR164。既存の製品開発ブランチは変更していない。CI全項目成功後に統合する。
+- 次: サイト配備の完了確認、PR164のCI確認・統合、公開READMEのGIFを確認する。
+
+---
+
+以下は過去の記録。
 # 最新の引き継ぎ — 2026-10-15（Asteria紹介サイト更新・公開承認待ち）
 
 紹介対象はAsteria（旧Kotori）。URL /kanai/ は維持。変更前にmain a77d114をorigin/main 754001aへfast-forwardし、現在のサイト・引き継ぎを再読した。
