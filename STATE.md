@@ -1,3 +1,19 @@
+# 最新の引き継ぎ — 2026-10-15（Asteria紹介サイト更新・公開承認待ち）
+
+紹介対象はAsteria（旧Kotori）。URL /kanai/ は維持。変更前にmain a77d114をorigin/main 754001aへfast-forwardし、現在のサイト・引き継ぎを再読した。
+
+- Asteriaの採用記録「月の余白」（2026-10-11）と正式アイコンを参照。内蔵image_genでモックアップを生成し、docs/design/2026-10-asteria-site/mockup.pngへ保存。制作プロンプトは同README。
+- 全7ページをAsteria / v1.1.3へ更新。配布URL・MSI名・サイズ・SHA・JSON-LD・OG・sitemap・API参照先を更新。製品コード・配布バイナリ・独立VERIFICATION.mdは変更なし。
+- 根拠: GitHub Latest v1.1.3（2026-10-12）、Asteria README・ADR0056・固定版のMSI検証記録。未署名、3.34.6431.100、1,569,517,568 bytes、SHA b7dbaee7e99dcea16544b169cadb7ea1e0c5b66f1225cbc01a044ad4293688d5。
+- 2026-10-01のKotori beta.8比較・CSV・出典・測定条件は維持。現在版の新規品質測定ではない。
+- sync-site / validate-pages（HTML14・参照277）/ git diff --check成功。Edge+Playwrightで7ページ×1440/390px、横はみ出し・画像欠落・JS例外なし。原票 .local/site-refresh/browser-check.json、home-1440.png、home-390.png。
+- 未完了: 実入力GIF/動画のREADME・サイト掲載。Windows Computer Useがtimeout→trusted Node process exited unexpectedly→timeoutで収録不能。このPCの導入版は3.34.6337.100で最新版とも異なる。生成UIはイメージと明記し、実録画として掲載していない。難文3例・収録条件・掲載手順はdocs/design/2026-10-asteria-site/recording-plan.md。
+- 公開未実施: mainへのpushを含むコマンドがauto-reviewで拒否。理由は今回の依頼に既定ブランチへの公開pushの明示許可が不足するという判断。コマンド全体が開始前に拒否され、push・配備は実施されていない。別ブランチ等で回避しない。
+- 次: ユーザーに公開承認を得てmainとgh-pagesへ反映後、Pages buildと公開ファイルの一致を確認する。録画はWindows操作環境の復旧後に実際の版・設定・操作・出力を記録し、Asteria READMEとサイトへ掲載する。
+
+---
+
+以下は過去の記録。
 # 最新の引き継ぎ — 2026-10-07（紹介文の語調）
 
 ユーザーは決め台詞や製品としての売り込みを希望せず、オープンソースの優しいソフトを目指す。

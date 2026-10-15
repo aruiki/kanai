@@ -9,7 +9,7 @@ const repositoryRoot = resolve(scriptDirectory, "..");
 const pagesRoot = join(repositoryRoot, "pages");
 const assetsRoot = join(repositoryRoot, "site-assets");
 const siteOrigin = "https://aruiki.github.io/kanai/";
-const releaseVersion = "1.0.0";
+const releaseVersion = "1.1.3";
 const canonicalOwners = new Map();
 const errors = [];
 const warnings = [];
@@ -186,13 +186,13 @@ function checkHtmlFile(filePath) {
   if (description.length === 0) reportError(`${source}: missing description`);
   if (description.length > 160) reportWarning(`${source}: description is ${description.length} characters; search results usually truncate past 160`);
 
-  // Product identity and disclosures follow the current Kotori release, not
+  // Product identity and disclosures follow the current Asteria release, not
   // the retired KanaAI beta. Old-result claims must never be republished.
   const phrases = language === "en"
-    ? ["Mozc", "Windows", `v${releaseVersion}`, "Kotori", "unsigned"]
-    : ["Mozc", "Windows", `v${releaseVersion}`, "Kotori", "未署名"];
+    ? ["Mozc", "Windows", `v${releaseVersion}`, "Asteria", "unsigned"]
+    : ["Mozc", "Windows", `v${releaseVersion}`, "Asteria", "未署名"];
   if (kind === "home" && language === "ja") phrases.push("ダウンロード", "FAQ", "GPU");
-  for (const stale of ["変換結果は変わりません", "0.1.0-beta.2", "Qwen2.5", "KanaAI-0.1.0-Setup.exe", "https://github.com/aruiki/kanai"])
+  for (const stale of ["KotoriIME-japanese-", "Kotori-AI-Japanese-IME", "v1.0.0", "v1.1.0-rc.1", "変換結果は変わりません", "0.1.0-beta.2", "Qwen2.5", "KanaAI-0.1.0-Setup.exe", "https://github.com/aruiki/kanai"])
     if (html.includes(stale)) reportError(`${source}: retired product claim or link: ${stale}`);
   for (const phrase of phrases) {
     if (!html.includes(phrase)) reportError(`${source}: required product content missing: ${phrase}`);
@@ -344,7 +344,7 @@ if (warnings.length > 0) {
   warnings.forEach((warning) => console.warn(`  - ${warning}`));
 }
 
-console.log("Kotori website validation");
+console.log("Asteria website validation");
 console.log(`  HTML pages:       ${counts.html}`);
 console.log(`  CSS files:        ${counts.stylesheets}`);
 console.log(`  JS files:         ${counts.scripts}`);

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Renders the Kotori IME Open Graph card (1200x630) as a PNG.
+  Renders the Asteria IME Open Graph card (1200x630) as a PNG.
 
 .DESCRIPTION
   Social crawlers (X, Facebook, LinkedIn, Slack) do not render SVG og:image
@@ -9,7 +9,7 @@
   becoming a binary with no source.
 
   Colours and wording match site-assets/landing.css and site-assets/index.html.
-  The card follows the current Kotori release notes and the dated site text.
+  The card follows the current Asteria release notes and the dated site text.
 
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-og-card.ps1
@@ -32,13 +32,13 @@ $width = 1200
 $height = 630
 
 # Brand tokens (kept in sync with site-assets/landing.css).
-$ink = [System.Drawing.Color]::FromArgb(255, 20, 46, 41)        # #142e29
-$inkDeep = [System.Drawing.Color]::FromArgb(255, 18, 33, 38)    # #122126
-$accent = [System.Drawing.Color]::FromArgb(255, 212, 244, 141)  # #d4f48d
+$ink = [System.Drawing.Color]::FromArgb(255, 13, 22, 36)        # #142e29
+$inkDeep = [System.Drawing.Color]::FromArgb(255, 13, 22, 36)    # #122126
+$accent = [System.Drawing.Color]::FromArgb(255, 229, 211, 179)  # #d4f48d
 $accentSoft = [System.Drawing.Color]::FromArgb(255, 185, 216, 255)
 $accentWarm = [System.Drawing.Color]::FromArgb(255, 245, 182, 122)
 $paper = [System.Drawing.Color]::FromArgb(255, 245, 243, 235)   # #f5f3eb
-$paperMuted = [System.Drawing.Color]::FromArgb(255, 214, 227, 218)
+$paperMuted = [System.Drawing.Color]::FromArgb(255, 196, 203, 212)
 
 function New-RoundedPath {
   param([float]$X, [float]$Y, [float]$W, [float]$H, [float]$Radius)
@@ -53,18 +53,10 @@ function New-RoundedPath {
 }
 
 function Draw-Mark {
-  # Vector replica of site-assets/kotori-mark.svg.
   param($Graphics, [float]$X, [float]$Y, [float]$Size)
-  $s = $Size / 64.0
-  $background = New-Object System.Drawing.SolidBrush($ink)
-  $graphics.FillPath($background, (New-RoundedPath -X $X -Y $Y -W $Size -H $Size -Radius (16 * $s)))
-  $pen = New-Object System.Drawing.Pen($accent, (7 * $s))
-  $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $graphics.DrawLine($pen, $X + 19 * $s, $Y + 16 * $s, $X + 19 * $s, $Y + 48 * $s)
-  $graphics.DrawLine($pen, $X + 25 * $s, $Y + 32 * $s, $X + 45 * $s, $Y + 15 * $s)
-  $graphics.DrawLine($pen, $X + 25 * $s, $Y + 32 * $s, $X + 45 * $s, $Y + 49 * $s)
-  $background.Dispose(); $pen.Dispose()
+  $iconPath = Join-Path $repositoryRoot 'site-assets/asteria-icon.png'
+  $icon = [System.Drawing.Image]::FromFile($iconPath)
+  try { $Graphics.DrawImage($icon, $X, $Y, $Size, $Size) } finally { $icon.Dispose() }
 }
 
 function Render-Card {
@@ -90,7 +82,7 @@ function Render-Card {
   $graphics.FillRectangle($inkBrush, 0, 0, $width, $height)
 
   # Ambient rings plus the accent rule, echoing the site hero.
-  $ringPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(26, 212, 244, 141), 2)
+  $ringPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(0, 229, 211, 179), 2)
   $graphics.DrawEllipse($ringPen, 760, -190, 640, 640)
   $graphics.DrawEllipse($ringPen, 860, -90, 440, 440)
   $ringPen.Dispose()
@@ -101,14 +93,14 @@ function Render-Card {
   Draw-Mark -Graphics $graphics -X 96 -Y 96 -Size 88
   $paperBrush = New-Object System.Drawing.SolidBrush($paper)
   $wordFont = New-Object System.Drawing.Font('Yu Gothic UI', 40, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
-  $graphics.DrawString('Kotori IME', $wordFont, $paperBrush, 208, 108)
+  $graphics.DrawString('Asteria IME', $wordFont, $paperBrush, 208, 108)
   $wordFont.Dispose()
 
   $kickerFont = New-Object System.Drawing.Font('Yu Gothic UI', 21, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
   $graphics.DrawString($Kicker, $kickerFont, $accentBrush, 96, 166)
   $kickerFont.Dispose()
 
-  $headFont = New-Object System.Drawing.Font('Yu Gothic UI', 62, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
+  $headFont = New-Object System.Drawing.Font('Yu Mincho', 55, [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
   $graphics.DrawString($Headline1, $headFont, $paperBrush, 92, 244)
   $graphics.DrawString($Headline2, $headFont, $paperBrush, 92, 324)
   $headFont.Dispose()
@@ -118,7 +110,7 @@ function Render-Card {
   $graphics.DrawString($Lede, $ledeFont, $mutedBrush, 96, 422)
   $ledeFont.Dispose()
 
-  $dividerPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255, 60, 92, 82), 2)
+  $dividerPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255, 83, 103, 121), 2)
   $graphics.DrawLine($dividerPen, 96, 494, 1104, 494)
   $dividerPen.Dispose()
 
@@ -132,7 +124,7 @@ function Render-Card {
   $urlFont.Dispose()
 
   $metaFont = New-Object System.Drawing.Font('Yu Gothic UI', 19, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
-  $metaBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 150, 172, 160))
+  $metaBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255, 176, 185, 195))
   $graphics.DrawString($Footnote, $metaFont, $metaBrush, 96, 564)
   $metaFont.Dispose()
 
@@ -174,7 +166,7 @@ foreach ($card in $copy.cards) {
   $probe.Dispose()
 }
 
-Write-Host 'Kotori IME OG cards'
+Write-Host 'Asteria IME OG cards'
 foreach ($card in $cards) {
   Write-Host ("  {0}  {1}x{2}  {3} bytes" -f $card.File, $card.Width, $card.Height, $card.Bytes)
 }

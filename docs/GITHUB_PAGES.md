@@ -1,81 +1,24 @@
-# GitHub Pages 紹介サイトの運用（2026-10-07）
+# GitHub Pages 紹介サイトの運用（2026-10-15）
 
-現在の紹介対象は **Kotori日本語入力**。
-公開URL: https://aruiki.github.io/kanai/
-現行製品リポジトリ: https://github.com/aruiki/KotoriIME-japanese-
+紹介対象は **Asteria — アステリア**。公開URLは既存の https://aruiki.github.io/kanai/ を維持する。
+製品リポジトリ: https://github.com/aruiki/Asteria-Japanese-IME 。旧Kotoriの後継で、旧KanaAI betaとは別の製品系統。
 
-ユーザーが指定した現行リポジトリを基準に全ページを更新。
-URLは既存の公開先を維持する。旧KanaAIのbeta.2の結果は現行製品の説明へ流用しない。
-製品コードや検証記録の書き換えは行わない。
+- 正本: `site-assets/`。`node scripts/sync-site.mjs` で `pages/` へ同期する。
+- 検証: `node scripts/validate-pages.mjs`、`git diff --check`、PC/390pxで全7ページの表示。
+- 公開先: `aruiki/kanai` の `gh-pages` ブランチ。配備後にPages build、HTTP200、正本とのバイト一致を確認する。
+- 配備対象: index.html / design.html / privacy.html / download.html / status.html / faq.html / en/index.html / landing.css / releases.js / asteria-icon.png / asteria-hero.png / og-card.png / og-card-en.png / ime-comparison.png / ime-comparison.csv / sitemap.xml / .nojekyll。
+- `site.css` / `site.js` / `kanai-mark.svg` / `kotori-mark.svg` は過去の資産。新規ページの配備には含めない。
 
-## ページ構成
+## 現在の確認済み内容
 
-- index.html: Kotori日本語入力の特徴、変換例、条件付きの評価値。
-- design.html: Mozc / zenz / TinySwallow、AI予測、GPU・CPU、品質モード。
-- privacy.html: ローカル処理、設定・学習の保存先、診断情報、削除後のデータ。
-- download.html: 製品版/RC、Kotori64.msi、必要な環境、版別SHA-256、導入・更新・削除。
-- status.html: v1.0.0 / v1.1.0-rc.1、評価の根拠、署名・長時間試験・実機確認の残項目。
-- faq.html: 12問。表示内容と一致するFAQPage JSON-LD。
-- en/index.html: English overview。製品版とRC、条件付きの評価値。
+2026-10-15にGitHub Releases API、Asteria README、固定版v1.1.3の検証記録を確認。公開版はv1.1.3（2026-10-12）、Asteria64.msi、未署名。サイズ・SHA・実機確認範囲はdownload.html / status.htmlと固定版の検証記録へ。
 
-## 正本と更新
+2026-10-01の実入力比較はKotori beta.8 / Unreal / 前の文なし。Standard 91.5%等の変換器評価とは別の条件。過去の測定版・数値・出典・CSVは保持し、現行版の新規測定値としない。
 
-site-assets/が正本。pages/は同一構造のミラー。
+ブランドはAsteriaで採用された「月の余白」。正式アイコン、濃紺・生成り、明朝、紙と墨を使用。制作プロンプトとモックアップは `docs/design/2026-10-asteria-site/`。
 
-```
-node scripts/sync-site.mjs
-node scripts/validate-pages.mjs
-git diff --check
-```
+`releases.js` は公開APIから版ラベルと最新リンクのみ更新する。本文の評価・署名・機能・構造化データは自動更新しない。新しい版の公開後は本文・JSON-LD・SHA・OG・sitemap・validatorのreleaseVersionを一次資料に合わせて更新する。
 
-validatorはリンク/アンカー/ローカル資産、canonical一意性、言語と文字種、OG/Twitter、
-JSON-LD型、現行製品名・版・署名の記載を確認する。
-旧beta.2の版・「変換結果は変わりません」・旧GitHubの製品リンク等をエラーにする。
-これらは現在の公開版の状態に合わせた紹介内容の検査で、IMEの製品テストを代替しない。
+実入力GIF・動画は未収録。生成イメージを実録画として使わない。収録条件とREADME/サイトへの掲載手順は `docs/design/2026-10-asteria-site/recording-plan.md`。
 
-## 新しい版が公開されたら
-
-1. 現行リポジトリのREADME・リリースノート・HANDOFF・利用ガイド・評価記録を読む。
-2. 製品版とRCを分けて記載。配布リンクは /releases/latest を基本とする。
-3. モデル、環境、サイズ、署名、削除後のデータ、精度の条件を確認して本文とJSON-LDを更新。
-4. scripts/og-card-text.jsonを更新し、make-og-card.ps1でOG画像を生成して視認する。
-5. validatorのreleaseVersionと必要な記載を現行製品に合わせる。
-6. sync・validator・diff確認、PC/390px幅の表示確認後に配備。
-
-releases.jsは製品版のラベルとフッターリンクのみ公開APIから更新する。
-本文の評価・機能・署名は確認時点の事実であり、自動更新しない。
-OG画像はscripts/make-og-card.ps1による再現可能な生成物。
-
-## 配備ファイル（16件）
-
-index.html / design.html / privacy.html / download.html / status.html / faq.html /
-en/index.html / landing.css / releases.js / kotori-mark.svg / og-card.png /
-og-card-en.png / ime-comparison.png / ime-comparison.csv / sitemap.xml / .nojekyll
-
-site-assets/site.css・site.js・kanai-mark.svgは旧ドラフトの資産で、配備対象に含めない。
-ソースツリー、.env、開発用設定は配備しない。
-
-既存aruiki/kanaiのgh-pagesを使用。push後にPages buildが対象commitでbuiltになることを確認。
-全16ファイルでHTTP 200かつ公開バイトと正本の一致を確認する。
-公開トップの見出しと現行リポジトリへのリンクもブラウザーで確認する。
-
-## 検索登録
-
-canonical・サイトマップの公開だけで検索への登録や順位は保証されない。
-Search Consoleは所有者アカウントでの確認・サイトマップ送信が残っている。
-詳しい周知・計測手順と未投稿の告知文はPROMOTION.md。
-
-## 3製品の比較
-
-トップとstatus.htmlはeval/imebench/README.mdの2026-10-01の実入力結果を掲載。
-Kotori beta.8 / Unreal、前の文なし。前の文あり91.5%と混ぜない。全5セットを掲載。
-図は現行Kotoriのdocs/images/gen_ime_comparison.pyで再生成できる。新規計測ではない。
-
-AJIMEE例は固定commit401666cの原データから3問。fetch.shと同じSHA-256を照合。
-出典とCC BY-SA 3.0を表の直下へ表示。CSVは既存集計値の転記、問ごとの出力ではない。
-
-## 紹介文の語調
-
-メンテナの2026-10-07の希望: オープンソースの優しいソフトとして紹介する。
-決め台詞や競争を煽る見出しは避け、機能・使い方・測定結果を具体的に記載する。
-配布区分は公開版・リリース候補と呼ぶ。
+Search Consoleの所有権確認・サイトマップ送信は所有者アカウントでの作業。canonicalやサイトマップの公開は検索掲載・順位を保証しない。
