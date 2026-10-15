@@ -7,8 +7,8 @@
 - 成果物: README用GIF224,890 bytes・36.12秒、サイトMP4 226,553 bytes・36.16秒、1152×576。元330枚の実フレームと時間間隔から生成、速度変更なし。ポスターは実フレーム140。公開素材に版表示なし。
 - 根拠: .local/typing-demo/take-06（results.tsv/candidate-trace.tsv/frames.tsv/tip-path.txt/PNG）。初期の入力・前面取得・候補選択の失敗はtake-01〜05に保持。制作記録はdocs/design/2026-10-asteria-site/recording-plan.md。
 - サイト: 日英トップへcontrols付きMP4・ポスターを追加。自動再生なし。sync/validator成功（HTML14・参照289）。Edge/Playwrightで日英×1440/390px、動画デコード・再生・15秒へのシーク、寸法、横はみ出しなしを確認。.local/typing-demo/video-check.json。
-- README: 別作業ツリー .local/typing-demo/product-worktree、branch codex/typing-demo-20261015、PR164。既存の製品開発ブランチは変更していない。CI全項目成功後に統合する。
-- 次: サイト配備の完了確認、PR164のCI確認・統合、公開READMEのGIFを確認する。
+- README公開完了: PR164の最終head 1293884で全7CI成功後、merge commit 1f51d6f72a24bf68647785f5dfa31d469b3982c0へ統合。公開GitHub READMEでGIFの描画1152×576を確認、raw GIFのSHAが制作成果物と一致。.local/typing-demo/readme-published.json/png。既存の製品開発ブランチは変更なし。
+- サイト公開完了: main fee7459 / gh-pages 0c6e387、Pages built。公開MP4のSHAが制作成果物と一致。公開日英トップ×1440/390pxで再生・15秒シーク・横はみ出しなしを確認（.local/typing-demo/video-public-check.json）。README/GIFとサイト/MP4の追加依頼は完了。
 
 ---
 
