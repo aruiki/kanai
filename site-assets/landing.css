@@ -99,3 +99,5 @@ h1,h2,h3{font-family:var(--serif);font-weight:500;letter-spacing:.025em}h1{font-
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 
 .typing-demo{margin:26px 0 18px}.typing-demo video{display:block;width:100%;height:auto;aspect-ratio:2/1;background:#0d1624;border:1px solid #ccc7be;border-radius:3px}.typing-demo figcaption{margin-top:12px;color:var(--muted);font-size:14px}.demo-transcript{color:var(--muted);margin:18px 0 0}
+
+.typing-demo img{display:block;width:100%;height:auto;border:0;background:#fffdf8}.typing-demo{margin:22px 0 0}

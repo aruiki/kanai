@@ -6,7 +6,7 @@
 - 正本: `site-assets/`。`node scripts/sync-site.mjs` で `pages/` へ同期する。
 - 検証: `node scripts/validate-pages.mjs`、`git diff --check`、PC/390pxで全7ページの表示。
 - 公開先: `aruiki/kanai` の `gh-pages` ブランチ。配備後にPages build、HTTP200、正本とのバイト一致を確認する。
-- 配備対象: index.html / design.html / privacy.html / download.html / status.html / faq.html / en/index.html / landing.css / releases.js / asteria-icon.png / asteria-hero.png / og-card.png / og-card-en.png / ime-comparison.png / ime-comparison.csv / sitemap.xml / typing-demo.mp4 / typing-demo-poster.png / .nojekyll。
+- 配備対象: index.html / design.html / privacy.html / download.html / status.html / faq.html / en/index.html / landing.css / releases.js / asteria-icon.png / asteria-hero.png / og-card.png / og-card-en.png / ime-comparison.png / ime-comparison.csv / sitemap.xml / typing-demo.gif / typing-demo.mp4 / typing-demo-poster.png / .nojekyll。
 - `site.css` / `site.js` / `kanai-mark.svg` / `kotori-mark.svg` は過去の資産。新規ページの配備には含めない。
 
 ## 現在の確認済み内容
@@ -19,6 +19,6 @@
 
 `releases.js` は公開APIから版ラベルと最新リンクのみ更新する。本文の評価・署名・機能・構造化データは自動更新しない。新しい版の公開後は本文・JSON-LD・SHA・OG・sitemap・validatorのreleaseVersionを一次資料に合わせて更新する。
 
-実入力GIF・動画は収録済み。READMEはGIF、日本語・英語サイトは操作できるMP4で掲載。収録条件と原票は `docs/design/2026-10-asteria-site/recording-plan.md`。
+実入力GIF・動画は収録済み。READMEと日本語・英語サイトは、変換画面だけを大きく切り出した自動ループGIFで掲載。収録条件と原票は `docs/design/2026-10-asteria-site/recording-plan.md`。
 
 Search Consoleの所有権確認・サイトマップ送信は所有者アカウントでの作業。canonicalやサイトマップの公開は検索掲載・順位を保証しない。
