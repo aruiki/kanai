@@ -3,8 +3,8 @@
 <title>Asteriaのしくみ｜GPU AIとMozcの日本語入力</title><meta name="description" content="Asteria v2.0.0の仕組み。Mozcの辞書・文節処理とローカルAIの候補生成・採点、AIの初回結果を待つ非同期表示、GPUとCPUの動作を説明します。">
 <link rel="canonical" href="https://aruiki.github.io/kanai/design.html"><link rel="alternate" hreflang="ja" href="https://aruiki.github.io/kanai/design.html"><link rel="alternate" hreflang="x-default" href="https://aruiki.github.io/kanai/design.html">
 <meta property="og:type" content="website"><meta property="og:locale" content="ja_JP"><meta property="og:site_name" content="Asteria"><meta property="og:title" content="Asteriaのしくみ｜GPU AIとMozcの日本語入力"><meta property="og:description" content="Asteria v2.0.0の仕組み。Mozcの辞書・文節処理とローカルAIの候補生成・採点、AIの初回結果を待つ非同期表示、GPUとCPUの動作を説明します。"><meta property="og:url" content="https://aruiki.github.io/kanai/design.html">
-<meta property="og:image" content="https://aruiki.github.io/kanai/og-card.png?v=2.0.0"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Asteria — GPUで考える、日本語入力。">
-<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card.png?v=2.0.0"><link rel="icon" href="asteria-icon.png" type="image/png"><link rel="stylesheet" href="landing.css?v=2.0.0">
+<meta property="og:image" content="https://aruiki.github.io/kanai/og-card.png?v=quality-20261022"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Asteria — 変換精度の高い日本語IME。">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card.png?v=quality-20261022"><link rel="icon" href="asteria-icon.png" type="image/png"><link rel="stylesheet" href="landing.css?v=2.0.0">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Asteria","item":"https://aruiki.github.io/kanai/"},{"@type":"ListItem","position":2,"name":"Asteriaのしくみ｜GPU AIとMozcの日本語入力","item":"https://aruiki.github.io/kanai/design.html"}]}</script></head><body>
 <a class="skip-link" href="#main-content">本文へ移動</a><header><div class="wrap"><a class="brand" href="./"><img src="asteria-icon.png" width="40" height="40" alt="">Asteria <span>アステリア</span></a><nav aria-label="メインナビゲーション"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/Asteria-Japanese-IME">GitHub</a><a href="en/">English</a></nav>
 </div>
@@ -35,7 +35,7 @@
 <a href="https://github.com/aruiki/Asteria-Japanese-IME/tree/main/docs/adr">設計記録</a> ／ <a href="https://github.com/aruiki/Asteria-Japanese-IME/tree/main/mozc/patches">Mozcへの変更</a> ／ <a href="status.html">公開状況と検証範囲</a></section>
 </main>
 <footer><div class="wrap"><p class="brand">Asteria</p>
-<p>GPUで考える、日本語入力。文脈を読むAIも、あなたのPCの中に。</p>
+<p>変換精度の高い日本語IME。無料・オープンソース。オフラインで使えます。</p>
 <p>紹介対象: v2.0.0 · 正式版 · 未署名 · Windows 10 / 11 x64 · 本文確認 2026-10-21</p>
 <nav aria-label="フッター"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/Asteria-Japanese-IME">GitHub</a><a href="en/">English</a></nav>
 <p><a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/USER_GUIDE.md">使い方</a> · <a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/licenses.md">ライセンス</a> · <a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/SECURITY.md">セキュリティ</a> · <a href="https://buy.stripe.com/cNi14m7jRdq005f0781ZS08">開発を支援</a></p>
