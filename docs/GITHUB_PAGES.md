@@ -6,7 +6,9 @@ GPUで考える日本語入力を軸に全7ページとOG画像を更新。紹�
 
 現行94.0%は条件付きのオフライン評価。旧比較・CSV・ライセンス出典は過去記録へ保持した。MSI SHAは2b37f6fbdcb069251e820e2009b096111cc2253e79ffac65d973fa11ce18e301、サイズ1,662,828,544 bytes。アプリ・モデル・本体ビルド入力は変更しない。
 
-公開URLとgh-pagesでの配備方法は以下を継続する。統合後にPages build成功・全配備ファイルのHTTP200/バイト一致・公開画面を確認する。
+公開結果: [PR8](https://github.com/aruiki/kanai/pull/8)をmain05befd9a4900cc1680b48333e114125e5f4eefa5へ統合。gh-pages6afbd5a2487a8c660e6c26a280d1aa7bdca55d97、[Pages run39535159315](https://github.com/aruiki/kanai/actions/runs/39535159315)がsuccess、Pages buildも同commitでbuilt。全20配備ファイルを公開URLから実取得し、HTTP200・配備元SHA-256と全一致を確認した。
+
+公開サイトも7ページ×1440/390pxの14条件で、画像欠落・横はみ出し・ページ例外0、h1各1、RC4表示、スキップリンクのキーボード到達を確認。公開トップをPC・スマートフォン幅で目視した。[製品リポジトリの公開検証記録](https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/verification/marketing-refresh-20261021.md)に原票SHAを保存。これはサイトの確認であり、実アプリの製品検証を代替しない。
 
 ---
 
