@@ -1,19 +1,81 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja"><head>
-<meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#0d1624" />
-<title>Asteria日本語入力とMicrosoft IME・Google日本語入力の比較｜評価・公開状況</title><meta name="description" content="Microsoft IME・Google日本語入力と同条件で比較。AJIMEE 198問でKotori 88.4%、Microsoft 59.6%、Google 58.1%。実際の問題文、測定条件、CSVとv1.1.3の公開状況を掲載。" />
-<link rel="canonical" href="https://aruiki.github.io/kanai/status.html" /><link rel="alternate" hreflang="ja" href="https://aruiki.github.io/kanai/status.html" /><link rel="alternate" hreflang="x-default" href="https://aruiki.github.io/kanai/status.html" />
-<meta property="og:type" content="website" /><meta property="og:locale" content="ja_JP" /><meta property="og:site_name" content="Asteria日本語入力" />
-<meta property="og:title" content="Asteria日本語入力とMicrosoft IME・Google日本語入力の比較｜評価・公開状況" /><meta property="og:description" content="Microsoft IME・Google日本語入力と同条件で比較。AJIMEE 198問でKotori 88.4%、Microsoft 59.6%、Google 58.1%。実際の問題文、測定条件、CSVとv1.1.3の公開状況を掲載。" /><meta property="og:url" content="https://aruiki.github.io/kanai/status.html" />
-<meta property="og:image" content="https://aruiki.github.io/kanai/og-card.png" /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" /><meta property="og:image:alt" content="Asteria日本語入力 — 文脈を読むローカルAI" />
-<meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card.png" />
-<link rel="icon" href="asteria-icon.png" type="image/png" /><link rel="stylesheet" href="landing.css" />
-<script src="releases.js" defer></script><script type="application/ld+json">
-{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Asteria日本語入力","item":"https://aruiki.github.io/kanai/"},{"@type":"ListItem","position":2,"name":"公開状況と評価","item":"https://aruiki.github.io/kanai/status.html"}]}
-</script>
-</head><body>
-<a class="skip-link" href="#main-content">本文へ移動</a>
-<header><div class="wrap"><a class="brand" href="./"><img src="asteria-icon.png" width="36" height="36" alt="" />Asteria日本語入力</a><nav aria-label="メインナビゲーション"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/Asteria-Japanese-IME">GitHub</a><a href="en/">English</a></nav></div></header>
-<main id="main-content" class="wrap"><nav class="breadcrumb" aria-label="現在地"><a href="./">ホーム</a><span>›</span><span>公開状況と評価</span></nav><section class="page-head"><p class="eyebrow">ASTERIA JAPANESE INPUT</p><h1>IMEの比較と開発状況</h1><p class="lede">Microsoft IME・Google日本語入力と同条件で比較。AJIMEE 198問でKotori 88.4%、Microsoft 59.6%、Google 58.1%。実際の問題文、測定条件、CSVとv1.1.3の公開状況を掲載。</p></section><section class="content" id="ime-comparison" aria-labelledby="comparison-title"><h2 id="comparison-title">Microsoft IME・Google日本語入力との実入力比較</h2><p class="lede">AJIMEE-Benchの198問を実際にキー入力して比較した結果です。Asteriaの正解率は88.4%、Microsoft IMEは59.6%、Google日本語入力は58.1%でした。</p><figure class="ime-figure"><img src="ime-comparison.png" width="1760" height="1020" alt="AJIMEE-Bench 198問の実入力正解率。Kotori beta.8 88.4%、Microsoft IME 59.6%、Google日本語入力58.1%。差は28.8、30.3ポイント。" /><figcaption>2026年10月1日 · RTX 3060 · Kotori beta.8 / Unreal · 3つのIMEすべて前の文なし</figcaption></figure><div class="table-wrap"><table class="data"><thead><tr><th scope="col">IME</th><th scope="col">難しい変換<br />198問</th><th scope="col">日常文<br />81問</th><th scope="col">同音語<br />40問</th><th scope="col">人名・新語<br />40問</th><th scope="col">打ち間違い<br />40問</th></tr></thead><tbody><tr><th scope="row">Kotori beta.8 / Unreal</th><td>88.4%</td><td>97.5%</td><td>97.5%</td><td>97.5%</td><td>5.0%</td></tr><tr><th scope="row">Microsoft IME / Windows 11</th><td>59.6%</td><td>86.4%</td><td>82.5%</td><td>82.5%</td><td>5.0%</td></tr><tr><th scope="row">Google 日本語入力 3.34.6260</th><td>58.1%</td><td>81.5%</td><td>65.0%</td><td>95.0%</td><td>10.0%</td></tr></tbody></table></div><h3>AJIMEE-Benchでは、どんな文を変換する？</h3><p>単語を知っているだけでなく、文の意味に合う漢字を選ぶ必要があります。実際の評価データから3問を抜粋しました。</p><div class="table-wrap"><table class="data"><thead><tr><th scope="col">問題ID</th><th scope="col">読み（原文）</th><th scope="col">許容される正解の一例</th><th scope="col">難しさ</th></tr></thead><tbody><tr><th scope="row">1890</th><td>カケイヲタスケルタメ、リョウシュノイエニホウコウシ</td><td><strong>家計を助けるため、領主の家に奉公し</strong></td><td>「かけい」「りょうしゅ」「ほうこう」を、家計・領主・奉公として文全体で選ぶ。</td></tr><tr><th scope="row">1982</th><td>シュウシカテイホケンカガク</td><td><strong>修士課程保健科学</strong></td><td>「しゅうしかてい」「ほけんかがく」を、大学院の修士課程・保健科学として選ぶ。</td></tr><tr><th scope="row">2128</th><td>ノケッカ、ジャッカンジュウサンサイニシ</td><td><strong>の結果、弱冠１３歳にし</strong></td><td>「じゃっかん」は、年齢を述べるこの文では「若干」ではなく「弱冠」。数字表記の許容解もある。</td></tr></tbody></table></div><p class="small">これは問題の難しさを示す例です。各IMEがこの3問にどう答えたかを示す出力ログではありません。上の正解率は全198問の集計です。</p><p class="small">出典: <a href="https://github.com/azooKey/AJIMEE-Bench/blob/401666cd56d1a570c2021798b64b6da4396bfd45/JWTD_v2/v1/evaluation_items.json">azooKey/AJIMEE-Bench（固定版の評価データ）</a>。元データ: <a href="https://nlp.ist.i.kyoto-u.ac.jp/?日本語Wikipedia入力誤りデータセット">日本語Wikipedia入力誤りデータセット v2</a>。読み・正解は<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>の抜粋、原文のまま。難しさの説明は当プロジェクトによるものです。</p><p>全IMEで、前の文を渡さず、Spaceを1回押した第1候補をEnterで確定して採点。数字・記号はNFKCで揃え、AJIMEE 200問のうち入力できない2問を除いた198問を比較しています。学習は既定設定のまま、問ごとにテキストとフォーカスをリセットしています。</p><p>この測定はbeta.8の記録です。現在のv1.1.3 / v1.1を再測定した数値ではありません。同音語・人名・打ち間違いはプロジェクト独自の各40問です。打ち間違い補正ではMicrosoft IMEと同率、Google日本語入力を下回りました。</p><p><a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/642bd515f7a057902eb80abeab7b74fe84173843/eval/imebench/README.md">測定記録・再現手順・評価用データ →</a> · <a href="ime-comparison.csv" download>比較データをCSVで保存</a></p></section><section class="content" id="published" aria-labelledby="published-title"><h2 id="published-title">現在の公開版 v1.1.3</h2><p>2026年10月12日公開。日本語を含む保存先、文末の文法語、Mozcの入力補正をAIが取り消す問題を修正しました。Asteria64.msiは未署名、内部版は3.34.6431.100です。</p><p>Windows CIで、公開MSIの導入・「日本語」「東京」のTSF実入力・削除を確認しています。削除時は再起動要求（終了コード3010）がありました。これは短い2例の導入確認で、複数アプリや長時間利用の受入れを代替しません。</p><p>StandardはAJIMEE 183/200（91.5%）、最終評価用は289/300（96.3%）を維持。<a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/v1.1.3/docs/verification/release-v1.1.3-20261012.md">版・ハッシュ・測定条件・検証範囲 →</a></p></section><section class="content" id="measured" aria-labelledby="measured-title"><h2 id="measured-title">前の文ありの変換器評価（別条件）</h2><div class="table-wrap"><table class="data"><thead><tr><th scope="col">評価</th><th scope="col">Mozc単体</th><th scope="col">Kotori Standard</th><th scope="col">条件</th></tr></thead><tbody><tr><td>AJIMEE-Bench（200問）</td><td>51.0%</td><td>91.5%</td><td>前の文あり</td></tr><tr><td>日常文（81問）</td><td>80.2%</td><td>97.5%</td><td>前の文あり</td></tr><tr><td>最終評価用（300問）</td><td>82.3%</td><td>96.3%</td><td>調整に使わないセット・前の文あり</td></tr></tbody></table></div><p>プロジェクトの公開測定値（2026年10月1日、RTX 3060）。当サイトの更新作業でIMEの品質評価を再実行したものではありません。<a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/eval/README.md">方法・記録・誤変換例</a>をご覧ください。</p></section><section class="content" id="remaining" aria-labelledby="remaining-title"><h2 id="remaining-title">確認が続いていること</h2><ul class="spec-list"><li>コード署名はv1.1.3では未実施です。</li><li>長時間試験、ノートPC・設定画面・更新導入などの受け入れ確認に残項目があります。</li><li>修正対象のAI ON/OFF効果を、複数のWindowsアプリで実入力する受入れ確認は未実施です。</li><li>CPUで長い文を打ってすぐSpaceを押すと、AIが間に合わずMozcの結果になる場合があります。</li><li>評価用セットの数値を、すべてのアプリ・PC・文章へ一般化することはできません。</li></ul></section><section class="content" id="updates" aria-labelledby="updates-title"><h2 id="updates-title">開発記録とリリース情報</h2><p><a href="https://github.com/aruiki/Asteria-Japanese-IME/releases">リリース一覧</a> · <a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/HANDOFF.md">開発の引き継ぎ</a> · <a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/ACCEPTANCE.md">実機の確認項目</a></p><p class="small">本文の根拠: 2026年10月15日に確認したAsteria v1.1.3の公開ノートと検証記録。実入力比較は2026年10月1日のKotori beta.8、前の文ありの変換器評価は別条件です。現行版の実アプリ比較として読み替えないでください。</p></section></main>
-<footer><div class="wrap"><a class="brand" href="./">Asteria日本語入力</a><p>Mozc + local AI · Japanese input for Windows</p><p>本文確認: 2026年10月15日 · 公開版 v1.1.3 · 未署名</p><p id="latest-release" aria-live="polite"><a href="https://github.com/aruiki/Asteria-Japanese-IME/releases/latest">最新版の公開版を確認 →</a></p><nav aria-label="フッター"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/USER_GUIDE.md">使い方と困ったとき</a></nav><p><a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/licenses.md">ライセンス</a> · <a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/SECURITY.md">セキュリティ</a></p></div></footer>
+<meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><meta content="#111c2d" name="theme-color"/>
+<title>Asteriaの品質・公開状況｜測定条件と検証記録</title><meta name="description" content="Asteria v1.1.4-rc.4の公開状況。Standard・前文あり188/200の開発評価、受入れ確認と未検証範囲、過去の実入力比較を条件とともに掲載。">
+<link href="https://aruiki.github.io/kanai/status.html" rel="canonical"/><link href="https://aruiki.github.io/kanai/status.html" hreflang="ja" rel="alternate"/><link href="https://aruiki.github.io/kanai/status.html" hreflang="x-default" rel="alternate"/>
+<meta content="website" property="og:type"/><meta content="ja_JP" property="og:locale"/><meta content="Asteria" property="og:site_name"/><meta content="Asteriaの品質・公開状況｜測定条件と検証記録" property="og:title"/><meta content="Asteria v1.1.4-rc.4の公開状況。Standard・前文あり188/200の開発評価、受入れ確認と未検証範囲、過去の実入力比較を条件とともに掲載。" property="og:description"/><meta content="https://aruiki.github.io/kanai/status.html" property="og:url"/>
+<meta content="https://aruiki.github.io/kanai/og-card.png?v=20261021" property="og:image"/><meta content="1200" property="og:image:width"/><meta content="630" property="og:image:height"/><meta content="Asteria — GPUで考える、日本語入力。" property="og:image:alt"/>
+<meta content="summary_large_image" name="twitter:card"/><meta content="https://aruiki.github.io/kanai/og-card.png?v=20261021" name="twitter:image"/><link href="asteria-icon.png" rel="icon" type="image/png"/><link href="landing.css?v=20261021" rel="stylesheet"/>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Asteria","item":"https://aruiki.github.io/kanai/"},{"@type":"ListItem","position":2,"name":"Asteriaの品質・公開状況｜測定条件と検証記録","item":"https://aruiki.github.io/kanai/status.html"}]}</script></head><body>
+<a class="skip-link" href="#main-content">本文へ移動</a><header><div class="wrap"><a class="brand" href="./"><img alt="" height="40" src="asteria-icon.png" width="40"/>Asteria <span>アステリア</span></a><nav aria-label="メインナビゲーション"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/Asteria-Japanese-IME">GitHub</a><a href="en/">English</a></nav>
+</div>
+</header>
+<main class="wrap interior" id="main-content"><div class="page-head"><p class="eyebrow">EVIDENCE</p>
+<h1>品質と公開状況。</h1>
+<p class="lede">測定した条件と、確認した範囲を分けて伝えます。</p>
+</div>
+<section class="content" id="current"><h2>公開中のリリース候補</h2>
+<p>v1.1.4-rc.4は2026-10-21公開のリリース候補です。未署名。AIの採点済み別候補を保持し、予測期限の境界と本文保持を修正しました。</p>
+<p>同じMSIの導入・再導入・入力・削除、EDIT/RichEditでの候補操作8項目を確認。再導入は同一MSI・同じbootで、旧版更新や再起動の確認ではありません。</p>
+<a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/verification/release-v1.1.4-rc.4-20261021.md">版・ソース・ハッシュ・受入れの記録 →</a></section>
+<section class="content" id="offline"><h2>固定変換器による開発評価</h2>
+<div class="table-wrap"><table class="data"><tr><th>AJIMEE-Bench・200問</th><th>正解数</th></tr>
+<tr><td>Standard・AI準備後・前文あり</td><td>188/200（94.0%）</td></tr>
+<tr><td>Standard・AI準備後・前文なし</td><td>175/200（87.5%）</td></tr>
+<tr><td>AIなし・前文なし（Mozc＋追加連語）</td><td>103/200（51.5%）</td></tr>
+</table>
+</div>
+<p>RTX 3060、指定した前文を渡すオフラインの調整・回帰用評価です。RC4対応sourceでも978出力の第一候補が全一致。正解候補の包含は前文なし189→193、あり193→195でした。第一候補正解数は変わりません。</p>
+<p>起動直後や導入済みIMEの実アプリ精度ではなく、他IMEを含む最新比較は未実施です。</p>
+<a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/BENCHMARKS.md">測定時点・固定ソース・原票 →</a></section>
+<section class="content" id="remaining"><h2>引き続き確認すること。</h2>
+<p>実アプリでのGPU AI ON/OFF寄与、複数アプリ、低性能実機、保護欄内部のAI/学習、旧版からの更新、再起動、独立した製品完成判定は未検証です。製品全体の完成宣言ではありません。</p>
+</section>
+<details class="history"><summary>過去の実入力比較と旧版の評価（2026-10-01）</summary><p>以下は当時のKotori beta.8と旧版の記録です。現在のRC4や94.0%を、この比較へ置き換えません。旧v1.1.3の更新内容は<a href="https://github.com/aruiki/Asteria-Japanese-IME/releases/tag/v1.1.3">当時のRelease</a>へ。</p>
+<section aria-labelledby="comparison-title" class="content" id="ime-comparison"><h2 id="comparison-title">Microsoft IME・Google日本語入力との実入力比較</h2>
+<p class="lede">AJIMEE-Benchの198問を実際にキー入力して比較した結果です。当時のKotori beta.8の正解率は88.4%、Microsoft IMEは59.6%、Google日本語入力は58.1%でした。</p>
+<figure class="ime-figure"><img alt="AJIMEE-Bench 198問の実入力正解率。Kotori beta.8 88.4%、Microsoft IME 59.6%、Google日本語入力58.1%。差は28.8、30.3ポイント。" height="1020" src="ime-comparison.png" width="1760"/><figcaption>2026年10月1日 · RTX 3060 · Kotori beta.8 / Unreal · 3つのIMEすべて前の文なし</figcaption></figure>
+<div class="table-wrap"><table class="data"><thead><tr><th scope="col">IME</th><th scope="col">難しい変換<br/>198問</th><th scope="col">日常文<br/>81問</th><th scope="col">同音語<br/>40問</th><th scope="col">人名・新語<br/>40問</th><th scope="col">打ち間違い<br/>40問</th></tr>
+</thead>
+<tbody><tr><th scope="row">Kotori beta.8 / Unreal</th><td>88.4%</td><td>97.5%</td><td>97.5%</td><td>97.5%</td><td>5.0%</td></tr>
+<tr><th scope="row">Microsoft IME / Windows 11</th><td>59.6%</td><td>86.4%</td><td>82.5%</td><td>82.5%</td><td>5.0%</td></tr>
+<tr><th scope="row">Google 日本語入力 3.34.6260</th><td>58.1%</td><td>81.5%</td><td>65.0%</td><td>95.0%</td><td>10.0%</td></tr>
+</tbody>
+</table>
+</div>
+<h3>AJIMEE-Benchでは、どんな文を変換する？</h3>
+<p>単語を知っているだけでなく、文の意味に合う漢字を選ぶ必要があります。実際の評価データから3問を抜粋しました。</p>
+<div class="table-wrap"><table class="data"><thead><tr><th scope="col">問題ID</th><th scope="col">読み（原文）</th><th scope="col">許容される正解の一例</th><th scope="col">難しさ</th></tr>
+</thead>
+<tbody><tr><th scope="row">1890</th><td>カケイヲタスケルタメ、リョウシュノイエニホウコウシ</td><td><strong>家計を助けるため、領主の家に奉公し</strong></td><td>「かけい」「りょうしゅ」「ほうこう」を、家計・領主・奉公として文全体で選ぶ。</td></tr>
+<tr><th scope="row">1982</th><td>シュウシカテイホケンカガク</td><td><strong>修士課程保健科学</strong></td><td>「しゅうしかてい」「ほけんかがく」を、大学院の修士課程・保健科学として選ぶ。</td></tr>
+<tr><th scope="row">2128</th><td>ノケッカ、ジャッカンジュウサンサイニシ</td><td><strong>の結果、弱冠１３歳にし</strong></td><td>「じゃっかん」は、年齢を述べるこの文では「若干」ではなく「弱冠」。数字表記の許容解もある。</td></tr>
+</tbody>
+</table>
+</div>
+<p class="small">これは問題の難しさを示す例です。各IMEがこの3問にどう答えたかを示す出力ログではありません。上の正解率は全198問の集計です。</p>
+<p class="small">出典: <a href="https://github.com/azooKey/AJIMEE-Bench/blob/401666cd56d1a570c2021798b64b6da4396bfd45/JWTD_v2/v1/evaluation_items.json">azooKey/AJIMEE-Bench（固定版の評価データ）</a>。元データ: <a href="https://nlp.ist.i.kyoto-u.ac.jp/?日本語Wikipedia入力誤りデータセット">日本語Wikipedia入力誤りデータセット v2</a>。読み・正解は<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>の抜粋、原文のまま。難しさの説明は当プロジェクトによるものです。</p>
+<p>全IMEで、前の文を渡さず、Spaceを1回押した第1候補をEnterで確定して採点。数字・記号はNFKCで揃え、AJIMEE 200問のうち入力できない2問を除いた198問を比較しています。学習は既定設定のまま、問ごとにテキストとフォーカスをリセットしています。</p>
+<p>この測定はbeta.8の記録です。後続の公開版を再測定した数値ではありません。同音語・人名・打ち間違いはプロジェクト独自の各40問です。打ち間違い補正ではMicrosoft IMEと同率、Google日本語入力を下回りました。</p>
+<p><a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/642bd515f7a057902eb80abeab7b74fe84173843/eval/imebench/README.md">測定記録・再現手順・評価用データ →</a> · <a href="ime-comparison.csv">比較データをCSVで保存</a></p>
+</section>
+<section aria-labelledby="measured-title" class="content" id="measured"><h2 id="measured-title">前の文ありの変換器評価（別条件）</h2>
+<div class="table-wrap"><table class="data"><thead><tr><th scope="col">評価</th><th scope="col">Mozc単体</th><th scope="col">Kotori Standard</th><th scope="col">条件</th></tr>
+</thead>
+<tbody><tr><td>AJIMEE-Bench（200問）</td><td>51.0%</td><td>91.5%</td><td>前の文あり</td></tr>
+<tr><td>日常文（81問）</td><td>80.2%</td><td>97.5%</td><td>前の文あり</td></tr>
+<tr><td>最終評価用（300問）</td><td>82.3%</td><td>96.3%</td><td>調整に使わないセット・前の文あり</td></tr>
+</tbody>
+</table>
+</div>
+<p>プロジェクトの公開測定値（2026年10月1日、RTX 3060）。当サイトの更新作業でIMEの品質評価を再実行したものではありません。<a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/eval/README.md">方法・記録・誤変換例</a>をご覧ください。</p>
+</section>
+</details></main>
+<footer><div class="wrap"><p class="brand">Asteria</p>
+<p>GPUで考える、日本語入力。文脈を読むAIも、あなたのPCの中に。</p>
+<p>紹介対象: v1.1.4-rc.4 · リリース候補 · 未署名 · Windows 10 / 11 x64 · 本文確認 2026-10-21</p>
+<nav aria-label="フッター"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/Asteria-Japanese-IME">GitHub</a><a href="en/">English</a></nav>
+<p><a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/USER_GUIDE.md">使い方</a> · <a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/licenses.md">ライセンス</a> · <a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/SECURITY.md">セキュリティ</a> · <a href="https://buy.stripe.com/cNi14m7jRdq005f0781ZS08">開発を支援</a></p>
+</div>
+</footer>
 </body></html>

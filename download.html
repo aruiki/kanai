@@ -1,19 +1,61 @@
-<!doctype html>
-<html lang="ja"><head>
-<meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#0d1624" />
-<title>Asteria日本語入力のダウンロード・導入｜Windows 10 / 11</title><meta name="description" content="Asteria64.msiで導入するWindows日本語IME。公開版v1.1.3、必要な環境、SHA-256、更新と削除の方法。GPUなしでも利用できます。" />
-<link rel="canonical" href="https://aruiki.github.io/kanai/download.html" /><link rel="alternate" hreflang="ja" href="https://aruiki.github.io/kanai/download.html" /><link rel="alternate" hreflang="x-default" href="https://aruiki.github.io/kanai/download.html" />
-<meta property="og:type" content="website" /><meta property="og:locale" content="ja_JP" /><meta property="og:site_name" content="Asteria日本語入力" />
-<meta property="og:title" content="Asteria日本語入力のダウンロード・導入｜Windows 10 / 11" /><meta property="og:description" content="Asteria64.msiで導入するWindows日本語IME。公開版v1.1.3、必要な環境、SHA-256、更新と削除の方法。GPUなしでも利用できます。" /><meta property="og:url" content="https://aruiki.github.io/kanai/download.html" />
-<meta property="og:image" content="https://aruiki.github.io/kanai/og-card.png" /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="630" /><meta property="og:image:alt" content="Asteria日本語入力 — 文脈を読むローカルAI" />
-<meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card.png" />
-<link rel="icon" href="asteria-icon.png" type="image/png" /><link rel="stylesheet" href="landing.css" />
-<script src="releases.js" defer></script><script type="application/ld+json">
-{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Asteria日本語入力","item":"https://aruiki.github.io/kanai/"},{"@type":"ListItem","position":2,"name":"ダウンロード","item":"https://aruiki.github.io/kanai/download.html"}]}
-</script>
-</head><body>
-<a class="skip-link" href="#main-content">本文へ移動</a>
-<header><div class="wrap"><a class="brand" href="./"><img src="asteria-icon.png" width="36" height="36" alt="" />Asteria日本語入力</a><nav aria-label="メインナビゲーション"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/Asteria-Japanese-IME">GitHub</a><a href="en/">English</a></nav></div></header>
-<main id="main-content" class="wrap"><nav class="breadcrumb" aria-label="現在地"><a href="./">ホーム</a><span>›</span><span>ダウンロード</span></nav><section class="page-head"><p class="eyebrow">ASTERIA JAPANESE INPUT</p><h1>ダウンロードと導入方法</h1><p class="lede">Asteria64.msiで導入するWindows日本語IME。公開版v1.1.3、必要な環境、SHA-256、更新と削除の方法。GPUなしでも利用できます。</p></section><section class="content" id="versions" aria-labelledby="versions-title"><h2 id="versions-title">配布している版</h2><div class="grid"><article class="card"><h3>公開版 <span data-stable-version>v1.1.3</span></h3><p>通常の導入向け。GitHub ReleasesのLatestへ進み、Asteria64.msiをダウンロードします。</p><div class="actions"><a class="button" href="https://github.com/aruiki/Asteria-Japanese-IME/releases/latest">最新版の公開版</a></div></article><article class="card"><h3>v1.1.3の変更</h3><p>日本語を含む保存先、文末表現、Mozcの入力補正をAIが取り消す問題を修正しました。</p><div class="actions"><a href="https://github.com/aruiki/Asteria-Japanese-IME/releases/tag/v1.1.3">更新内容を読む →</a></div></article><article class="card"><h3>配布元を確認</h3><p>ファイルは現行のAsteria-Japanese-IMEリポジトリで配布しています。未署名です。</p><div class="actions"><a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/USER_GUIDE.md">使い方と困ったとき</a></div></article></div></section><section class="content" id="requirements" aria-labelledby="requirements-title"><h2 id="requirements-title">必要な環境</h2><div class="table-wrap"><table class="data"><thead><tr><th scope="col">項目</th><th scope="col">必要な環境</th><th scope="col">おすすめ</th></tr></thead><tbody><tr><td>OS</td><td>Windows 10 1809以降 / Windows 11（x64）</td><td>Windows 11</td></tr><tr><td>メモリ</td><td>8 GB</td><td>16 GB</td></tr><tr><td>ディスク</td><td>1.7 GBの空き容量</td><td></td></tr><tr><td>GPU</td><td>なしでも動作。内蔵GPUはAIに使いません。</td><td>専用GPU・Vulkan対応・VRAM 3 GB以上</td></tr></tbody></table></div><p>AIモデルとGPU実行環境は同梱しています。GPUのドライバー以外にCUDAなどの準備は不要です。ARM版Windowsには対応していません。動作確認済みのGPUとしてRTX 3060が記録されています。</p></section><section class="content" id="install" aria-labelledby="install-title"><h2 id="install-title">MSIを実行して、入力方式を切り替える。</h2><ol class="spec-list"><li><a href="https://github.com/aruiki/Asteria-Japanese-IME/releases/latest">GitHub Releases</a>でリリースノートを確認し、<strong>Asteria64.msi</strong>をダウンロードします。</li><li>MSIをダブルクリックし、管理者の確認（UAC）を承認します。</li><li><kbd>Win</kbd> + <kbd>Space</kbd>で<strong>Asteria日本語入力</strong>へ切り替えます。<kbd>半角/全角</kbd>で日本語入力をON/OFFできます。</li><li>デスクトップまたはスタートメニューの「Asteria日本語入力の設定」を開き、「AI変換」タブで品質とAIの状態を確認できます。</li></ol><p class="small">v1.1.3は未署名のため、Windowsの警告が表示される場合があります。ファイルの照合方法と対処は<a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/USER_GUIDE.md">利用ガイド</a>へ。</p></section><section class="content" id="hash" aria-labelledby="hash-title"><h2 id="hash-title">配布ファイルの照合</h2><div class="table-wrap"><table class="data"><thead><tr><th scope="col">版</th><th scope="col">Asteria64.msiのサイズ</th><th scope="col">SHA-256</th></tr></thead><tbody><tr><td>v1.1.3</td><td>1,569,517,568 bytes</td><td><code class="hash">b7dbaee7e99dcea16544b169cadb7ea1e0c5b66f1225cbc01a044ad4293688d5</code></td></tr></tbody></table></div><p>各リリースにAsteria64.msi.sha256を同梱しています。このハッシュはv1.1.3の固定値です。新しい版は、その版の配布ページで確認してください。</p><pre class="code"><code>Get-FileHash .\Asteria64.msi -Algorithm SHA256</code></pre></section><section class="content" id="update" aria-labelledby="update-title"><h2 id="update-title">更新・アンインストール</h2><p>v0.3.0-beta.6以降は、新しいMSIを上書きして更新できます。設定・学習・ユーザー辞書は引き継ぎます。それより古い版は一度アンインストールしてから導入してください。入力中のアプリがあると、再起動を求められる場合があります。</p><p>削除はWindowsの「設定 → アプリ」から<strong>Asteria日本語入力</strong>を選びます。ユーザーデータは再導入時に引き継ぐため残ります。削除後のデータの扱いは<a href="privacy.html#delete">プライバシーと削除</a>で説明しています。</p><p>自動更新の通知はありません。<a href="https://github.com/aruiki/Asteria-Japanese-IME/releases">Releases</a>で更新を確認できます。</p></section></main>
-<footer><div class="wrap"><a class="brand" href="./">Asteria日本語入力</a><p>Mozc + local AI · Japanese input for Windows</p><p>本文確認: 2026年10月15日 · 公開版 v1.1.3 · 未署名</p><p id="latest-release" aria-live="polite"><a href="https://github.com/aruiki/Asteria-Japanese-IME/releases/latest">最新版の公開版を確認 →</a></p><nav aria-label="フッター"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/USER_GUIDE.md">使い方と困ったとき</a></nav><p><a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/licenses.md">ライセンス</a> · <a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/SECURITY.md">セキュリティ</a></p></div></footer>
+<!doctype html><html lang="ja"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#111c2d">
+<title>Asteriaのダウンロード・導入｜Windows 10 / 11</title><meta name="description" content="Asteria v1.1.4-rc.4のダウンロード。未署名のリリース候補、動作環境、MSI導入、SmartScreen、SHA-256とアンインストールを説明します。">
+<link rel="canonical" href="https://aruiki.github.io/kanai/download.html"><link rel="alternate" hreflang="ja" href="https://aruiki.github.io/kanai/download.html"><link rel="alternate" hreflang="x-default" href="https://aruiki.github.io/kanai/download.html">
+<meta property="og:type" content="website"><meta property="og:locale" content="ja_JP"><meta property="og:site_name" content="Asteria"><meta property="og:title" content="Asteriaのダウンロード・導入｜Windows 10 / 11"><meta property="og:description" content="Asteria v1.1.4-rc.4のダウンロード。未署名のリリース候補、動作環境、MSI導入、SmartScreen、SHA-256とアンインストールを説明します。"><meta property="og:url" content="https://aruiki.github.io/kanai/download.html">
+<meta property="og:image" content="https://aruiki.github.io/kanai/og-card.png?v=20261021"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Asteria — GPUで考える、日本語入力。">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="https://aruiki.github.io/kanai/og-card.png?v=20261021"><link rel="icon" href="asteria-icon.png" type="image/png"><link rel="stylesheet" href="landing.css?v=20261021">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Asteria","item":"https://aruiki.github.io/kanai/"},{"@type":"ListItem","position":2,"name":"Asteriaのダウンロード・導入｜Windows 10 / 11","item":"https://aruiki.github.io/kanai/download.html"}]}</script></head><body>
+<a class="skip-link" href="#main-content">本文へ移動</a><header><div class="wrap"><a class="brand" href="./"><img src="asteria-icon.png" width="40" height="40" alt="">Asteria <span>アステリア</span></a><nav aria-label="メインナビゲーション"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/Asteria-Japanese-IME">GitHub</a><a href="en/">English</a></nav>
+</div>
+</header>
+<main id="main-content" class="wrap interior"><div class="page-head"><p class="eyebrow">DOWNLOAD</p>
+<h1>Asteriaを使う。</h1>
+<p class="lede">MozcとAIのモデル・実行環境を、ひとつのMSIに。手動のモデル配置やコマンド入力は不要です。</p>
+</div>
+<section class="content" id="release"><h2>ダウンロード</h2>
+<div class="download-box"><span class="tag">RELEASE CANDIDATE</span><h2>v1.1.4-rc.4</h2>
+<p>2026-10-21公開 · Windows 10 / 11 x64 · 約1.66 GB · 未署名</p>
+<div class="actions"><a class="button" href="https://github.com/aruiki/Asteria-Japanese-IME/releases/download/v1.1.4-rc.4/Asteria64.msi">Asteria64.msiをダウンロード →</a><a href="https://github.com/aruiki/Asteria-Japanese-IME/releases/tag/v1.1.4-rc.4">更新内容を確認</a></div>
+</div>
+<p class="small">現在紹介している版はリリース候補です。GitHubのLatestとは別の、RC4の明示URLへ案内しています。</p>
+</section>
+<section class="content" id="requirements"><h2>動作環境</h2>
+<div class="table-wrap"><table class="data"><tr><th>項目</th><th>条件</th></tr>
+<tr><td>OS</td><td>Windows 10 1809以降 / Windows 11・64bit</td></tr>
+<tr><td>メモリ</td><td>8 GB以上、16 GB推奨</td></tr>
+<tr><td>GPU AI</td><td>Vulkan対応の専用GPU、VRAM 3 GiB以上。NVIDIA / AMD / Intel Arc</td></tr>
+<tr><td>GPUがないPC</td><td>CPU向けLow設定。GPU Standardと品質・速度が異なります</td></tr>
+<tr><td>ディスク</td><td>約1.7 GBの空き容量</td></tr>
+</table>
+</div>
+<p>内蔵GPUはAIに使いません。ARM版Windows向けの配布はありません。PythonやCUDAの手動セットアップは不要です。</p>
+</section>
+<section class="content" id="install"><h2>3ステップで、日本語入力へ。</h2>
+<ol class="steps"><li>公式ReleaseのMSIをダウンロードして開きます。</li>
+<li>インストーラーに従い、管理者の確認が表示されたら内容を確認します。</li>
+<li><kbd>Windows</kbd> + <kbd>Space</kbd> → <strong>Asteria日本語入力</strong>を選びます。</li>
+</ol>
+<p>設定はデスクトップやスタートメニューの「Asteria」から開けます。OSが再起動を求めた場合は、その案内に従ってください。</p>
+</section>
+<section class="content" id="smartscreen"><h2>SmartScreenが表示されたとき</h2>
+<p>配布MSIは未署名です。「WindowsによってPCが保護されました」というSmartScreen画面が表示される場合があります。SmartScreenはファイルや発行元の評判も確認します。この画面だけでマルウェアが検出されたとは判断できませんが、安全性の保証でもありません。</p>
+<p>この公式GitHub Releaseから取得したAsteria64.msiであることを確認し、続行する場合は <strong>詳細情報 → 表示内容を確認 → 実行</strong>を選びます。「実行」がない管理対象PCや、別の脅威名を伴う検出には、この手順を適用しないでください。SmartScreenやDefenderを無効にする操作は不要です。</p>
+<a href="https://learn.microsoft.com/ja-jp/windows/apps/package-and-deploy/smartscreen-reputation">Microsoft公式の説明</a></section>
+<section class="content" id="hash"><h2>配布ファイルの照合</h2>
+<p>MSI内部版 3.34.6440.100 · 1,662,828,544 bytes。</p>
+<p>同じReleaseのSHAファイルと比較できます。RC4のSHA-256:</p>
+<pre><code>2b37f6fbdcb069251e820e2009b096111cc2253e79ffac65d973fa11ce18e301</code></pre><pre><code>Get-FileHash -Algorithm SHA256 .\Asteria64.msi</code></pre><a href="https://github.com/aruiki/Asteria-Japanese-IME/releases/tag/v1.1.4-rc.4">SHAファイル・対応ソース・配布情報を見る →</a></section>
+<section class="content" id="update"><h2>更新とアンインストール</h2>
+<p>更新方法・設定の引継ぎは利用ガイドを確認してください。今回のRC4受入れでは、旧公開版からの更新と再起動後の動作は未検証です。</p>
+<p>削除はWindowsの「設定 → アプリ」からAsteria日本語入力を選びます。設定・学習・ユーザー辞書のデータは残ります。</p>
+<a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/USER_GUIDE.md">使い方と困ったとき →</a> ／ <a href="privacy.html">保存データと削除</a></section>
+</main>
+<footer><div class="wrap"><p class="brand">Asteria</p>
+<p>GPUで考える、日本語入力。文脈を読むAIも、あなたのPCの中に。</p>
+<p>紹介対象: v1.1.4-rc.4 · リリース候補 · 未署名 · Windows 10 / 11 x64 · 本文確認 2026-10-21</p>
+<nav aria-label="フッター"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/Asteria-Japanese-IME">GitHub</a><a href="en/">English</a></nav>
+<p><a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/USER_GUIDE.md">使い方</a> · <a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/licenses.md">ライセンス</a> · <a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/SECURITY.md">セキュリティ</a> · <a href="https://buy.stripe.com/cNi14m7jRdq005f0781ZS08">開発を支援</a></p>
+</div>
+</footer>
 </body></html>
