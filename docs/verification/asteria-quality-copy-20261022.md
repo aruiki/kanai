@@ -21,4 +21,12 @@ main db61204から専用枝codex/quality-copy-20261022で作業。日英7ペー�
 
 ## 公開確認
 
-この記録時点はPR準備。main統合とgh-pages配備後に、公開バイトと画面を確認して追記する。過去の独立FAILと製品全体の未検証7範囲は維持する。
+[PR12](https://github.com/aruiki/kanai/pull/12)をmain387018abd57cd011bbdab52624d9999111abafe1へ統合。サイトmainにはPR用Actions workflowがないことをGitの.githubツリーとチェック一覧から確認し、ローカル検証を適用した。
+
+gh-pagesへ33a823f9e40995567d2d999058f8a736aaa9150bを配備し、[Pages run39693693438](https://github.com/aruiki/kanai/actions/runs/39693693438)のbuild/deploy/report全3job成功、Pages API built/同commitを確認した。
+
+公開20ファイルを新規取得して全HTTP200/配備commitの全バイトSHA一致。公式7ページ×PC/390pxの14配置で、版/新コピー、画像、横はみ出し、h1、skip link、例外の全検査が成功。原票quality-site-deploy-manifest-v1.json、quality-site-public-v1.json、quality-site-public-browser-v1/を保存した。
+
+最初の配備前検査は、Windows checkoutのCRLFをそのまま写した差で停止し、pushしていない。全21ファイルが期待したコピーと一致し、保存blobとの差は改行だけと確認してquality-site-deploy-line-endings-v1.jsonへ記録。Gitの保存blobを取り出す方法へ修正して配備した。SHA検査は緩めていない。
+
+公式サイトの紹介方針変更と公開確認は完了。製品本体の辞書/順位改善、実アプリ検証、製品全体の未検証7範囲、過去の独立FAILは別であり、完了扱いにしない。
