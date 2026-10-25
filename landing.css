@@ -119,5 +119,43 @@ header nav{gap:10px 19px;font-size:12px}
 .data th,.data td{padding:10px;font-size:13px}
 }
 
+/* v3: 地は和紙の白、紺は文字・ボタン・印にだけ使う(2026-10-25 利用者の指示)。 */
+body{background:var(--paper) url("washi.jpg") repeat;background-size:1920px auto}
+header{background:transparent;color:var(--ink);border-bottom:1px solid var(--rule)}
+.v3 .hero{grid-template-columns:1fr 1.25fr;gap:48px;min-height:600px;color:var(--ink)}
+.v3 .hero::before,.v3 .hero-facts::before{display:none}
+.v3 .hero h1{font-size:clamp(32px,3.7vw,54px);line-height:1.45;margin-top:10px}
+.v3 .hero .lede{color:var(--muted);max-width:30em}
+.v3 .hero .small,.v3 .hero .eyebrow{color:var(--muted)}
+.v3 .hero .button{background:var(--ink);color:var(--ivory)}
+.v3 .hero-facts{color:var(--ink);padding-top:0}
+.v3 .hero-facts span{border-top:1px solid var(--ink)}
+.nb{white-space:nowrap}
+.hero-video{margin:0;min-width:0}
+.hero-video video{display:block;width:100%;height:auto;aspect-ratio:16/9;background:#e9e4d9;border-radius:10px;box-shadow:0 18px 50px rgba(17,28,45,.18),0 2px 8px rgba(17,28,45,.10)}
+.hero-video figcaption{margin-top:12px}
+.assure{display:flex;flex-wrap:wrap;gap:6px 22px;list-style:none;padding:0;margin:6px 0 0;font-size:13px;color:var(--muted)}
+.assure li::before{content:"✓";color:var(--ink);margin-right:6px;font-weight:700}
+.example{font-size:14px;line-height:1.8;background:rgba(255,255,255,.65);padding:14px 16px;border-left:3px solid var(--ink);color:var(--ink)!important}
+.example strong{font-weight:600}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin:26px 0 20px}
+.stats strong{display:block;font:56px Georgia,serif;line-height:1.2;color:var(--ink)}
+.stats strong span{font-size:26px;color:var(--muted)}
+.stats p{color:var(--muted);margin:6px 0 0}
+.ime-figure img{border-radius:8px;box-shadow:0 10px 30px rgba(17,28,45,.12)}
+.steps3{list-style:none;counter-reset:s;display:grid;grid-template-columns:repeat(3,1fr);gap:30px;padding:0;margin:10px 0 30px}
+.steps3 li{counter-increment:s;border-top:2px solid var(--ink);padding-top:18px}
+.steps3 li::before{content:counter(s,decimal-leading-zero);font:15px Georgia,serif;color:#7a8592;letter-spacing:.12em;display:block}
+.steps3 strong{display:block;font:22px var(--serif);margin:6px 0}
+.steps3 span{color:var(--muted)}
+.grid.four{grid-template-columns:repeat(4,1fr);gap:32px}
+.grid.four h3{font-size:20px}
+.grid.four p{color:var(--muted);font-size:15px}
+.cta-band{text-align:center;padding:80px 0 70px;margin-top:20px;border-top:1px solid var(--rule)}
+.cta-band .actions{justify-content:center}
+.home.v3~footer{margin-top:0}
+@media(max-width:1000px){.v3 .hero{grid-template-columns:1fr;gap:28px}.grid.four{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){.v3 .hero-facts{grid-template-columns:1fr;padding-bottom:20px}.v3 .hero-facts span{padding:12px 0}.stats{grid-template-columns:1fr;gap:20px}.stats strong{font-size:44px}.steps3{grid-template-columns:1fr;gap:20px}.grid.four{grid-template-columns:1fr}.v3 .hero{padding-top:36px}}
+
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}
 }
