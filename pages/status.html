@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="ja"><head>
 <meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><meta content="#111c2d" name="theme-color"/>
-<title>Asteriaの品質・公開状況｜測定条件と検証記録</title><meta name="description" content="Asteria v3.0.0の公開状況。Standard・前文あり188/200の開発評価、受入れ確認と未検証範囲、過去の実入力比較を条件とともに掲載。">
+<title>Asteriaの品質・公開状況｜測定条件と検証記録</title><meta name="description" content="Asteria v3.2.0の公開状況。Standard・前文あり188/200の開発評価、受入れ確認と未検証範囲、過去の実入力比較を条件とともに掲載。">
 <link href="https://aruiki.github.io/kanai/status.html" rel="canonical"/><link href="https://aruiki.github.io/kanai/status.html" hreflang="ja" rel="alternate"/><link href="https://aruiki.github.io/kanai/status.html" hreflang="x-default" rel="alternate"/>
-<meta content="website" property="og:type"/><meta content="ja_JP" property="og:locale"/><meta content="Asteria" property="og:site_name"/><meta content="Asteriaの品質・公開状況｜測定条件と検証記録" property="og:title"/><meta content="Asteria v3.0.0の公開状況。Standard・前文あり188/200の開発評価、受入れ確認と未検証範囲、過去の実入力比較を条件とともに掲載。" property="og:description"/><meta content="https://aruiki.github.io/kanai/status.html" property="og:url"/>
+<meta content="website" property="og:type"/><meta content="ja_JP" property="og:locale"/><meta content="Asteria" property="og:site_name"/><meta content="Asteriaの品質・公開状況｜測定条件と検証記録" property="og:title"/><meta content="Asteria v3.2.0の公開状況。Standard・前文あり188/200の開発評価、受入れ確認と未検証範囲、過去の実入力比較を条件とともに掲載。" property="og:description"/><meta content="https://aruiki.github.io/kanai/status.html" property="og:url"/>
 <meta content="https://aruiki.github.io/kanai/og-card.png?v=quality-20261022" property="og:image"/><meta content="1200" property="og:image:width"/><meta content="630" property="og:image:height"/><meta content="Asteria — 変換精度の高い日本語IME。" property="og:image:alt"/>
 <meta content="summary_large_image" name="twitter:card"/><meta content="https://aruiki.github.io/kanai/og-card.png?v=quality-20261022" name="twitter:image"/><link href="asteria-icon.png" rel="icon" type="image/png"/><link href="landing.css?v=3.0.0" rel="stylesheet"/>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Asteria","item":"https://aruiki.github.io/kanai/"},{"@type":"ListItem","position":2,"name":"Asteriaの品質・公開状況｜測定条件と検証記録","item":"https://aruiki.github.io/kanai/status.html"}]}</script></head><body>
@@ -15,9 +15,9 @@
 <p class="lede">測定した条件と、確認した範囲を分けて伝えます。</p>
 </div>
 <section class="content" id="current"><h2>公開中の正式版</h2>
-<p>v3.0.0は2026-10-25公開の正式版です。未署名。少し間を置いてSpaceを押したときの候補表示を約20 msに短縮し、1画面のインストーラー（v3.0.0以降どうしの更新は再起動なし）、使い方の数字を表示する設定画面、英数キーで直接入力、数字の後の句読点などを改善しました。Google日本語入力との同条件比較は、前の文で正解が決まる同音語300問で274対133、日常の短文500問で461対434です。</p>
-<p>同じ新MSIの導入・再導入・入力・削除、候補操作8項目、EDIT/RichEditの二重入力28条件とEdgeの14条件を確認。再導入は同一MSI・同じbootで、旧版更新や再起動の確認ではありません。</p>
-<a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/verification/release-v3.0.0-20261024.md">版・ソース・ハッシュ・受入れの記録 →</a></section>
+<p>v3.2.0は2026-10-28公開の正式版です。未署名。v3.1.0で打ち間違いの補正を強め（打ち間違い40問で手を止めて17→24問）、v3.2.0で選び直した語を前後の語を手がかりに覚える学習（PCの中だけ・学習履歴のクリアで消えます）と安定化を加えました。判定用の問題の正解数はv3.0.0と同じで、v3.0.0で正しかった文が外れたものは0件です。Google日本語入力との同条件比較（v3.0.0で測定）は、前の文で正解が決まる同音語300問で274対133、日常の短文500問で461対434です。</p>
+<p>公開と同じMSIでv3.1.0から更新し、終了コード0・再起動なし。候補操作8項目、二重入力26回、Edgeの12件を確認しました（候補のクリック2件は未検証）。</p>
+<a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/verification/context-choice-20261027.md">版・ソース・ハッシュ・受入れの記録 →</a></section>
 <section class="content" id="offline"><h2>固定変換器による開発評価</h2>
 <div class="table-wrap"><table class="data"><tr><th>AJIMEE-Bench・200問</th><th>正解数</th></tr>
 <tr><td>Standard・AI準備後・前文あり</td><td>188/200（94.0%）</td></tr>
@@ -73,7 +73,7 @@
 </details></main>
 <footer><div class="wrap"><p class="brand">Asteria</p>
 <p>変換精度の高い日本語IME。無料・オープンソース。オフラインで使えます。</p>
-<p>紹介対象: v3.0.0 · 正式版 · 未署名 · Windows 10 / 11 x64 · 本文確認 2026-10-25</p>
+<p>紹介対象: v3.2.0 · 正式版 · 未署名 · Windows 10 / 11 x64 · 本文確認 2026-10-28</p>
 <nav aria-label="フッター"><a href="design.html">設計</a><a href="privacy.html">プライバシー</a><a href="download.html">ダウンロード</a><a href="status.html">公開状況</a><a href="faq.html">FAQ</a><a href="https://github.com/aruiki/Asteria-Japanese-IME">GitHub</a><a href="en/">English</a></nav>
 <p><a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/USER_GUIDE.md">使い方</a> · <a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/docs/licenses.md">ライセンス</a> · <a href="https://github.com/aruiki/Asteria-Japanese-IME/blob/main/SECURITY.md">セキュリティ</a> · <a href="https://buy.stripe.com/cNi14m7jRdq005f0781ZS08">開発を支援</a></p>
 </div>
